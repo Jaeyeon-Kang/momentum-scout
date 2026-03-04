@@ -16,12 +16,8 @@ const S = {
     opt20d:        '20D (~1 month)',
     btnScan:       'Scan',
     btnScanning:   'Scanning…',
-    btnAdvancedShow:'Show advanced filters',
-    btnAdvancedHide:'Hide advanced filters',
     hBatch:        'AI copy pad (optional)',
     metaBatch:     'Screener-first: select symbols only when you want a pasted report.',
-    btnAIPadShow:  'Open AI copy pad',
-    btnAIPadHide:  'Close AI copy pad',
     btnReportSel:  'Generate: Selected',
     btnCopy:       'Copy',
     btnSelectText: 'Select report text',
@@ -103,12 +99,8 @@ const S = {
     opt20d:        '20일 (~1개월)',
     btnScan:       '스캔',
     btnScanning:   '스캔 중…',
-    btnAdvancedShow:'고급 필터 보기',
-    btnAdvancedHide:'고급 필터 숨기기',
     hBatch:        'AI 복사용 패드 (선택)',
     metaBatch:     '스크리너 중심: 필요할 때만 선택 종목 리포트를 생성하세요.',
-    btnAIPadShow:  'AI 복사용 패드 열기',
-    btnAIPadHide:  'AI 복사용 패드 닫기',
     btnReportSel:  '생성: 선택 종목',
     btnCopy:       '복사',
     btnSelectText: '텍스트 전체 선택',
@@ -676,8 +668,6 @@ window.addEventListener('load', async () => {
   $('checkAllBtn').addEventListener('click', toggleCheckAll);
 
   // Batch report
-  $('toggleAdvancedBtn').addEventListener('click', toggleAdvanced);
-  $('toggleAIPadBtn').addEventListener('click', toggleAIPad);
   $('reportSelBtn').addEventListener('click', reportSelected);
   $('copyAllBtn').addEventListener('click', copyAll);
   $('selectTextBtn').addEventListener('click', selectText);
