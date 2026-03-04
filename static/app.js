@@ -16,10 +16,9 @@ const S = {
     opt20d:        '20D (~1 month)',
     btnScan:       'Scan',
     btnScanning:   'Scanning…',
-    hBatch:        'Batch report',
-    metaBatch:     'Scan → auto-generates Top 5 report.',
-    btnReportTop:  'Report: Top 5',
-    btnReportSel:  'Report: Selected',
+    hBatch:        'AI copy pad (optional)',
+    metaBatch:     'Screener-first: select symbols only when you want a pasted report.',
+    btnReportSel:  'Generate: Selected',
     btnCopy:       'Copy',
     btnSelectText: 'Select report text',
     btnCheckAll:   'Check all',
@@ -100,10 +99,9 @@ const S = {
     opt20d:        '20일 (~1개월)',
     btnScan:       '스캔',
     btnScanning:   '스캔 중…',
-    hBatch:        '일괄 리포트',
-    metaBatch:     '스캔 → Top 5 리포트 자동 생성.',
-    btnReportTop:  '리포트: Top 5',
-    btnReportSel:  '리포트: 선택 종목',
+    hBatch:        'AI 복사용 패드 (선택)',
+    metaBatch:     '스크리너 중심: 필요할 때만 선택 종목 리포트를 생성하세요.',
+    btnReportSel:  '생성: 선택 종목',
     btnCopy:       '복사',
     btnSelectText: '텍스트 전체 선택',
     btnCheckAll:   '전체 체크',
@@ -374,8 +372,6 @@ async function scan() {
     setStatus(t('asof', j.asof_kst || j.asof_et, market, j.horizon_days, ctxStr, lastCandidates.length));
     renderList(lastCandidates, j.horizon_days);
 
-    const top5 = lastCandidates.slice(0, 5).map(x => x.symbol);
-    if (top5.length) await generateReport(top5);
   } catch (e) {
     const msg = e.name === 'TypeError' ? t('errNetwork') : `${t('errUnknown')}: ${e.message}`;
     setStatus(''); $('list').innerHTML = `<div class="err-state">${msg}</div>`;
@@ -577,7 +573,6 @@ async function generateReport(symbolList) {
   if (!symbolList?.length) return;
   const market = getMarket(), horizon = getHorizon();
   $('reportMeta').textContent = t('loadingRep', symbolList.length);
-  setReportLoading('reportTopBtn', true);
   setReportLoading('reportSelBtn', true);
 
   try {
@@ -601,13 +596,8 @@ async function generateReport(symbolList) {
     $('reportMeta').textContent = msg;
     showToast(msg);
   } finally {
-    setReportLoading('reportTopBtn', false);
     setReportLoading('reportSelBtn', false);
   }
-}
-
-async function reportTop() {
-  await generateReport(lastCandidates.slice(0, 5).map(x => x.symbol));
 }
 async function reportSelected() {
   const syms = Array.from(selected);
@@ -658,7 +648,6 @@ window.addEventListener('load', async () => {
   $('checkAllBtn').addEventListener('click', toggleCheckAll);
 
   // Batch report
-  $('reportTopBtn').addEventListener('click', reportTop);
   $('reportSelBtn').addEventListener('click', reportSelected);
   $('copyAllBtn').addEventListener('click', copyAll);
   $('selectTextBtn').addEventListener('click', selectText);
