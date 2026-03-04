@@ -101,13 +101,17 @@
           <button class="btn sm" id="clearBtn">✕</button>
         </div>
       </div>
-      <div class="row" style="flex-wrap:wrap;">
-        <button class="btn primary" id="reportSelBtn">
-          <span data-i18n="btnReportSel">Generate: Selected</span>
-          <span id="selCount" class="sel-count hidden">(0)</span>
-        </button>
-        <button class="btn" id="copyAllBtn" data-i18n="btnCopy">Copy</button>
-        <button class="btn ghost" id="selectTextBtn" data-i18n="btnSelectText">Select report text</button>
+      <div id="aiPadBody" class="hidden">
+        <div class="row" style="flex-wrap:wrap;">
+          <button class="btn primary" id="reportSelBtn">
+            <span data-i18n="btnReportSel">Generate: Selected</span>
+            <span id="selCount" class="sel-count hidden">(0)</span>
+          </button>
+          <button class="btn" id="copyAllBtn" data-i18n="btnCopy">Copy</button>
+          <button class="btn ghost" id="selectTextBtn" data-i18n="btnSelectText">Select report text</button>
+        </div>
+        <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
+        <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
       </div>
     </section>
 

@@ -21,6 +21,10 @@ const S = {
     btnReportSel:  'Generate: Selected',
     btnCopy:       'Copy',
     btnSelectText: 'Select report text',
+    btnAdvancedShow: 'Show advanced filters',
+    btnAdvancedHide: 'Hide advanced filters',
+    btnAIPadShow:    'Open AI copy pad',
+    btnAIPadHide:    'Close AI copy pad',
     btnCheckAll:   'Check all',
     btnUncheckAll: 'Uncheck all',
     btnCopySingle: 'Copy report',
@@ -104,6 +108,10 @@ const S = {
     btnReportSel:  '생성: 선택 종목',
     btnCopy:       '복사',
     btnSelectText: '텍스트 전체 선택',
+    btnAdvancedShow: '고급 필터 열기',
+    btnAdvancedHide: '고급 필터 닫기',
+    btnAIPadShow:    'AI 패드 열기',
+    btnAIPadHide:    'AI 패드 닫기',
     btnCheckAll:   '전체 체크',
     btnUncheckAll: '전체 해제',
     btnCopySingle: '리포트 복사',
@@ -659,6 +667,10 @@ window.addEventListener('load', async () => {
 
   // Symbols override → dim screener
   $('symbols').addEventListener('input', updateSymbolsUI);
+
+  // Toggle buttons
+  $('toggleAdvancedBtn').addEventListener('click', toggleAdvanced);
+  $('toggleAIPadBtn').addEventListener('click', toggleAIPad);
 
   // Scan
   $('scanBtn').addEventListener('click', scan);
