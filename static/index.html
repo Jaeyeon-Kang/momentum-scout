@@ -50,6 +50,10 @@
       </div>
 
       <div class="row">
+        <button class="btn sm ghost" id="toggleAdvancedBtn" data-i18n="btnAdvancedShow">Show advanced filters</button>
+      </div>
+
+      <div class="row hidden" id="advancedFiltersRow">
         <label class="field">
           <div class="label"><span data-i18n="lbMaxPrice">Max Price</span> <span id="currencyTag" class="currency-tag">($)</span></div>
           <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
@@ -85,26 +89,30 @@
       <div class="muted small" data-i18n="disclaimer"></div>
     </section>
 
-    <!-- ── Batch report card ── -->
+    <!-- ── AI copy pad (optional) ── -->
     <section class="card" style="margin-top:14px;">
       <div class="row" style="align-items:center; justify-content:space-between;">
         <div>
-          <div class="h2" data-i18n="hBatch">Batch report</div>
+          <div class="h2" data-i18n="hBatch">AI copy pad (optional)</div>
           <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
         </div>
-        <button class="btn sm" id="clearBtn">✕</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn sm ghost" id="toggleAIPadBtn" data-i18n="btnAIPadShow">Open AI copy pad</button>
+          <button class="btn sm" id="clearBtn">✕</button>
+        </div>
       </div>
-      <div class="row" style="flex-wrap:wrap;">
-        <button class="btn primary" id="reportTopBtn" data-i18n="btnReportTop">Report: Top 5</button>
-        <button class="btn" id="reportSelBtn">
-          <span data-i18n="btnReportSel">Report: Selected</span>
-          <span id="selCount" class="sel-count hidden">(0)</span>
-        </button>
-        <button class="btn" id="copyAllBtn" data-i18n="btnCopy">Copy</button>
-        <button class="btn ghost" id="selectTextBtn" data-i18n="btnSelectText">Select report text</button>
+      <div id="aiPadBody" class="hidden">
+        <div class="row" style="flex-wrap:wrap;">
+          <button class="btn primary" id="reportSelBtn">
+            <span data-i18n="btnReportSel">Generate: Selected</span>
+            <span id="selCount" class="sel-count hidden">(0)</span>
+          </button>
+          <button class="btn" id="copyAllBtn" data-i18n="btnCopy">Copy</button>
+          <button class="btn ghost" id="selectTextBtn" data-i18n="btnSelectText">Select report text</button>
+        </div>
+        <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
+        <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
       </div>
-      <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
-      <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
     </section>
 
     <!-- ── Candidate list ── -->
