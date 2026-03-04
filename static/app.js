@@ -189,6 +189,7 @@ function applyLang() {
   });
   updateMarketUI(false);  // refresh labels that depend on market
   updateSelectedCount();
+  updateToggleButtons();
 }
 
 // ─── Theme ──────────────────────────────────────────────────────
@@ -303,6 +304,25 @@ function updateSymbolsUI() {
 // ─── Selected count ─────────────────────────────────────────────
 let lastCandidates = [];
 let selected = new Set();
+let advancedOpen = false;
+let aiPadOpen = false;
+
+function updateToggleButtons() {
+  $('toggleAdvancedBtn').textContent = t(advancedOpen ? 'btnAdvancedHide' : 'btnAdvancedShow');
+  $('toggleAIPadBtn').textContent = t(aiPadOpen ? 'btnAIPadHide' : 'btnAIPadShow');
+}
+
+function toggleAdvanced() {
+  advancedOpen = !advancedOpen;
+  $('advancedFiltersRow').classList.toggle('hidden', !advancedOpen);
+  updateToggleButtons();
+}
+
+function toggleAIPad() {
+  aiPadOpen = !aiPadOpen;
+  $('aiPadBody').classList.toggle('hidden', !aiPadOpen);
+  updateToggleButtons();
+}
 
 function updateSelectedCount() {
   const cnt = selected.size;
@@ -652,6 +672,8 @@ window.addEventListener('load', async () => {
   $('copyAllBtn').addEventListener('click', copyAll);
   $('selectTextBtn').addEventListener('click', selectText);
   $('clearBtn').addEventListener('click', clearReport);
+
+  updateToggleButtons();
 
   // Modal
   $('closeBtn').addEventListener('click', closeModal);
