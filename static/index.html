@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Momentum Scout</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script>
+    (function () {
+      const th = localStorage.getItem('ms_theme');
+      const pref = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.dataset.theme = th || pref;
+      const lg = localStorage.getItem('ms_lang');
+      if (lg) document.documentElement.lang = lg;
+    })();
+  </script>
+</head>
+<body>
+  <header class="header">
+    <div class="title">
+      <div class="h1">⚡ Momentum Scout</div>
+      <div class="sub" id="asof" data-i18n="tagline">loading…</div>
+    </div>
+    <div class="hdr-actions">
+      <button class="hdr-btn" id="langBtn" aria-label="Switch language">한국어</button>
+      <button class="hdr-btn" id="themeBtn" aria-label="Toggle theme">☾</button>
+      <button class="hdr-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">↻</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- ── Filter card ── -->
+    <section class="card">
+      <div class="row">
+        <label class="field">
+          <div class="label" data-i18n="lbMarket">Market</div>
+          <select id="market">
+            <option value="US">US</option>
+            <option value="KR">KR (Yahoo .KS/.KQ)</option>
+          </select>
+        </label>
+        <label class="field">
+          <div class="label" data-i18n="lbHorizon">Horizon (trading days)</div>
+          <select id="horizon">
+            <option value="5"  data-i18n="opt5d">5D (default)</option>
+            <option value="20" data-i18n="opt20d">20D (~1 month)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <div class="label"><span data-i18n="lbMaxPrice">Max Price</span> <span id="currencyTag" class="currency-tag">($)</span></div>
+          <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
+        </label>
+        <label class="field">
+          <div class="label" data-i18n="lbMinTurnover">Min Avg Turnover (20D)</div>
+          <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field grow">
+          <div class="label">
+            <span data-i18n="lbSymbols">Analyze specific symbols (overrides screener)</span>
+          </div>
+          <input id="symbols" type="text" data-i18n-ph="phSymbols" placeholder="e.g. TSLA,NVDA or 005930.KS,035420.KS" />
+        </label>
+      </div>
+
+      <div class="row" id="scrRow">
+        <label class="field grow">
+          <div class="label" data-i18n="lbScreeners">US Screeners</div>
+          <input id="scrIds" type="text" value="day_gainers,most_actives" />
+        </label>
+        <span class="badge hidden" id="directBadge" data-i18n="directMode">Direct mode</span>
+      </div>
+
+      <div class="row">
+        <button class="btn primary" id="scanBtn" data-i18n="btnScan">Scan</button>
+        <div class="status-text" id="status"></div>
+      </div>
+
+      <div class="muted small" data-i18n="disclaimer"></div>
+    </section>
+
+    <!-- ── Batch report card ── -->
+    <section class="card" style="margin-top:14px;">
+      <div class="row" style="align-items:center; justify-content:space-between;">
+        <div>
+          <div class="h2" data-i18n="hBatch">Batch report</div>
+          <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
+        </div>
+        <button class="btn sm" id="clearBtn">✕</button>
+      </div>
+      <div class="row" style="flex-wrap:wrap;">
+        <button class="btn primary" id="reportTopBtn" data-i18n="btnReportTop">Report: Top 5</button>
+        <button class="btn" id="reportSelBtn">
+          <span data-i18n="btnReportSel">Report: Selected</span>
+          <span id="selCount" class="sel-count hidden">(0)</span>
+        </button>
+        <button class="btn" id="copyAllBtn" data-i18n="btnCopy">Copy</button>
+        <button class="btn ghost" id="selectTextBtn" data-i18n="btnSelectText">Select report text</button>
+      </div>
+      <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
+      <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
+    </section>
+
+    <!-- ── Candidate list ── -->
+    <div class="list-header" id="listHeader" style="display:none;">
+      <button class="btn sm" id="checkAllBtn" data-i18n="btnCheckAll">Check all</button>
+    </div>
+    <section class="list" id="list"></section>
+  </main>
+
+  <!-- ── Detail modal ── -->
+  <div class="modal hidden" id="modal">
+    <div class="sheet">
+      <div class="sheetHeader">
+        <div>
+          <div class="h2" id="mSymbol">—</div>
+          <div class="sub" id="mName"></div>
+        </div>
+        <button class="btn sm" id="closeBtn">✕</button>
+      </div>
+      <div class="sheetBody" id="detail"></div>
+      <div class="sheetFooter">
+        <button class="btn primary" id="copyBtn" data-i18n="btnCopySingle">Copy report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast ── -->
+  <div class="toast hidden" id="toast">
+    <span id="toastMsg"></span>
+    <button class="toast-close" id="toastClose">✕</button>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
