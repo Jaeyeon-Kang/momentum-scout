@@ -1171,7 +1171,56 @@ def _fmt_pct(x: Any) -> str:
         return "확인 불가"
 
 
-def _build_single_report(d: Dict[str, Any]) -> str:
+async def _fetch_macro_snapshot(market: str) -> List[Dict[str, Any]]:
+    m = (market or "US").upper().strip()
+    if m == "KR":
+        labels = {
+            "^KS11": "KOSPI",
+            "^KQ11": "KOSDAQ",
+            "USDKRW=X": "USD/KRW",
+            "^TNX": "US10Y",
+            "DX-Y.NYB": "DXY",
+        }
+        region = "KR"
+        symbols = list(labels.keys())
+    else:
+        labels = {
+            "SPY": "SPY",
+            "QQQ": "QQQ",
+            "^VIX": "VIX",
+            "^TNX": "US10Y",
+            "DX-Y.NYB": "DXY",
+        }
+        region = "US"
+        symbols = list(labels.keys())
+
+    out: List[Dict[str, Any]] = []
+    try:
+        qmap = await fetch_yahoo_quote(symbols, region=region)
+        for s in symbols:
+            q = qmap.get(s) or {}
+            p = q.get("regularMarketPrice")
+            pc = q.get("regularMarketPreviousClose")
+            chg = None
+            try:
+                if p is not None and pc is not None:
+                    chg = _safe_pct(float(p), float(pc))
+            except Exception:
+                chg = None
+            out.append(
+                {
+                    "symbol": s,
+                    "label": labels.get(s, s),
+                    "last": p,
+                    "day_chg_pct": chg,
+                }
+            )
+    except Exception:
+        return []
+    return out
+
+
+def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]] = None) -> str:
     now_et = _now_et()
     now_kst = _now_kst()
 
@@ -1193,6 +1242,19 @@ def _build_single_report(d: Dict[str, Any]) -> str:
     lines.append(f"현재 시간 KST: {_fmt_dt(now_kst)}")
     lines.append(f"마켓: {market} / 데이터 세션: {d.get('session','Unknown')} (Yahoo/SEC best-effort)")
     lines.append(f"기준: {horizon} 거래일 모멘텀(보유기한 최대 {horizon} 거래일)")
+    lines.append("")
+    lines.append("AI 판단 요청(복붙용):")
+    lines.append("아래 데이터 기반으로 다음 4가지를 판단해줘.")
+    lines.append("1) 각 종목 진입 여부 (진입/관망)")
+    lines.append("2) 각 종목 목표가/손절가 (숫자 필수)")
+    lines.append("3) 최종 1순위 종목 1개")
+    lines.append("4) 판단 근거 요약 (거시 + 종목)")
+
+    if macro:
+        lines.append("")
+        lines.append("매크로 체크(당일):")
+        for x in macro:
+            lines.append(f"  - {x.get('label')}: {_fnum(x.get('last'))} ({_fmt_pct(x.get('day_chg_pct'))})")
     lines.append("")
 
     lines.append(f"- 종목: {d.get('symbol')} / {d.get('name')} ({d.get('currency') or 'currency ?'})")
@@ -1257,7 +1319,7 @@ def _build_single_report(d: Dict[str, Any]) -> str:
     lines.append(f"  - 당일 고가/저가: {_fnum(lv.get('day_high'))} / {_fnum(lv.get('day_low'))}")
 
     lines.append("")
-    lines.append("트레이드 플랜(규칙 기반 예시, 투자 조언 아님 / 분할매수·분할매도 없음):")
+    lines.append("트레이드 플랜(규칙 기반 참고값, 최종 판단은 AI/사용자):")
     lines.append(f"  - 진입 트리거: {_fnum(plan.get('entry_trigger'))} 이상 체결 시")
     lines.append(f"  - 손절(무효화): {_fnum(plan.get('stop'))}")
     lines.append(f"  - 목표(전량 1회 매도): {_fnum(plan.get('target'))}")
@@ -1272,7 +1334,8 @@ def _build_single_report(d: Dict[str, Any]) -> str:
 @app.get("/report/{symbol}", response_class=PlainTextResponse)
 async def report(symbol: str, market: str = Query(default="US"), horizon_days: int = Query(default=5)) -> str:
     d = await ticker_detail(symbol, market=market, horizon_days=horizon_days)
-    return _build_single_report(d)
+    macro = await _fetch_macro_snapshot(market)
+    return _build_single_report(d, macro=macro)
 
 
 @app.get("/report_multi", response_class=PlainTextResponse)
@@ -1317,46 +1380,212 @@ async def report_multi(
         else:
             errors.append(f"- {s}: {err or '확인 불가'}")
 
-    # top pick: highest horizon return * relvol if available (simple heuristic)
-    def pick_score(d: Dict[str, Any]) -> float:
-        st = d.get("stats", {}) or {}
-        rv = st.get("rel_vol_20d")
-        r = st.get("ret_horizon_pct")
-        try:
-            rvf = float(rv) if rv is not None else 1.0
-            rf = float(r) if r is not None else -999.0
-            return rf * math.log(max(1.0, rvf))
-        except Exception:
-            return -999.0
-
-    ok_details.sort(key=pick_score, reverse=True)
-
     # header
     lines: List[str] = []
     lines.append(f"현재 시간 ET: {_fmt_dt(now_et)}")
     lines.append(f"현재 시간 KST: {_fmt_dt(now_kst)}")
     lines.append(f"리포트 모드: 다종목 일괄 / 기준 {horizon_days} 거래일 (보유기한 최대 {horizon_days} 거래일)")
     lines.append(f"심볼: {', '.join([d.get('symbol') for d in ok_details])}")
+    lines.append("")
+    lines.append("AI 판단 요청(복붙용):")
+    lines.append("아래 데이터로 진입/관망, 목표가, 손절가, 우선순위 TOP3를 제시해줘.")
+    lines.append("핵심: 점수(total/세부) + 매크로 + 이벤트 리스크를 함께 반영.")
+
+    macro = await _fetch_macro_snapshot(market)
+    if macro:
+        lines.append("")
+        lines.append("매크로 체크(당일):")
+        for x in macro:
+            lines.append(f"- {x.get('label')}: {_fnum(x.get('last'))} ({_fmt_pct(x.get('day_chg_pct'))})")
+
     if errors:
         lines.append("")
         lines.append("불러오기 실패:")
         lines.extend(errors)
 
-    # body
-    for idx, d in enumerate(ok_details, start=1):
-        lines.append("\n" + ("=" * 44))
-        lines.append(f"[{idx}] {d.get('symbol')} / {d.get('name')}")
+    def _to_float(x: Any, default: float = 0.0) -> float:
+        try:
+            return float(x)
+        except Exception:
+            return default
 
-        # reuse single report body but remove the global header to keep it compact.
-        single = _build_single_report(d).splitlines()
-        # drop first 4 lines (time/market/horizon) for each symbol
-        trimmed = single[4:] if len(single) > 6 else single
-        lines.extend(trimmed)
+    def _score_breakdown(d: Dict[str, Any]) -> Dict[str, float]:
+        q = d.get("quote", {}) or {}
+        st = d.get("stats", {}) or {}
+        ex = d.get("extras", {}) or {}
+        qs = (ex.get("quote_summary") or {})
+        opt = (ex.get("options") or {})
 
-    if ok_details:
-        best = ok_details[0]
-        lines.append("\n" + ("=" * 44))
-        lines.append(f"가장 가능성이 높은 1개(규칙 기반, 최신 값 기준): {best.get('symbol')} (선택 {horizon_days}D 수익률 {_fmt_pct((best.get('stats') or {}).get('ret_horizon_pct'))}, 상대거래량 {_fnum((best.get('stats') or {}).get('rel_vol_20d'))}x)")
+        relv = _to_float(st.get("rel_vol_20d"), 0.0)
+        hret = _to_float(st.get("ret_horizon_pct"), -50.0)
+        dayp = _to_float(q.get("day_chg_pct"), 0.0)
+        atr = _to_float(st.get("atr14"), 0.0)
+        last = _to_float(q.get("last"), 0.0)
+        vol = _to_float(q.get("day_volume"), 0.0)
+        turnover = last * vol
+        call_put = _to_float(opt.get("call_put_vol_ratio"), 1.0)
+        short_ratio = _to_float(qs.get("short_ratio"), 0.0)
+        short_float = _to_float(qs.get("short_percent_of_float"), 0.0)
+
+        atr_pct = (atr / last * 100.0) if last > 0 and atr > 0 else 0.0
+
+        momentum = 0.0
+        momentum += max(-20.0, min(25.0, hret)) * 1.8
+        momentum += max(-8.0, min(10.0, dayp)) * 1.2
+
+        liquidity = 0.0
+        liquidity += min(4.0, relv) * 14.0
+        if turnover >= 1_000_000_000:
+            liquidity += 18.0
+        elif turnover >= 300_000_000:
+            liquidity += 12.0
+        elif turnover >= 100_000_000:
+            liquidity += 7.0
+
+        flow_proxy = 0.0
+        flow_proxy += max(0.0, min(3.0, call_put)) * 7.0
+        flow_proxy += max(0.0, min(12.0, short_float)) * 1.1
+        if short_ratio >= 5.0:
+            flow_proxy += 4.0
+
+        risk = 0.0
+        if atr_pct > 7.0:
+            risk += 16.0
+        elif atr_pct > 5.0:
+            risk += 9.0
+        elif atr_pct > 3.5:
+            risk += 4.0
+        if relv < 0.7:
+            risk += 5.0
+
+        total = momentum + liquidity + flow_proxy - risk
+        return {
+            "total": round(total, 1),
+            "momentum": round(momentum, 1),
+            "liquidity": round(liquidity, 1),
+            "flow_proxy": round(flow_proxy, 1),
+            "risk_penalty": round(risk, 1),
+            "turnover": turnover,
+            "atr_pct": atr_pct,
+        }
+
+    def _spread_pct(q: Dict[str, Any]) -> Optional[float]:
+        b = q.get("bid")
+        a = q.get("ask")
+        try:
+            bf = float(b)
+            af = float(a)
+            if bf > 0 and af > 0:
+                return (af / bf - 1.0) * 100.0
+        except Exception:
+            return None
+        return None
+
+    def _risk_flags(d: Dict[str, Any], score: Dict[str, float]) -> str:
+        flags: List[str] = []
+        q = d.get("quote", {}) or {}
+        ex = d.get("extras", {}) or {}
+        qs = (ex.get("quote_summary") or {})
+        sec = d.get("sec_filings_last_7d", []) or []
+        spread = _spread_pct(q)
+        eds = qs.get("earnings_dates") or []
+        if eds:
+            flags.append("실적일정")
+        if spread is not None and spread > 0.35:
+            flags.append("스프레드넓음")
+        if score.get("atr_pct", 0.0) > 6.0:
+            flags.append("변동성높음")
+        if sec:
+            flags.append(f"SEC{len(sec)}건")
+        return ",".join(flags) if flags else "낮음"
+
+    def _macro_regime(macro_rows: List[Dict[str, Any]], market_code: str) -> str:
+        m = {str(x.get("label")): x for x in (macro_rows or [])}
+        if market_code.upper() == "US":
+            spy = _to_float((m.get("SPY") or {}).get("day_chg_pct"), 0.0)
+            qqq = _to_float((m.get("QQQ") or {}).get("day_chg_pct"), 0.0)
+            vix = _to_float((m.get("VIX") or {}).get("day_chg_pct"), 0.0)
+            if spy > 0 and qqq > 0 and vix <= 0:
+                return "RISK_ON"
+            if spy < 0 and qqq < 0 and vix > 0:
+                return "RISK_OFF"
+            return "MIXED"
+        kospi = _to_float((m.get("KOSPI") or {}).get("day_chg_pct"), 0.0)
+        kosdaq = _to_float((m.get("KOSDAQ") or {}).get("day_chg_pct"), 0.0)
+        usdkrw = _to_float((m.get("USD/KRW") or {}).get("day_chg_pct"), 0.0)
+        if kospi > 0 and kosdaq > 0 and usdkrw <= 0:
+            return "RISK_ON"
+        if kospi < 0 and kosdaq < 0 and usdkrw > 0:
+            return "RISK_OFF"
+        return "MIXED"
+
+    # 비교 테이블(리포트 탭 전용): AI가 바로 랭킹할 수 있는 구조화 데이터
+    lines.append("")
+    lines.append("비교 요약(배치 리포트):")
+    lines.append("SYMBOL | TOTAL | MOM | LIQ | FLOW | RISK- | HRET | DAY | RELVOL | ATR% | SPREAD% | TURNOVER | EVENT")
+    ranked: List[Tuple[float, Dict[str, Any], Dict[str, float]]] = []
+    for d in ok_details:
+        q = d.get("quote", {}) or {}
+        st = d.get("stats", {}) or {}
+        sc = _score_breakdown(d)
+        event = _risk_flags(d, sc)
+        spread = _spread_pct(q)
+        ranked.append((sc["total"], d, sc))
+        lines.append(
+            f"{d.get('symbol')} | {sc['total']} | {sc['momentum']} | {sc['liquidity']} | {sc['flow_proxy']} | {sc['risk_penalty']} | "
+            f"{_fmt_pct(st.get('ret_horizon_pct'))} | {_fmt_pct(q.get('day_chg_pct'))} | {_fnum(st.get('rel_vol_20d'))}x | "
+            f"{_fnum(sc.get('atr_pct'))}% | {_fnum(spread,3) if spread is not None else '확인 불가'} | {_fint(sc['turnover'])} | {event}"
+        )
+
+    ranked.sort(key=lambda x: x[0], reverse=True)
+    if ranked:
+        best = ranked[0][1]
+        top3 = [x[1].get("symbol") for x in ranked[:3]]
+        lines.append("")
+        lines.append(f"우선순위 TOP3: {', '.join([str(x) for x in top3])}")
+        lines.append(f"1순위 후보: {best.get('symbol')} (총점 {ranked[0][0]})")
+        lines.append("주의: FLOW는 기관/외국인 순매수 원데이터가 아닌 프록시(거래강도/옵션/숏지표)입니다.")
+
+    # 종목별 AI 해석 블록
+    lines.append("")
+    lines.append("종목별 해석 입력(요약):")
+    for total, d, sc in ranked:
+        q = d.get("quote", {}) or {}
+        st = d.get("stats", {}) or {}
+        lv = d.get("levels", {}) or {}
+        plan = d.get("trade_plan_like", {}) or {}
+        ex = d.get("extras", {}) or {}
+        qs = (ex.get("quote_summary") or {})
+        opt = (ex.get("options") or {})
+        news = d.get("news", []) or []
+        sec = d.get("sec_filings_last_7d", []) or []
+        lines.append("-" * 42)
+        lines.append(
+            f"[{d.get('symbol')}] total={total} (mom={sc['momentum']}, liq={sc['liquidity']}, flow={sc['flow_proxy']}, risk={sc['risk_penalty']})"
+        )
+        lines.append(
+            f"price={_fnum(q.get('last'))}, day={_fmt_pct(q.get('day_chg_pct'))}, hret={_fmt_pct(st.get('ret_horizon_pct'))}, relvol={_fnum(st.get('rel_vol_20d'))}x, atr={_fnum(st.get('atr14'))} ({_fnum(sc.get('atr_pct'))}%)"
+        )
+        lines.append(
+            f"levels: resist20={_fnum(lv.get('resistance_20d'))}, support20={_fnum(lv.get('support_20d'))}, dayHL={_fnum(lv.get('day_high'))}/{_fnum(lv.get('day_low'))}"
+        )
+        lines.append(
+            f"plan_ref: entry={_fnum(plan.get('entry_trigger'))}, stop={_fnum(plan.get('stop'))}, target={_fnum(plan.get('target'))}"
+        )
+        lines.append(
+            f"flow_proxy_details: turnover={_fint(sc['turnover'])}, call_put={_fnum(opt.get('call_put_vol_ratio'))}, short_float={_fnum(qs.get('short_percent_of_float'),4)}, short_ratio={_fnum(qs.get('short_ratio'))}"
+        )
+        if qs.get("earnings_dates"):
+            lines.append(f"event: earnings={', '.join((qs.get('earnings_dates') or [])[:2])}")
+        if sec:
+            lines.append(f"event: sec_forms={', '.join([(x.get('form') or 'N/A') for x in sec[:3]])}")
+        if news:
+            lines.append(f"news_headline_1: {(news[0].get('title') or '확인 불가')}")
+
+    lines.append("")
+    lines.append(f"매크로 레짐 추정: {_macro_regime(macro, market)}")
+    lines.append("AI 출력 요청 형식(엄수):")
+    lines.append("[종목] 진입/관망 | 진입가 | 손절가 | 목표가 | 포지션우선순위(1~3) | 확신도 | 근거(거시/수급프록시/레벨)")
 
     return "\n".join(lines)
 

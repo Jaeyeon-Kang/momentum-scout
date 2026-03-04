@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="ko" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -8,10 +8,10 @@
   <link rel="stylesheet" href="/styles.css" />
   <script>
     (function () {
-      const th = localStorage.getItem('ms_theme');
-      const pref = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      const th = localStorage.getItem("ms_theme");
+      const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
       document.documentElement.dataset.theme = th || pref;
-      const lg = localStorage.getItem('ms_lang');
+      const lg = localStorage.getItem("ms_lang");
       if (lg) document.documentElement.lang = lg;
     })();
   </script>
@@ -19,130 +19,168 @@
 <body>
   <header class="header">
     <div class="title">
-      <div class="h1">⚡ Momentum Scout</div>
-      <div class="sub" id="asof" data-i18n="tagline">loading…</div>
+      <div class="h1" data-i18n="appTitle">Momentum Scout</div>
+      <div class="sub" id="asof" data-i18n="tagline">로딩 중…</div>
     </div>
     <div class="hdr-actions">
-      <button class="hdr-btn" id="langBtn" aria-label="Switch language">한국어</button>
+      <button class="hdr-btn" id="langBtn" aria-label="Switch language">EN</button>
       <button class="hdr-btn" id="themeBtn" aria-label="Toggle theme">☾</button>
-      <button class="hdr-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">↻</button>
+      <button class="hdr-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">새로고침</button>
     </div>
   </header>
 
+  <nav class="top-menu" aria-label="Main menu">
+    <button class="menu-btn active" id="menuScan" data-panel="panelScan" data-i18n="menuScan">1. 탐색 설정</button>
+    <button class="menu-btn" id="menuList" data-panel="panelList" data-i18n="menuList">2. 후보 보기</button>
+  </nav>
+
   <main class="main">
-    <!-- ── Filter card ── -->
-    <section class="card">
-      <div class="row">
-        <label class="field">
-          <div class="label" data-i18n="lbMarket">Market</div>
-          <select id="market">
-            <option value="US">US</option>
-            <option value="KR">KR (Yahoo .KS/.KQ)</option>
-          </select>
-        </label>
-        <label class="field">
-          <div class="label" data-i18n="lbHorizon">Horizon (trading days)</div>
-          <select id="horizon">
-            <option value="5"  data-i18n="opt5d">5D (default)</option>
-            <option value="20" data-i18n="opt20d">20D (~1 month)</option>
-          </select>
-        </label>
-      </div>
+    <section class="panel active" id="panelScan">
+      <section class="card">
+        <div class="section-head">
+          <div class="h2" data-i18n="scanTitle">무엇을 찾을지 정해요</div>
+          <div class="muted small" data-i18n="scanDesc">시장과 기간을 고르고, 필요하면 직접 종목을 넣으세요.</div>
+        </div>
 
-      <div class="row">
-        <button class="btn sm ghost" id="toggleAdvancedBtn" data-i18n="btnAdvancedShow">Show advanced filters</button>
-      </div>
+        <div class="row">
+          <label class="field">
+            <div class="label" data-i18n="lbMarket">거래 시장</div>
+            <select id="market">
+              <option value="US">US</option>
+              <option value="KR">KR (Yahoo .KS/.KQ)</option>
+            </select>
+          </label>
+          <label class="field">
+            <div class="label" data-i18n="lbHorizon">보유 기간</div>
+            <select id="horizon">
+              <option value="5" data-i18n="opt5d">5일 (빠른 탐색)</option>
+              <option value="20" data-i18n="opt20d">20일 (완만한 흐름)</option>
+            </select>
+          </label>
+        </div>
 
-      <div class="row hidden" id="advancedFiltersRow">
-        <label class="field">
-          <div class="label"><span data-i18n="lbMaxPrice">Max Price</span> <span id="currencyTag" class="currency-tag">($)</span></div>
-          <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
-        </label>
-        <label class="field">
-          <div class="label" data-i18n="lbMinTurnover">Min Avg Turnover (20D)</div>
-          <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
-        </label>
-      </div>
+        <div class="row">
+          <button class="btn sm ghost" id="toggleAdvancedBtn" data-i18n="btnAdvancedShow">고급 설정 열기</button>
+        </div>
 
-      <div class="row">
-        <label class="field grow">
-          <div class="label">
-            <span data-i18n="lbSymbols">Analyze specific symbols (overrides screener)</span>
+        <div class="row hidden" id="advancedFiltersRow">
+          <label class="field">
+            <div class="label"><span data-i18n="lbMaxPrice">최대 가격</span> <span id="currencyTag" class="currency-tag">($)</span></div>
+            <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
+          </label>
+          <label class="field">
+            <div class="label" data-i18n="lbMinTurnover">최소 평균 거래대금 (20일)</div>
+            <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="field grow">
+            <div class="label">
+              <span data-i18n="lbSymbols">직접 볼 종목 코드 (선택)</span>
+            </div>
+            <input id="symbols" type="text" data-i18n-ph="phSymbols" placeholder="예: TSLA,NVDA 또는 005930.KS,035420.KS" />
+          </label>
+        </div>
+
+        <div class="row" id="scrRow">
+          <label class="field grow">
+            <div class="label" data-i18n="lbScreeners">US 자동 스크리너</div>
+            <select id="scrPreset">
+              <option value="momentum" data-i18n="scrPresetMomentum">추천: 모멘텀 기본</option>
+              <option value="gainers" data-i18n="scrPresetGainers">상승 강도 중심</option>
+              <option value="liquidity" data-i18n="scrPresetLiquidity">거래량 중심</option>
+              <option value="custom" data-i18n="scrPresetCustom">직접 입력</option>
+            </select>
+          </label>
+          <span class="badge hidden" id="directBadge" data-i18n="directMode">직접입력 모드</span>
+        </div>
+        <div class="row hidden" id="scrCustomRow">
+          <label class="field grow">
+            <div class="label" data-i18n="lbScreenerCustom">직접 스크리너 ID 입력</div>
+            <input id="scrIds" type="text" value="day_gainers,most_actives" />
+          </label>
+        </div>
+        <div class="muted small" id="scrHint" data-i18n="scrHint">
+          추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="scanBtn" data-i18n="btnScan">후보 찾기</button>
+          <div class="status-text" id="status"></div>
+        </div>
+
+        <div class="muted small" data-i18n="disclaimer"></div>
+      </section>
+    </section>
+
+    <section class="panel" id="panelList">
+      <section class="card">
+        <div class="section-head section-head-inline">
+          <div>
+            <div class="h2" data-i18n="listTitle">후보 목록</div>
+            <div class="muted small" data-i18n="listDesc">카드를 눌러 상세를 보고, 체크해서 리포트에 담으세요.</div>
           </div>
-          <input id="symbols" type="text" data-i18n-ph="phSymbols" placeholder="e.g. TSLA,NVDA or 005930.KS,035420.KS" />
-        </label>
-      </div>
+          <div class="list-header" id="listHeader" style="display:none;">
+            <button class="btn sm" id="checkAllBtn" data-i18n="btnCheckAll">전체 체크</button>
+          </div>
+        </div>
+        <section class="list" id="list"></section>
+      </section>
 
-      <div class="row" id="scrRow">
-        <label class="field grow">
-          <div class="label" data-i18n="lbScreeners">US Screeners</div>
-          <input id="scrIds" type="text" value="day_gainers,most_actives" />
-        </label>
-        <span class="badge hidden" id="directBadge" data-i18n="directMode">Direct mode</span>
-      </div>
-
-      <div class="row">
-        <button class="btn primary" id="scanBtn" data-i18n="btnScan">Scan</button>
-        <div class="status-text" id="status"></div>
-      </div>
-
-      <div class="muted small" data-i18n="disclaimer"></div>
+      <section class="card" style="margin-top:12px;" id="aiReportAnchor">
+        <div class="section-head section-head-inline">
+          <div>
+            <div class="h2" data-i18n="hBatch">AI 전달용 리포트</div>
+            <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
+          </div>
+          <div class="row-btns">
+            <button class="btn sm" id="clearBtn">지우기</button>
+          </div>
+        </div>
+        <div class="guide-box">
+          <div class="guide-title" data-i18n="reportGuideTitle">리포트 탭 사용 순서</div>
+          <div class="guide-text" data-i18n="reportGuideBody">
+            1) 탐색 설정에서 후보 찾기 -> 2) 후보 보기에서 체크 -> 3) 여기서 리포트 생성
+          </div>
+          <div class="guide-text" data-i18n="reportGuideAction">
+            매크로 + 점수분해 + 이벤트 리스크를 함께 담아 AI가 순위를 좁힙니다.
+          </div>
+        </div>
+        <div id="aiPadBody">
+          <div class="row wrap">
+            <button class="btn primary" id="reportSelBtn">
+              <span data-i18n="btnReportSel">선택 종목 리포트 생성</span>
+              <span id="selCount" class="sel-count hidden">(0)</span>
+            </button>
+            <button class="btn" id="copyAllBtn" data-i18n="btnCopy">전체 복사</button>
+          </div>
+          <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
+          <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
+        </div>
+      </section>
     </section>
-
-    <!-- ── AI copy pad (optional) ── -->
-    <section class="card" style="margin-top:14px;">
-      <div class="row" style="align-items:center; justify-content:space-between;">
-        <div>
-          <div class="h2" data-i18n="hBatch">AI copy pad (optional)</div>
-          <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn sm ghost" id="toggleAIPadBtn" data-i18n="btnAIPadShow">Open AI copy pad</button>
-          <button class="btn sm" id="clearBtn">✕</button>
-        </div>
-      </div>
-      <div id="aiPadBody" class="hidden">
-        <div class="row" style="flex-wrap:wrap;">
-          <button class="btn primary" id="reportSelBtn">
-            <span data-i18n="btnReportSel">Generate: Selected</span>
-            <span id="selCount" class="sel-count hidden">(0)</span>
-          </button>
-          <button class="btn" id="copyAllBtn" data-i18n="btnCopy">Copy</button>
-          <button class="btn ghost" id="selectTextBtn" data-i18n="btnSelectText">Select report text</button>
-        </div>
-        <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
-        <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
-      </div>
-    </section>
-
-    <!-- ── Candidate list ── -->
-    <div class="list-header" id="listHeader" style="display:none;">
-      <button class="btn sm" id="checkAllBtn" data-i18n="btnCheckAll">Check all</button>
-    </div>
-    <section class="list" id="list"></section>
   </main>
 
-  <!-- ── Detail modal ── -->
   <div class="modal hidden" id="modal">
     <div class="sheet">
       <div class="sheetHeader">
         <div>
-          <div class="h2" id="mSymbol">—</div>
+          <div class="h2" id="mSymbol">-</div>
           <div class="sub" id="mName"></div>
         </div>
-        <button class="btn sm" id="closeBtn">✕</button>
+        <button class="btn sm" id="closeBtn">닫기</button>
       </div>
       <div class="sheetBody" id="detail"></div>
       <div class="sheetFooter">
-        <button class="btn primary" id="copyBtn" data-i18n="btnCopySingle">Copy report</button>
+        <button class="btn primary" id="copyBtn" data-i18n="btnCopySingle">이 종목 리포트 복사</button>
       </div>
     </div>
   </div>
 
-  <!-- ── Toast ── -->
   <div class="toast hidden" id="toast">
     <span id="toastMsg"></span>
-    <button class="toast-close" id="toastClose">✕</button>
+    <button class="toast-close" id="toastClose">닫기</button>
   </div>
 
   <script src="/app.js"></script>

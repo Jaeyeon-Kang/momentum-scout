@@ -3,32 +3,52 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 const S = {
   en: {
-    tagline:       'loading…',
+    appTitle:      'Momentum Scout',
+    tagline:       'Loading market status…',
+    menuScan:      '1. Setup',
+    menuList:      '2. Candidates',
+    menuReport:    '3. Report',
+    scanTitle:     'Set your scan target',
+    scanDesc:      'Choose market and hold period, then optionally enter symbols.',
+    listTitle:     'Candidate list',
+    listDesc:      'Tap a card for detail. Check items to build a report.',
     lbMarket:      'Market',
-    lbHorizon:     'Horizon (trading days)',
-    lbMaxPrice:    'Max Price',
-    lbMinTurnover: 'Min Avg Turnover (20D)',
-    lbSymbols:     'Analyze specific symbols (overrides screener)',
-    lbScreeners:   'US Screeners',
+    lbHorizon:     'Hold period',
+    lbMaxPrice:    'Max price',
+    lbMinTurnover: 'Min avg turnover (20D)',
+    lbSymbols:     'Symbols to analyze directly (optional)',
+    lbScreeners:   'US auto screeners',
+    lbScreenerCustom: 'Custom screener IDs',
+    scrPresetMomentum: 'Recommended: Momentum core',
+    scrPresetGainers: 'Up movers focus',
+    scrPresetLiquidity: 'Liquidity focus',
+    scrPresetCustom: 'Manual input',
+    scrHint:       'Recommended preset is applied automatically. Most users do not need manual IDs.',
     phSymbols:     'e.g. TSLA,NVDA or 005930.KS,035420.KS',
     phReport:      'Scan first. Report will appear here.',
-    opt5d:         '5D (default)',
-    opt20d:        '20D (~1 month)',
-    btnScan:       'Scan',
+    opt5d:         '5D (quick)',
+    opt20d:        '20D (smoother trend)',
+    btnScan:       'Find candidates',
     btnScanning:   'Scanning…',
-    hBatch:        'AI copy pad (optional)',
-    metaBatch:     'Screener-first: select symbols only when you want a pasted report.',
-    btnReportSel:  'Generate: Selected',
-    btnCopy:       'Copy',
-    btnSelectText: 'Select report text',
-    btnAdvancedShow: 'Show advanced filters',
-    btnAdvancedHide: 'Hide advanced filters',
-    btnAIPadShow:    'Open AI copy pad',
-    btnAIPadHide:    'Close AI copy pad',
+    hBatch:        'AI ranking report',
+    metaBatch:     'No scan here. Build a comparison report from checked candidates.',
+    btnReportSel:  'Build AI comparison report',
+    btnCopy:       'Copy all',
+    btnAdvancedShow: 'Open advanced settings',
+    btnAdvancedHide: 'Close advanced settings',
     btnCheckAll:   'Check all',
-    btnUncheckAll: 'Uncheck all',
-    btnCopySingle: 'Copy report',
+    btnUncheckAll: 'Clear all checks',
+    btnCopySingle: 'Copy this ticker report',
     directMode:    'Direct mode',
+    btnClear:      'Clear',
+    btnRefresh:    'Refresh',
+    btnClose:      'Close',
+    colLast:       'Last',
+    colRelVol:     'RelVol',
+    colScore:      'Score',
+    reportGuideTitle: 'How to use report tab',
+    reportGuideBody:  '1) Scan in Setup -> 2) Check in Candidates -> 3) Generate report here',
+    reportGuideAction:'Includes macro + score breakdown + event risk for AI ranking.',
     disclaimer:    "No API keys. Data: Yahoo Finance (public) + SEC + Yahoo RSS. Not financial advice.",
     iosHint:       'iPhone: tap textarea → Select All → Copy.',
     scanning:      'Scanning…',
@@ -39,7 +59,7 @@ const S = {
     noSelected:    'Select tickers first by checking the boxes.',
     reportEmpty:   'Report is empty.',
     reportCleared: 'Cleared.',
-    copied:        'Copied ✓',
+    copied:        'Copied',
     reportDone:    'Report generated ✓',
     // sections
     secQuote:  'Quote',
@@ -90,32 +110,52 @@ const S = {
     directScan:   (n) => `Analyzing ${n} symbols (direct mode)…`,
   },
   ko: {
-    tagline:       '로딩 중…',
-    lbMarket:      '마켓',
-    lbHorizon:     '보유 기간 (거래일)',
+    appTitle:      'Momentum Scout',
+    tagline:       '시장 상태 불러오는 중…',
+    menuScan:      '1. 탐색 설정',
+    menuList:      '2. 후보 보기',
+    menuReport:    '3. 리포트',
+    scanTitle:     '무엇을 찾을지 정해요',
+    scanDesc:      '시장과 기간을 고르고, 필요하면 직접 종목을 넣으세요.',
+    listTitle:     '후보 목록',
+    listDesc:      '카드를 눌러 상세를 보고, 체크해서 리포트에 담으세요.',
+    lbMarket:      '거래 시장',
+    lbHorizon:     '보유 기간',
     lbMaxPrice:    '최대 가격',
     lbMinTurnover: '최소 평균 거래대금 (20일)',
-    lbSymbols:     '종목 직접 분석 (입력 시 스크리너 무시)',
-    lbScreeners:   'US 스크리너',
+    lbSymbols:     '직접 볼 종목 코드 (선택)',
+    lbScreeners:   'US 자동 스크리너',
+    lbScreenerCustom: '직접 스크리너 ID 입력',
+    scrPresetMomentum: '추천: 모멘텀 기본',
+    scrPresetGainers: '상승 강도 중심',
+    scrPresetLiquidity: '거래량 중심',
+    scrPresetCustom: '직접 입력',
+    scrHint:       '추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.',
     phSymbols:     '예: TSLA,NVDA 또는 005930.KS,035420.KS',
     phReport:      '먼저 스캔하세요. 리포트가 여기에 생성됩니다.',
-    opt5d:         '5일 (기본)',
-    opt20d:        '20일 (~1개월)',
-    btnScan:       '스캔',
+    opt5d:         '5일 (빠른 탐색)',
+    opt20d:        '20일 (완만한 흐름)',
+    btnScan:       '후보 찾기',
     btnScanning:   '스캔 중…',
-    hBatch:        'AI 복사용 패드 (선택)',
-    metaBatch:     '스크리너 중심: 필요할 때만 선택 종목 리포트를 생성하세요.',
-    btnReportSel:  '생성: 선택 종목',
-    btnCopy:       '복사',
-    btnSelectText: '텍스트 전체 선택',
-    btnAdvancedShow: '고급 필터 열기',
-    btnAdvancedHide: '고급 필터 닫기',
-    btnAIPadShow:    'AI 패드 열기',
-    btnAIPadHide:    'AI 패드 닫기',
+    hBatch:        'AI 비교 리포트',
+    metaBatch:     '이 탭은 스캔이 아닙니다. 체크한 후보로 비교 리포트를 만듭니다.',
+    btnReportSel:  'AI 비교 리포트 만들기',
+    btnCopy:       '전체 복사',
+    btnAdvancedShow: '고급 설정 열기',
+    btnAdvancedHide: '고급 설정 닫기',
     btnCheckAll:   '전체 체크',
     btnUncheckAll: '전체 해제',
-    btnCopySingle: '리포트 복사',
+    btnCopySingle: '이 종목 리포트 복사',
     directMode:    '직접입력 모드',
+    btnClear:      '지우기',
+    btnRefresh:    '새로고침',
+    btnClose:      '닫기',
+    colLast:       '현재가',
+    colRelVol:     '거래강도',
+    colScore:      '점수',
+    reportGuideTitle: '리포트 탭 사용 순서',
+    reportGuideBody:  '1) 탐색 설정에서 후보 찾기 -> 2) 후보 보기에서 체크 -> 3) 여기서 리포트 생성',
+    reportGuideAction:'매크로 + 점수분해 + 이벤트 리스크를 함께 담아 AI가 순위를 좁힙니다.',
     disclaimer:    'API 키 없음. 데이터: Yahoo Finance (공개) + SEC + Yahoo RSS. 투자 조언 아님.',
     iosHint:       'iPhone: 텍스트 영역 탭 → 전체 선택 → 복사.',
     scanning:      '스캔 중…',
@@ -123,10 +163,10 @@ const S = {
     noCandidate:   '조건에 맞는 종목 없음. 필터를 완화해보세요 (최대가격 올리기 또는 최소거래대금 낮추기).',
     noRss:         '뉴스 없음.',
     noSec:         '없음 / 확인 불가',
-    noSelected:    '종목을 먼저 선택하세요 (체크박스).',
+    noSelected:    '먼저 후보 보기 탭에서 종목을 체크하세요.',
     reportEmpty:   '리포트가 비어있습니다.',
     reportCleared: '초기화됨.',
-    copied:        '복사됨 ✓',
+    copied:        '복사됨',
     reportDone:    '리포트 생성 완료 ✓',
     secQuote:  '시세',
     secLevels: '레벨',
@@ -187,6 +227,10 @@ function t(key, ...args) {
 }
 function applyLang() {
   $('langBtn').textContent = getLang() === 'ko' ? 'EN' : '한국어';
+  $('refreshBtn').textContent = t('btnRefresh');
+  $('clearBtn').textContent = t('btnClear');
+  $('closeBtn').textContent = t('btnClose');
+  $('toastClose').textContent = t('btnClose');
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const v = t(el.dataset.i18n);
     if (typeof v === 'string') el.textContent = v;
@@ -198,6 +242,7 @@ function applyLang() {
   updateMarketUI(false);  // refresh labels that depend on market
   updateSelectedCount();
   updateToggleButtons();
+  updateMenuLabels();
 }
 
 // ─── Theme ──────────────────────────────────────────────────────
@@ -274,6 +319,23 @@ function setStatus(text) { $('status').textContent = text; }
 // ─── Market/mode UI ─────────────────────────────────────────────
 function getMarket()  { return ($('market').value || 'US').toUpperCase(); }
 function getHorizon() { return Number($('horizon').value || 5) === 20 ? 20 : 5; }
+const SCREENER_PRESETS = {
+  momentum: 'day_gainers,most_actives',
+  gainers: 'day_gainers',
+  liquidity: 'most_actives',
+};
+
+function getScreenerIds() {
+  if (getMarket() !== 'US') return '';
+  const preset = $('scrPreset')?.value || 'momentum';
+  if (preset === 'custom') return ($('scrIds').value || '').trim();
+  return SCREENER_PRESETS[preset] || SCREENER_PRESETS.momentum;
+}
+
+function updateScreenerPresetUI() {
+  const isCustom = ($('scrPreset')?.value || 'momentum') === 'custom';
+  $('scrCustomRow')?.classList.toggle('hidden', !isCustom);
+}
 
 function updateMarketUI(notify = true) {
   const m = getMarket();
@@ -281,8 +343,15 @@ function updateMarketUI(notify = true) {
   $('currencyTag').textContent = m === 'KR' ? '(₩)' : '($)';
   // Hide screener row for KR
   const scrRow = $('scrRow');
-  if (m === 'KR') scrRow.classList.add('market-hidden');
-  else            scrRow.classList.remove('market-hidden');
+  const scrCustomRow = $('scrCustomRow');
+  if (m === 'KR') {
+    scrRow.classList.add('market-hidden');
+    scrCustomRow?.classList.add('market-hidden');
+  } else {
+    scrRow.classList.remove('market-hidden');
+    scrCustomRow?.classList.remove('market-hidden');
+    updateScreenerPresetUI();
+  }
   // Defaults
   const mp = $('maxPrice'), mt = $('minTurnover');
   if (m === 'KR') {
@@ -299,12 +368,15 @@ function updateMarketUI(notify = true) {
 function updateSymbolsUI() {
   const hasSymbols = ($('symbols').value || '').trim().length > 0;
   const scrRow = $('scrRow');
+  const scrCustomRow = $('scrCustomRow');
   const badge  = $('directBadge');
   if (hasSymbols && getMarket() !== 'KR') {
     scrRow.classList.add('dimmed');
+    scrCustomRow?.classList.add('dimmed');
     badge.classList.remove('hidden');
   } else {
     scrRow.classList.remove('dimmed');
+    scrCustomRow?.classList.remove('dimmed');
     badge.classList.add('hidden');
   }
 }
@@ -313,11 +385,26 @@ function updateSymbolsUI() {
 let lastCandidates = [];
 let selected = new Set();
 let advancedOpen = false;
-let aiPadOpen = false;
+let activePanel = 'panelScan';
+
+function updateMenuLabels() {
+  ['menuScan', 'menuList'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    const key = el.dataset.i18n;
+    if (key) el.textContent = t(key);
+  });
+}
+
+function switchPanel(panelId) {
+  const target = document.getElementById(panelId) ? panelId : 'panelScan';
+  activePanel = target;
+  document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === target));
+  document.querySelectorAll('.menu-btn').forEach(el => el.classList.toggle('active', el.dataset.panel === target));
+}
 
 function updateToggleButtons() {
   $('toggleAdvancedBtn').textContent = t(advancedOpen ? 'btnAdvancedHide' : 'btnAdvancedShow');
-  $('toggleAIPadBtn').textContent = t(aiPadOpen ? 'btnAIPadHide' : 'btnAIPadShow');
 }
 
 function toggleAdvanced() {
@@ -326,17 +413,19 @@ function toggleAdvanced() {
   updateToggleButtons();
 }
 
-function toggleAIPad() {
-  aiPadOpen = !aiPadOpen;
-  $('aiPadBody').classList.toggle('hidden', !aiPadOpen);
-  updateToggleButtons();
-}
-
 function updateSelectedCount() {
   const cnt = selected.size;
   const el = $('selCount');
   if (cnt > 0) { el.textContent = `(${cnt})`; el.classList.remove('hidden'); }
   else         { el.classList.add('hidden'); }
+  updateReportActionState();
+}
+
+function updateReportActionState() {
+  const hasSelection = selected.size > 0;
+  const hasReport = (($('reportBox')?.value || '').trim().length > 0);
+  $('reportSelBtn').disabled = !hasSelection;
+  $('copyAllBtn').disabled = !hasReport;
 }
 
 // ─── Health ─────────────────────────────────────────────────────
@@ -360,7 +449,7 @@ async function scan() {
   const horizon   = getHorizon();
   const maxPrice  = Number($('maxPrice').value || 0);
   const minTurn   = Number($('minTurnover').value || 0);
-  const scrIds    = ($('scrIds').value || 'day_gainers,most_actives').trim();
+  const scrIds    = getScreenerIds();
   const symbols   = ($('symbols').value || '').trim();
 
   // Direct mode feedback
@@ -391,6 +480,8 @@ async function scan() {
     const j = await r.json();
     lastCandidates = j.candidates || [];
     selected = new Set();
+    allChecked = false;
+    $('checkAllBtn').textContent = t('btnCheckAll');
     updateSelectedCount();
 
     const ctx = j.context || {};
@@ -399,6 +490,7 @@ async function scan() {
       : `KOSPI ${fmtPct(ctx.KOSPI_day_chg_pct)} · KOSDAQ ${fmtPct(ctx.KOSDAQ_day_chg_pct)}`;
     setStatus(t('asof', j.asof_kst || j.asof_et, market, j.horizon_days, ctxStr, lastCandidates.length));
     renderList(lastCandidates, j.horizon_days);
+    switchPanel('panelList');
 
   } catch (e) {
     const msg = e.name === 'TypeError' ? t('errNetwork') : `${t('errUnknown')}: ${e.message}`;
@@ -429,10 +521,10 @@ function renderList(items, horizonDays) {
         <div class="name">${(x.name || '').slice(0, 42)}${x.currency ? ` · ${x.currency}` : ''}</div>
       </div>
       <div class="cols">
-        <div class="kv"><div class="k">Last</div><div class="v">${fmt(x.last, 2)}</div></div>
-        <div class="kv"><div class="k">RelVol</div><div class="v">${x.rel_vol_20d ? `${fmt(x.rel_vol_20d, 2)}×` : '—'}</div></div>
+        <div class="kv"><div class="k">${t('colLast')}</div><div class="v">${fmt(x.last, 2)}</div></div>
+        <div class="kv"><div class="k">${t('colRelVol')}</div><div class="v">${x.rel_vol_20d ? `${fmt(x.rel_vol_20d, 2)}×` : '—'}</div></div>
         <div class="kv"><div class="k">${hl}</div><div class="v">${fmt(x.ret_horizon_pct, 2)}%</div></div>
-        <div class="kv"><div class="k">Score</div><div class="v">${fmt(x.score, 1)}</div></div>
+        <div class="kv"><div class="k">${t('colScore')}</div><div class="v">${fmt(x.score, 1)}</div></div>
       </div>
     </div>`).join('');
 
@@ -588,9 +680,6 @@ async function copySingleReport() {
     if (!r.ok) { showToast(await parseErr(r)); return; }
     await navigator.clipboard.writeText(await r.text());
     showToast(t('copied'), 'ok');
-    const btn = $('copyBtn');
-    btn.textContent = t('copied');
-    setTimeout(() => (btn.textContent = t('btnCopySingle')), 1500);
   } catch (e) {
     showToast(e.name === 'TypeError' ? t('errNetwork') : e.message);
   }
@@ -600,6 +689,7 @@ async function copySingleReport() {
 async function generateReport(symbolList) {
   if (!symbolList?.length) return;
   const market = getMarket(), horizon = getHorizon();
+  switchPanel('panelList');
   $('reportMeta').textContent = t('loadingRep', symbolList.length);
   setReportLoading('reportSelBtn', true);
 
@@ -619,6 +709,8 @@ async function generateReport(symbolList) {
     $('reportBox').value = await r.text();
     $('reportMeta').textContent = t('reportReady', market, horizon, symbolList.length);
     showToast(t('reportDone'), 'ok');
+    updateReportActionState();
+    $('aiReportAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     const msg = e.name === 'TypeError' ? t('errNetwork') : e.message;
     $('reportMeta').textContent = msg;
@@ -638,13 +730,17 @@ async function copyAll() {
   try {
     await navigator.clipboard.writeText(text);
     showToast(t('copied'), 'ok');
-    const btn = $('copyAllBtn');
-    btn.textContent = t('copied');
-    setTimeout(() => (btn.textContent = t('btnCopy')), 1500);
   } catch { window.prompt('Copy:', text); }
 }
-function selectText() { const b = $('reportBox'); b.focus(); b.select(); }
-function clearReport() { $('reportBox').value = ''; $('reportMeta').textContent = t('reportCleared'); }
+function clearReport() {
+  $('reportBox').value = '';
+  $('reportMeta').textContent = t('reportCleared');
+  selected = new Set();
+  allChecked = false;
+  document.querySelectorAll('.pick').forEach(cb => { cb.checked = false; });
+  $('checkAllBtn').textContent = t('btnCheckAll');
+  updateSelectedCount();
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Init
@@ -667,10 +763,16 @@ window.addEventListener('load', async () => {
 
   // Symbols override → dim screener
   $('symbols').addEventListener('input', updateSymbolsUI);
+  $('scrPreset').addEventListener('change', updateScreenerPresetUI);
+  updateScreenerPresetUI();
 
   // Toggle buttons
   $('toggleAdvancedBtn').addEventListener('click', toggleAdvanced);
-  $('toggleAIPadBtn').addEventListener('click', toggleAIPad);
+
+  // Top menu
+  document.querySelectorAll('.menu-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchPanel(btn.dataset.panel));
+  });
 
   // Scan
   $('scanBtn').addEventListener('click', scan);
@@ -682,10 +784,10 @@ window.addEventListener('load', async () => {
   // Batch report
   $('reportSelBtn').addEventListener('click', reportSelected);
   $('copyAllBtn').addEventListener('click', copyAll);
-  $('selectTextBtn').addEventListener('click', selectText);
   $('clearBtn').addEventListener('click', clearReport);
 
   updateToggleButtons();
+  updateReportActionState();
 
   // Modal
   $('closeBtn').addEventListener('click', closeModal);
@@ -693,6 +795,7 @@ window.addEventListener('load', async () => {
   $('copyBtn').addEventListener('click', copySingleReport);
 
   // Go
+  switchPanel(activePanel);
   try { await health(); } catch {}
   await scan();
 });
