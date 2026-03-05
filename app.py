@@ -1220,7 +1220,83 @@ async def _fetch_macro_snapshot(market: str) -> List[Dict[str, Any]]:
     return out
 
 
-def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]] = None) -> str:
+def _build_ai_request_prompt(
+    *,
+    now_et: datetime,
+    now_kst: datetime,
+    market: str,
+    horizon_days: int,
+    symbols: List[str],
+    session_hint: str,
+    max_loss_pct: float = 6.0,
+    watchlist: str = "",
+    exclude_themes: str = "",
+    news_lookback_days: int = 7,
+    candidate_count_range: str = "1~3",
+) -> List[str]:
+    symbol_line = ", ".join([s for s in symbols if s]) if symbols else "없음/확인 불가"
+    watchlist_line = watchlist.strip() or symbol_line
+    exclude_line = exclude_themes.strip() or "없음"
+    max_loss = float(max_loss_pct or 6.0)
+
+    out: List[str] = []
+    out.append("너는 미국주식 단기 모멘텀(1~5거래일) 스윙 트레이딩 분석가다.")
+    out.append("반드시 최신 데이터 기반으로만 말하고, 확인 못한 건 추정하지 말고 '확인 불가'라고 써라.")
+    out.append("")
+    out.append("0) 먼저 시간부터 고정:")
+    out.append(f"- 현재 시간 ET: {_fmt_dt(now_et)}")
+    out.append(f"- 현재 시간 KST: {_fmt_dt(now_kst)}")
+    out.append(f"- 데이터 세션 표기: 가격/뉴스/지표 각각 RTH/PM/AH를 표시하라. 현재 리포트 세션 힌트: {session_hint}")
+    out.append("")
+    out.append("1) 웹검색으로 최신 데이터를 확보해라. 종목별 실제 숫자 + 출처 + 시각 포함:")
+    out.append("- 현재가(또는 마지막 체결가) / 당일 등락률 / 거래량 / 거래대금(가능하면)")
+    out.append("- 최근 20거래일 평균 대비 오늘 거래량(배수, 가능하면)")
+    out.append(f"- 촉매: 최근 {news_lookback_days}일 뉴스/공시 핵심 3개(제목+날짜/시각+요지)")
+    out.append("- 실적 일정: 날짜 + 발표 시간(BMO/AMC) + 컨센서스(EPS/매출 가능하면)")
+    out.append("- SEC: 8-K/10-Q/S-3/Form 4 관련 요약(없으면 '없음/확인 불가')")
+    out.append("- 옵션/숏: 콜/풋 분위기, Short interest/CTB/대차 지표(가능한 범위)")
+    out.append(f"- 시장 맥락: {market.upper()} 기준 SPY/QQQ 흐름, 섹터 ETF 동행 여부")
+    out.append("")
+    out.append(f"2) 단기 모멘텀 후보를 {candidate_count_range}개만 뽑아라.")
+    out.append("- 유동성 낮거나 스프레드 과도하면 제외(확인 불가면 보수적으로 제외)")
+    out.append("- 단발 뉴스만이 아니라 거래량/촉매/옵션·숏 구조 중 최소 2개가 같이 붙은 후보 우선")
+    out.append("- 공격적 관점이되 손절 규칙은 숫자로 명확히")
+    out.append("")
+    out.append("3) 각 후보를 아래 포맷으로만 출력:")
+    out.append("- Ticker / 회사명")
+    out.append("- 한 줄 결론(왜 지금 모멘텀인지, 최소 2개 근거)")
+    out.append("- 모멘텀 근거: 거래량/거래대금, 촉매, 옵션/숏, 차트 레벨, 지수/섹터 동행")
+    out.append("- 리스크 3개(구체적으로)")
+    out.append("- 트레이드 플랜: 진입가 범위, 손절가(무효화 가격 1개), 목표가(1차/2차), 보유기한/시간손절, 이벤트 규칙")
+    out.append("")
+    out.append("4) 마지막에 전체 후보 중 가장 가능성이 높은 1개를 골라라.")
+    out.append("- 근거는 반드시 가장 최신 시각 데이터만 사용")
+    out.append("- 확인 못한 데이터는 '확인 불가'로 유지")
+    out.append("")
+    out.append("내 조건:")
+    out.append("- 스타일: 공격적 단기 스윙")
+    out.append(f"- 최대 보유기간: {horizon_days} 거래일")
+    out.append(f"- 1트레이드 최대 허용손실: -{max_loss:.1f}%")
+    out.append(f"- 관심 티커(우선 평가): {watchlist_line}")
+    out.append(f"- 제외 섹터/테마: {exclude_line}")
+    out.append(f"- 분석 대상 티커: {symbol_line}")
+    return out
+
+
+def _normalize_report_output(output: str) -> str:
+    v = (output or "full").strip().lower()
+    if v in ("full", "data", "prompt"):
+        return v
+    return "full"
+
+
+def _build_single_report(
+    d: Dict[str, Any],
+    macro: Optional[List[Dict[str, Any]]] = None,
+    max_loss_pct: float = 6.0,
+    watchlist: str = "",
+    exclude_themes: str = "",
+) -> str:
     now_et = _now_et()
     now_kst = _now_kst()
 
@@ -1243,7 +1319,6 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
     lines.append(f"마켓: {market} / 데이터 세션: {d.get('session','Unknown')} (Yahoo/SEC best-effort)")
     lines.append(f"기준: {horizon} 거래일 모멘텀(보유기한 최대 {horizon} 거래일)")
     lines.append("")
-    lines.append("AI 판단 요청(복붙용):")
     lines.append("아래 데이터 기반으로 다음 4가지를 판단해줘.")
     lines.append("1) 각 종목 진입 여부 (진입/관망)")
     lines.append("2) 각 종목 목표가/손절가 (숫자 필수)")
@@ -1327,15 +1402,42 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
 
     lines.append("")
     lines.append("주의: 교육용 프로토타입 출력. 데이터 지연/누락 가능. 매매 판단은 본인 책임.")
+    lines.append("")
+    lines.extend(
+        _build_ai_request_prompt(
+            now_et=now_et,
+            now_kst=now_kst,
+            market=market,
+            horizon_days=horizon,
+            symbols=[str(d.get("symbol") or "").upper()],
+            session_hint=str(d.get("session") or "Unknown"),
+            max_loss_pct=max_loss_pct,
+            watchlist=watchlist,
+            exclude_themes=exclude_themes,
+        )
+    )
 
     return "\n".join(lines)
 
 
 @app.get("/report/{symbol}", response_class=PlainTextResponse)
-async def report(symbol: str, market: str = Query(default="US"), horizon_days: int = Query(default=5)) -> str:
+async def report(
+    symbol: str,
+    market: str = Query(default="US"),
+    horizon_days: int = Query(default=5),
+    max_loss_pct: float = Query(default=6.0, gt=0, le=30),
+    watchlist: str = Query(default=""),
+    exclude_themes: str = Query(default=""),
+) -> str:
     d = await ticker_detail(symbol, market=market, horizon_days=horizon_days)
     macro = await _fetch_macro_snapshot(market)
-    return _build_single_report(d, macro=macro)
+    return _build_single_report(
+        d,
+        macro=macro,
+        max_loss_pct=max_loss_pct,
+        watchlist=watchlist,
+        exclude_themes=exclude_themes,
+    )
 
 
 @app.get("/report_multi", response_class=PlainTextResponse)
@@ -1344,6 +1446,10 @@ async def report_multi(
     market: str = Query(default="US"),
     horizon_days: int = Query(default=5),
     max_items: int = Query(default=5, ge=1, le=10),
+    output: str = Query(default="full", description="full | data | prompt"),
+    max_loss_pct: float = Query(default=6.0, gt=0, le=30),
+    watchlist: str = Query(default=""),
+    exclude_themes: str = Query(default=""),
 ) -> str:
     syms = [s.strip().upper() for s in (symbols or "").split(",") if s.strip()]
     if not syms:
@@ -1354,6 +1460,7 @@ async def report_multi(
 
     # cap
     syms = syms[:max_items]
+    output_mode = _normalize_report_output(output)
 
     now_et = _now_et()
     now_kst = _now_kst()
@@ -1380,6 +1487,20 @@ async def report_multi(
         else:
             errors.append(f"- {s}: {err or '확인 불가'}")
 
+    prompt_lines = _build_ai_request_prompt(
+        now_et=now_et,
+        now_kst=now_kst,
+        market=market,
+        horizon_days=horizon_days,
+        symbols=[str(d.get("symbol") or "").upper() for d in ok_details] if ok_details else syms,
+        session_hint=", ".join(sorted({str(d.get("session") or "Unknown") for d in ok_details})) if ok_details else "Unknown",
+        max_loss_pct=max_loss_pct,
+        watchlist=watchlist,
+        exclude_themes=exclude_themes,
+    )
+    if output_mode == "prompt":
+        return "\n".join(prompt_lines)
+
     # header
     lines: List[str] = []
     lines.append(f"현재 시간 ET: {_fmt_dt(now_et)}")
@@ -1387,9 +1508,9 @@ async def report_multi(
     lines.append(f"리포트 모드: 다종목 일괄 / 기준 {horizon_days} 거래일 (보유기한 최대 {horizon_days} 거래일)")
     lines.append(f"심볼: {', '.join([d.get('symbol') for d in ok_details])}")
     lines.append("")
-    lines.append("AI 판단 요청(복붙용):")
-    lines.append("아래 데이터로 진입/관망, 목표가, 손절가, 우선순위 TOP3를 제시해줘.")
-    lines.append("핵심: 점수(total/세부) + 매크로 + 이벤트 리스크를 함께 반영.")
+    if output_mode != "data":
+        lines.append("아래 데이터로 진입/관망, 목표가, 손절가, 우선순위 TOP3를 제시해줘.")
+        lines.append("핵심: 점수(total/세부) + 매크로 + 이벤트 리스크를 함께 반영.")
 
     macro = await _fetch_macro_snapshot(market)
     if macro:
@@ -1584,8 +1705,12 @@ async def report_multi(
 
     lines.append("")
     lines.append(f"매크로 레짐 추정: {_macro_regime(macro, market)}")
-    lines.append("AI 출력 요청 형식(엄수):")
-    lines.append("[종목] 진입/관망 | 진입가 | 손절가 | 목표가 | 포지션우선순위(1~3) | 확신도 | 근거(거시/수급프록시/레벨)")
+    if output_mode != "data":
+        lines.append("AI 출력 요청 형식(엄수):")
+        lines.append("[종목] 진입/관망 | 진입가 | 손절가 | 목표가 | 포지션우선순위(1~3) | 확신도 | 근거(거시/수급프록시/레벨)")
+    if output_mode == "full":
+        lines.append("")
+        lines.extend(prompt_lines)
 
     return "\n".join(lines)
 

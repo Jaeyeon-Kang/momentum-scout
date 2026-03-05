@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ko" data-theme="light">
 <head>
   <meta charset="utf-8" />
@@ -8,24 +8,26 @@
   <link rel="stylesheet" href="/styles.css" />
   <script>
     (function () {
-      const th = localStorage.getItem("ms_theme");
-      const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      const th = localStorage.getItem('ms_theme');
+      const pref = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
       document.documentElement.dataset.theme = th || pref;
-      const lg = localStorage.getItem("ms_lang");
+      const lg = localStorage.getItem('ms_lang');
       if (lg) document.documentElement.lang = lg;
     })();
   </script>
 </head>
 <body>
   <header class="header">
-    <div class="title">
-      <div class="h1" data-i18n="appTitle">Momentum Scout</div>
-      <div class="sub" id="asof" data-i18n="tagline">로딩 중…</div>
-    </div>
-    <div class="hdr-actions">
-      <button class="hdr-btn" id="langBtn" aria-label="Switch language">EN</button>
-      <button class="hdr-btn" id="themeBtn" aria-label="Toggle theme">☾</button>
-      <button class="hdr-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">새로고침</button>
+    <div class="header-inner">
+      <div class="title">
+        <div class="h1" data-i18n="appTitle">Momentum Scout</div>
+        <div class="sub" id="asof" data-i18n="tagline">로딩 중...</div>
+      </div>
+      <div class="hdr-actions">
+        <button class="hdr-btn" id="langBtn" aria-label="Switch language">EN</button>
+        <button class="hdr-btn" id="themeBtn" aria-label="Toggle theme">☾</button>
+        <button class="hdr-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">새로고침</button>
+      </div>
     </div>
   </header>
 
@@ -38,8 +40,8 @@
     <section class="panel active" id="panelScan">
       <section class="card">
         <div class="section-head">
-          <div class="h2" data-i18n="scanTitle">무엇을 찾을지 정해요</div>
-          <div class="muted small" data-i18n="scanDesc">시장과 기간을 고르고, 필요하면 직접 종목을 넣으세요.</div>
+          <div class="h2" data-i18n="scanTitle">자동 탐색 (필요시만 수정)</div>
+          <div class="muted small" data-i18n="scanDesc">기본값으로 자동 스캔됩니다. 필요할 때만 필터를 바꾸세요.</div>
         </div>
 
         <div class="row">
@@ -54,7 +56,7 @@
             <div class="label" data-i18n="lbHorizon">보유 기간</div>
             <select id="horizon">
               <option value="5" data-i18n="opt5d">5일 (빠른 탐색)</option>
-              <option value="20" data-i18n="opt20d">20일 (완만한 흐름)</option>
+              <option value="20" data-i18n="opt20d">20일 (완만한 추세)</option>
             </select>
           </label>
         </div>
@@ -69,7 +71,7 @@
             <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
           </label>
           <label class="field">
-            <div class="label" data-i18n="lbMinTurnover">최소 평균 거래대금 (20일)</div>
+            <div class="label" data-i18n="lbMinTurnover">최소 평균 거래대금(20일)</div>
             <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
           </label>
         </div>
@@ -102,7 +104,7 @@
           </label>
         </div>
         <div class="muted small" id="scrHint" data-i18n="scrHint">
-          추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.
+          추천값이 자동 적용됩니다. 대부분은 수정할 필요 없습니다.
         </div>
 
         <div class="row">
@@ -115,50 +117,53 @@
     </section>
 
     <section class="panel" id="panelList">
-      <section class="card">
-        <div class="section-head section-head-inline">
-          <div>
-            <div class="h2" data-i18n="listTitle">후보 목록</div>
-            <div class="muted small" data-i18n="listDesc">카드를 눌러 상세를 보고, 체크해서 리포트에 담으세요.</div>
+      <div class="list-grid">
+        <section class="card list-pane">
+          <div class="section-head section-head-inline">
+            <div>
+              <div class="h2" data-i18n="listTitle">후보 목록</div>
+              <div class="muted small" data-i18n="listDesc">카드를 눌러 상세를 보고, 체크해서 리포트에 담으세요.</div>
+            </div>
+            <div class="list-header" id="listHeader" style="display:none;">
+              <button class="btn sm" id="checkAllBtn" data-i18n="btnCheckAll">전체 체크</button>
+            </div>
           </div>
-          <div class="list-header" id="listHeader" style="display:none;">
-            <button class="btn sm" id="checkAllBtn" data-i18n="btnCheckAll">전체 체크</button>
-          </div>
-        </div>
-        <section class="list" id="list"></section>
-      </section>
+          <section class="list" id="list"></section>
+        </section>
 
-      <section class="card" style="margin-top:12px;" id="aiReportAnchor">
-        <div class="section-head section-head-inline">
-          <div>
-            <div class="h2" data-i18n="hBatch">AI 전달용 리포트</div>
-            <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
+        <section class="card report-pane" id="aiReportAnchor">
+          <div class="section-head section-head-inline">
+            <div>
+              <div class="h2" data-i18n="hBatch">AI 전달용 리포트</div>
+              <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
+            </div>
+            <div class="row-btns">
+              <button class="btn sm icon-btn" id="copyAllBtn" aria-label="Copy all" title="Copy all">⎘</button>
+              <button class="btn sm" id="clearBtn">지우기</button>
+            </div>
           </div>
-          <div class="row-btns">
-            <button class="btn sm" id="clearBtn">지우기</button>
+          <div class="guide-box">
+            <div class="guide-title" data-i18n="reportGuideTitle">리포트 탭 사용 순서</div>
+            <div class="guide-text" data-i18n="reportGuideBody">
+              1) 탐색 설정에서 후보 찾기 -> 2) 후보 보기에서 체크 -> 3) 여기서 리포트 생성
+            </div>
+            <div class="guide-text" data-i18n="reportGuideAction">
+              매크로 + 점수분해 + 이벤트 리스크를 함께 담아 AI가 순위를 좁힙니다.
+            </div>
           </div>
-        </div>
-        <div class="guide-box">
-          <div class="guide-title" data-i18n="reportGuideTitle">리포트 탭 사용 순서</div>
-          <div class="guide-text" data-i18n="reportGuideBody">
-            1) 탐색 설정에서 후보 찾기 -> 2) 후보 보기에서 체크 -> 3) 여기서 리포트 생성
+          <div id="aiPadBody">
+            <div class="report-actions">
+              <button class="btn primary" id="reportSelBtn">
+                <span>데이터 리포트 생성</span>
+                <span id="selCount" class="sel-count hidden">(0)</span>
+              </button>
+              <button class="btn primary" id="reportPromptBtn">AI 프롬프트 포함 생성</button>
+            </div>
+            <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
+            <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
           </div>
-          <div class="guide-text" data-i18n="reportGuideAction">
-            매크로 + 점수분해 + 이벤트 리스크를 함께 담아 AI가 순위를 좁힙니다.
-          </div>
-        </div>
-        <div id="aiPadBody">
-          <div class="row wrap">
-            <button class="btn primary" id="reportSelBtn">
-              <span data-i18n="btnReportSel">선택 종목 리포트 생성</span>
-              <span id="selCount" class="sel-count hidden">(0)</span>
-            </button>
-            <button class="btn" id="copyAllBtn" data-i18n="btnCopy">전체 복사</button>
-          </div>
-          <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
-          <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
-        </div>
-      </section>
+        </section>
+      </div>
     </section>
   </main>
 

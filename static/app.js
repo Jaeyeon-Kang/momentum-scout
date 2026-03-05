@@ -5,11 +5,11 @@ const S = {
   en: {
     appTitle:      'Momentum Scout',
     tagline:       'Loading market status…',
-    menuScan:      '1. Setup',
+    menuScan:      '1. Auto Scan',
     menuList:      '2. Candidates',
     menuReport:    '3. Report',
-    scanTitle:     'Set your scan target',
-    scanDesc:      'Choose market and hold period, then optionally enter symbols.',
+    scanTitle:     'Auto scan (edit only if needed)',
+    scanDesc:      'Default settings scan automatically. Change filters only when necessary.',
     listTitle:     'Candidate list',
     listDesc:      'Tap a card for detail. Check items to build a report.',
     lbMarket:      'Market',
@@ -112,11 +112,11 @@ const S = {
   ko: {
     appTitle:      'Momentum Scout',
     tagline:       '시장 상태 불러오는 중…',
-    menuScan:      '1. 탐색 설정',
+    menuScan:      '1. 자동 탐색',
     menuList:      '2. 후보 보기',
     menuReport:    '3. 리포트',
-    scanTitle:     '무엇을 찾을지 정해요',
-    scanDesc:      '시장과 기간을 고르고, 필요하면 직접 종목을 넣으세요.',
+    scanTitle:     '자동 탐색 (필요시만 수정)',
+    scanDesc:      '기본값으로 자동 스캔됩니다. 필요할 때만 필터를 바꾸세요.',
     listTitle:     '후보 목록',
     listDesc:      '카드를 눌러 상세를 보고, 체크해서 리포트에 담으세요.',
     lbMarket:      '거래 시장',
@@ -425,6 +425,7 @@ function updateReportActionState() {
   const hasSelection = selected.size > 0;
   const hasReport = (($('reportBox')?.value || '').trim().length > 0);
   $('reportSelBtn').disabled = !hasSelection;
+  if ($('reportPromptBtn')) $('reportPromptBtn').disabled = !hasSelection;
   $('copyAllBtn').disabled = !hasReport;
 }
 
@@ -686,18 +687,28 @@ async function copySingleReport() {
 }
 
 // ─── Batch report ────────────────────────────────────────────────
-async function generateReport(symbolList) {
+async function generateReport(symbolList, outputMode = 'full', triggerBtnId = 'reportSelBtn') {
   if (!symbolList?.length) return;
   const market = getMarket(), horizon = getHorizon();
+  const ko = getLang() === 'ko';
+  const modeLabel = outputMode === 'data'
+    ? (ko ? '데이터 리포트' : 'Data report')
+    : (ko ? 'AI 프롬프트 포함 리포트' : 'AI prompt report');
   switchPanel('panelList');
-  $('reportMeta').textContent = t('loadingRep', symbolList.length);
-  setReportLoading('reportSelBtn', true);
+  $('reportMeta').textContent = ko
+    ? `${modeLabel} 생성 중 (${symbolList.length}개)...`
+    : `${modeLabel} generating (${symbolList.length})...`;
+  $('reportSelBtn').disabled = true;
+  if ($('reportPromptBtn')) $('reportPromptBtn').disabled = true;
+  setReportLoading(triggerBtnId, true);
 
   try {
     const params = new URLSearchParams({
       symbols: symbolList.join(','), market,
       horizon_days: String(horizon),
       max_items: String(Math.min(10, symbolList.length)),
+      output: outputMode,
+      watchlist: symbolList.join(','),
     });
     const r = await fetch(`/report_multi?${params}`);
     if (!r.ok) {
@@ -707,22 +718,32 @@ async function generateReport(symbolList) {
       return;
     }
     $('reportBox').value = await r.text();
-    $('reportMeta').textContent = t('reportReady', market, horizon, symbolList.length);
-    showToast(t('reportDone'), 'ok');
+    $('reportMeta').textContent = ko
+      ? `${modeLabel} 완료 · ${market} · ${horizon}일 · ${symbolList.length}개`
+      : `${modeLabel} ready · ${market} · ${horizon}D · ${symbolList.length} symbols`;
+    showToast(ko ? `${modeLabel} 완료` : `${modeLabel} ready`, 'ok');
     updateReportActionState();
-    $('aiReportAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (window.innerWidth < 1024) {
+      $('aiReportAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   } catch (e) {
     const msg = e.name === 'TypeError' ? t('errNetwork') : e.message;
     $('reportMeta').textContent = msg;
     showToast(msg);
   } finally {
-    setReportLoading('reportSelBtn', false);
+    setReportLoading(triggerBtnId, false);
+    updateReportActionState();
   }
 }
 async function reportSelected() {
   const syms = Array.from(selected);
   if (!syms.length) { showToast(t('noSelected'), 'warn'); return; }
-  await generateReport(syms);
+  await generateReport(syms, 'data', 'reportSelBtn');
+}
+async function reportPromptSelected() {
+  const syms = Array.from(selected);
+  if (!syms.length) { showToast(t('noSelected'), 'warn'); return; }
+  await generateReport(syms, 'full', 'reportPromptBtn');
 }
 async function copyAll() {
   const text = $('reportBox').value || '';
@@ -783,6 +804,7 @@ window.addEventListener('load', async () => {
 
   // Batch report
   $('reportSelBtn').addEventListener('click', reportSelected);
+  $('reportPromptBtn')?.addEventListener('click', reportPromptSelected);
   $('copyAllBtn').addEventListener('click', copyAll);
   $('clearBtn').addEventListener('click', clearReport);
 
