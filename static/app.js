@@ -669,6 +669,23 @@ function getScanContext() {
   };
 }
 
+function validateCandidatesContract(payload, market) {
+  if (!payload || payload.schema_version !== 'candidates.v2') {
+    throw new Error('스캔 응답 스키마가 맞지 않습니다. 서버를 최신 코드로 맞춰주세요.');
+  }
+  const req = ['symbol', 'name', 'last', 'score', 'scan_reason', 'rejection_flags'];
+  const first = (payload.candidates || [])[0];
+  if (!first) return;
+  for (const k of req) {
+    if (!(k in first)) throw new Error(`스캔 응답 필드 누락: ${k}`);
+  }
+  if (market === 'KR') {
+    if (!('day_turnover' in first) || !('market_cap' in first)) {
+      throw new Error('KR 스캔 필드 누락: day_turnover/market_cap');
+    }
+  }
+}
+
 // ─── Health ─────────────────────────────────────────────────────
 async function health() {
   try {
@@ -708,6 +725,7 @@ async function scan() {
     size_per_screener: '25',
     top_n:             '10',
   });
+  if (symbols) params.set('direct_mode', 'true');
   if (market === 'KR') {
     params.set('market_cap_min', String(Number($('marketCapMin').value || plan.marketCapMin || 0)));
     params.set('today_turnover_min', String(Number($('todayTurnoverMin').value || plan.todayTurnoverMin || 0)));
@@ -729,6 +747,7 @@ async function scan() {
       return;
     }
     const j = await r.json();
+    validateCandidatesContract(j, market);
     lastCandidates = j.candidates || [];
     selected = new Set();
     allChecked = false;
@@ -792,7 +811,17 @@ function renderList(items, horizonDays) {
             ${(x.scan_reason || []).slice(0, 3).map(tag => `<span class="item-tag good">${tag}</span>`).join('')}
             ${(x.rejection_flags || []).slice(0, 3).map(tag => `<span class="item-tag bad">${tag}</span>`).join('')}
           </div>
-        ` : ''}
+        ` : `
+          <div class="item-meta">
+            <span class="meta-chip">Day $Vol ${fmtInt(x.day_turnover)}</span>
+            <span class="meta-chip">20D Avg $Vol ${fmtInt(x.avg_turnover_20d)}</span>
+            <span class="meta-chip">MCap ${fmtInt(x.market_cap)}</span>
+            <span class="meta-chip">${x.extras?.us_quote_type || 'EQUITY'}</span>
+          </div>
+          <div class="item-tags">
+            ${(x.extras?.us_filter_flags || []).slice(0, 3).map(tag => `<span class="item-tag bad">${esc(tag)}</span>`).join('')}
+          </div>
+        `}
       </div>
       <div class="cols">
         <div class="kv"><div class="k">${t('colLast')}</div><div class="v">${fmt(x.last, 2)}</div></div>

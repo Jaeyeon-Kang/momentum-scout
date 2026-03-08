@@ -923,6 +923,7 @@ def _parse_naver_news_items(html: str, limit: int = 6) -> List[Dict[str, Any]]:
         title = _clean_html_text(title_html)
         link = _normalize_naver_href(href)
         date_label = _clean_html_text(date_text)
+        dt = _parse_kr_news_timestamp(date_label)
         if not title or title in seen:
             continue
         seen.add(title)
@@ -931,6 +932,7 @@ def _parse_naver_news_items(html: str, limit: int = 6) -> List[Dict[str, Any]]:
                 "title": title,
                 "link": link or None,
                 "published": date_label or None,
+                "published_kst": dt.isoformat(timespec="seconds") if dt is not None else None,
                 "summary": None,
                 "source": "Naver Finance",
             }
@@ -1493,6 +1495,11 @@ async def candidates(
     ret_5d_max: float = Query(default=500.0, ge=-100.0, le=500.0),
     close_position_min: float = Query(default=0.0, ge=0.0, le=1.0),
     fresh_news_hours: float = Query(default=0.0, ge=0.0, le=240.0),
+    direct_mode: bool = Query(default=False, description="When true with symbols, bypass hard filters and include symbols directly."),
+    us_market_cap_min: float = Query(default=2_000_000_000.0, ge=0.0),
+    us_day_turnover_min: float = Query(default=25_000_000.0, ge=0.0),
+    us_rel_volume_min: float = Query(default=1.2, ge=0.0),
+    us_exclude_etf: bool = Query(default=True),
     top_n: int = Query(default=10, ge=1, le=25),
 ) -> Dict[str, Any]:
     """Returns momentum candidates for short swing (5 trading days default). No keys."""
@@ -1515,6 +1522,13 @@ async def candidates(
     universe_source = ""
     kr_seed_map: Dict[str, Dict[str, Any]] = {}
     scan_defaults: Dict[str, Any] = {}
+    us_defaults: Dict[str, Any] = {
+        "market_cap_min": float(us_market_cap_min),
+        "day_turnover_min": float(us_day_turnover_min),
+        "rel_volume_min": float(us_rel_volume_min),
+        "exclude_etf": bool(us_exclude_etf),
+    }
+    direct_override = bool(direct_mode and bool(explicit))
 
     if market_u == "KR":
         scan_defaults = {
@@ -1617,6 +1631,7 @@ async def candidates(
             day_volume = q.get("day_volume")
             day_turnover = q.get("day_turnover")
             market_cap = q.get("market_cap")
+            quote_type = "EQUITY"
         else:
             q = quote_map.get(sym) or {}
             name = q.get("shortName") or q.get("longName") or ""
@@ -1632,10 +1647,11 @@ async def candidates(
             day_volume = q.get("regularMarketVolume")
             day_turnover = (float(last) * float(day_volume)) if last is not None and day_volume is not None else None
             market_cap = q.get("marketCap")
+            quote_type = str(q.get("quoteType") or "").upper().strip()
 
         # price filter (local currency)
         try:
-            if market_u != "KR" and max_price > 0 and last is not None and float(last) > float(max_price):
+            if (not direct_override) and market_u != "KR" and max_price > 0 and last is not None and float(last) > float(max_price):
                 return None
         except Exception:
             pass
@@ -1687,7 +1703,7 @@ async def candidates(
                 day_turnover = None
 
         # liquidity filter
-        if avg_turnover_20d is None or avg_turnover_20d < float(min_avg_turnover):
+        if (not direct_override) and (avg_turnover_20d is None or avg_turnover_20d < float(min_avg_turnover)):
             return None
 
         extras: Dict[str, Any] = {}
@@ -1767,6 +1783,25 @@ async def candidates(
                 rejection_flags=rejection_flags,
             )
 
+        if market_u == "US":
+            us_flags: List[str] = []
+            if us_defaults["exclude_etf"] and quote_type in {"ETF", "MUTUALFUND"}:
+                us_flags.append("etf_excluded")
+            if market_cap is None or float(market_cap) < us_defaults["market_cap_min"]:
+                us_flags.append("market_cap_low")
+            if day_turnover is None or float(day_turnover) < us_defaults["day_turnover_min"]:
+                us_flags.append("day_turnover_low")
+            if rel_vol_20d is None or float(rel_vol_20d) < us_defaults["rel_volume_min"]:
+                us_flags.append("rel_volume_low")
+            if (not direct_override) and us_flags:
+                return None
+            extras = {
+                "us_quote_type": quote_type or None,
+                "us_filter_flags": us_flags,
+            }
+        else:
+            extras = {}
+
         score = _score_candidate(
             day_chg_pct,
             rel_vol_20d,
@@ -1776,6 +1811,14 @@ async def candidates(
             avg_turnover_20d,
             horizon_days=horizon_days,
         )
+
+        if market_u == "US":
+            if market_cap is not None:
+                score += _clamp(float(market_cap) / 20_000_000_000.0, 0.0, 5.0) * 3.0
+            if day_turnover is not None:
+                score += _clamp(float(day_turnover) / 100_000_000.0, 0.0, 4.0) * 2.5
+            if quote_type in {"ETF", "MUTUALFUND"}:
+                score -= 12.0
 
         return Candidate(
             symbol=sym,
@@ -1793,6 +1836,7 @@ async def candidates(
             score=float(score),
             day_turnover=float(day_turnover) if day_turnover is not None else None,
             market_cap=float(market_cap) if market_cap is not None else None,
+            extras=extras,
         )
 
     tasks = [build_candidate(s) for s in universe]
@@ -1825,7 +1869,16 @@ async def candidates(
             flow_1d = (flow.get("lookbacks") or {}).get("1d") or {}
             flow_5d = (flow.get("lookbacks") or {}).get("5d") or {}
             signed_flow = _signed_flow_score(flow_1d, flow_5d)
-            news_dt = _parse_kr_news_timestamp((news_items[0] or {}).get("published")) if news_items else None
+            news_dt = None
+            if news_items:
+                n0 = news_items[0] or {}
+                if n0.get("published_kst"):
+                    try:
+                        news_dt = datetime.fromisoformat(str(n0.get("published_kst")))
+                    except Exception:
+                        news_dt = None
+                if news_dt is None:
+                    news_dt = _parse_kr_news_timestamp(n0.get("published"))
             news_age_hours = None
             if news_dt is not None:
                 try:
@@ -1883,7 +1936,7 @@ async def candidates(
             extras.update(
                 {
                     "news_items": news_items,
-                    "news_asof": (news_items[0] or {}).get("published") if news_items else None,
+                    "news_asof": ((news_items[0] or {}).get("published_kst") or (news_items[0] or {}).get("published")) if news_items else None,
                     "flow_asof": flow.get("as_of"),
                     "signed_flow_score": round(signed_flow, 2),
                     "conviction_score": round(conviction_score, 2),
@@ -1947,6 +2000,50 @@ async def candidates(
 
     now_et = _now_et()
     out = {
+        "schema_version": "candidates.v2",
+        "contract": {
+            "required_candidate_fields": [
+                "symbol",
+                "name",
+                "currency",
+                "last",
+                "day_chg_pct",
+                "day_volume",
+                "avg20_volume",
+                "rel_vol_20d",
+                "ret_3d_pct",
+                "ret_5d_pct",
+                "ret_20d_pct",
+                "ret_horizon_pct",
+                "avg_turnover_20d",
+                "day_turnover",
+                "market_cap",
+                "score",
+                "scan_reason",
+                "rejection_flags",
+            ],
+            "direct_mode_bypass_supported": True,
+        },
+        "fields_guaranteed": [
+            "symbol",
+            "name",
+            "currency",
+            "last",
+            "day_chg_pct",
+            "day_volume",
+            "avg20_volume",
+            "rel_vol_20d",
+            "ret_3d_pct",
+            "ret_5d_pct",
+            "ret_20d_pct",
+            "ret_horizon_pct",
+            "avg_turnover_20d",
+            "day_turnover",
+            "market_cap",
+            "score",
+            "scan_reason",
+            "rejection_flags",
+        ],
         "asof_et": _fmt_dt(now_et),
         "asof_kst": _fmt_dt(_now_kst()),
         "market": market_u,
@@ -1964,6 +2061,11 @@ async def candidates(
             "ret_5d_max": scan_defaults.get("ret_5d_max", ret_5d_max),
             "close_position_min": scan_defaults.get("close_position_min", close_position_min),
             "fresh_news_hours": scan_defaults.get("fresh_news_hours", fresh_news_hours),
+            "direct_mode": direct_override,
+            "us_market_cap_min": us_defaults["market_cap_min"],
+            "us_day_turnover_min": us_defaults["day_turnover_min"],
+            "us_rel_volume_min": us_defaults["rel_volume_min"],
+            "us_exclude_etf": us_defaults["exclude_etf"],
         },
         "scan_defaults": scan_defaults or None,
         "context": context,
@@ -2286,7 +2388,7 @@ async def ticker_detail(
             "kr_short": kr_short,
             "timestamps": {
                 "quote_asof_kst": _fmt_dt(_now_kst()) if market_u == "KR" else None,
-                "news_asof_kst": (news_items[0] or {}).get("published") if news_items else None,
+                "news_asof_kst": ((news_items[0] or {}).get("published_kst") or (news_items[0] or {}).get("published")) if news_items else None,
                 "flow_asof_kst": kr_flow.get("as_of") if market_u == "KR" else None,
                 "short_asof_kst": (kr_short.get("latest") or {}).get("date") if market_u == "KR" else None,
             },
@@ -2336,6 +2438,17 @@ def _to_float(x: Any, default: float = 0.0) -> float:
         return float(x)
     except Exception:
         return default
+
+
+def _parse_scan_thresholds(raw: str) -> Dict[str, Any]:
+    text = (raw or "").strip()
+    if not text:
+        return {}
+    try:
+        obj = json.loads(text)
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        return {}
 
 
 def _spread_pct_from_quote(q: Dict[str, Any]) -> Optional[float]:
@@ -2664,6 +2777,19 @@ def _build_data_package(
         )
 
     return {
+        "schema_version": "data_package.v2",
+        "fields_guaranteed": [
+            "candidates[].quote",
+            "candidates[].stats",
+            "candidates[].levels",
+            "candidates[].derived.scan_reason",
+            "candidates[].derived.rejection_flags",
+            "candidates[].events.news_asof_kst",
+            "candidates[].market_micro.timestamps",
+        ],
+        "external_discovery_allowed": True,
+        "reason_for_rejection_required": True,
+        "source_latency_hint": "best-effort delayed feeds; KR flow/short can lag market close",
         "generated_at_et": _fmt_dt(_now_et()),
         "generated_at_kst": _fmt_dt(_now_kst()),
         "market": market.upper().strip(),
@@ -3004,7 +3130,7 @@ async def report_multi_data(
             "scan_profile": scan_profile,
             "scan_label": scan_label,
             "scan_note": scan_note,
-            "thresholds": json.loads(scan_thresholds) if scan_thresholds else {},
+            "thresholds": _parse_scan_thresholds(scan_thresholds),
         },
     )
 
@@ -3033,7 +3159,7 @@ async def prompt_single(
             "scan_profile": scan_profile,
             "scan_label": scan_label,
             "scan_note": scan_note,
-            "thresholds": json.loads(scan_thresholds) if scan_thresholds else {},
+            "thresholds": _parse_scan_thresholds(scan_thresholds),
         },
     )
     return _build_ai_prompt_from_package(pkg)
