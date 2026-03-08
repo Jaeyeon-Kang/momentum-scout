@@ -39,71 +39,133 @@
       <section class="card">
         <div class="section-head">
           <div class="h2" data-i18n="scanTitle">무엇을 찾을지 정해요</div>
-          <div class="muted small" data-i18n="scanDesc">시장과 기간을 고르고, 필요하면 직접 종목을 넣으세요.</div>
+          <div class="muted small" data-i18n="scanDesc">찾고 싶은 상황부터 고르고, 유동성과 직접 확인 범위를 정하세요.</div>
         </div>
 
-        <div class="row">
-          <label class="field">
-            <div class="label" data-i18n="lbMarket">거래 시장</div>
-            <select id="market">
-              <option value="US">US</option>
-              <option value="KR">KR (Yahoo .KS/.KQ)</option>
-            </select>
-          </label>
-          <label class="field">
-            <div class="label" data-i18n="lbHorizon">보유 기간</div>
-            <select id="horizon">
-              <option value="5" data-i18n="opt5d">5일 (빠른 탐색)</option>
-              <option value="20" data-i18n="opt20d">20일 (완만한 흐름)</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="row">
-          <button class="btn sm ghost" id="toggleAdvancedBtn" data-i18n="btnAdvancedShow">고급 설정 열기</button>
-        </div>
-
-        <div class="row hidden" id="advancedFiltersRow">
-          <label class="field">
-            <div class="label"><span data-i18n="lbMaxPrice">최대 가격</span> <span id="currencyTag" class="currency-tag">($)</span></div>
-            <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
-          </label>
-          <label class="field">
-            <div class="label" data-i18n="lbMinTurnover">최소 평균 거래대금 (20일)</div>
-            <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
-          </label>
-        </div>
-
-        <div class="row">
-          <label class="field grow">
-            <div class="label">
-              <span data-i18n="lbSymbols">직접 볼 종목 코드 (선택)</span>
+        <section class="scan-block">
+          <div class="scan-block-head">
+            <div class="scan-step">1</div>
+            <div>
+              <div class="scan-block-title" data-i18n="scanBlockProfile">찾을 상황</div>
+              <div class="muted small" data-i18n="scanBlockProfileDesc">급등 추적, 추세 지속, 초기 포착 중 하나를 먼저 고릅니다.</div>
             </div>
-            <input id="symbols" type="text" data-i18n-ph="phSymbols" placeholder="예: TSLA,NVDA 또는 005930.KS,035420.KS" />
-          </label>
-        </div>
+          </div>
+          <div class="row">
+            <label class="field grow">
+              <div class="label" data-i18n="lbScanProfile">탐색 프로필</div>
+              <select id="scanProfile">
+                <option value="surge" data-i18n="profileSurge">단기 급등 추적</option>
+                <option value="continuation" data-i18n="profileContinuation">거래량 동반 추세 지속</option>
+                <option value="early" data-i18n="profileEarly">초기 포착</option>
+                <option value="manual" data-i18n="profileManual">직접 조정</option>
+              </select>
+            </label>
+          </div>
+          <div class="plan-summary" id="planSummary"></div>
+        </section>
 
-        <div class="row" id="scrRow">
-          <label class="field grow">
-            <div class="label" data-i18n="lbScreeners">US 자동 스크리너</div>
-            <select id="scrPreset">
-              <option value="momentum" data-i18n="scrPresetMomentum">추천: 모멘텀 기본</option>
-              <option value="gainers" data-i18n="scrPresetGainers">상승 강도 중심</option>
-              <option value="liquidity" data-i18n="scrPresetLiquidity">거래량 중심</option>
-              <option value="custom" data-i18n="scrPresetCustom">직접 입력</option>
-            </select>
-          </label>
-          <span class="badge hidden" id="directBadge" data-i18n="directMode">직접입력 모드</span>
-        </div>
-        <div class="row hidden" id="scrCustomRow">
-          <label class="field grow">
-            <div class="label" data-i18n="lbScreenerCustom">직접 스크리너 ID 입력</div>
-            <input id="scrIds" type="text" value="day_gainers,most_actives" />
-          </label>
-        </div>
-        <div class="muted small" id="scrHint" data-i18n="scrHint">
-          추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.
-        </div>
+        <section class="scan-block">
+          <div class="scan-block-head">
+            <div class="scan-step">2</div>
+            <div>
+              <div class="scan-block-title" data-i18n="scanBlockRange">기본 범위</div>
+              <div class="muted small" data-i18n="scanBlockRangeDesc">시장과 보유 기간을 정해서 후보 성격을 좁힙니다.</div>
+            </div>
+          </div>
+          <div class="row">
+            <label class="field">
+              <div class="label" data-i18n="lbMarket">거래 시장</div>
+              <select id="market">
+                <option value="US">US</option>
+                <option value="KR">KR (KOSPI / KOSDAQ)</option>
+              </select>
+            </label>
+            <label class="field">
+              <div class="label" data-i18n="lbHorizon">보유 기간</div>
+              <select id="horizon">
+                <option value="5" data-i18n="opt5d">5일 (빠른 탐색)</option>
+                <option value="20" data-i18n="opt20d">20일 (완만한 흐름)</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="scan-block">
+          <div class="scan-block-head">
+            <div class="scan-step">3</div>
+            <div>
+              <div class="scan-block-title" data-i18n="scanBlockFilter">거를 기준</div>
+              <div class="muted small" data-i18n="scanBlockFilterDesc">너무 무거운 종목인지, 거래가 너무 약한지 먼저 거릅니다.</div>
+            </div>
+          </div>
+          <div class="row">
+            <label class="field">
+              <div class="label" data-i18n="lbLiquidityLevel">유동성 기준</div>
+              <select id="liquidityLevel">
+                <option value="tight" data-i18n="liqTight">빡세게</option>
+                <option value="balanced" data-i18n="liqBalanced">균형</option>
+                <option value="aggressive" data-i18n="liqAggressive">공격적으로</option>
+              </select>
+            </label>
+            <label class="field">
+              <div class="label"><span data-i18n="lbMaxPrice">최대 가격</span> <span id="currencyTag" class="currency-tag">($)</span></div>
+              <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
+            </label>
+          </div>
+
+          <div class="row">
+            <label class="field grow">
+              <div class="label" data-i18n="lbMinTurnover">최소 평균 거래대금 (20일)</div>
+              <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
+            </label>
+            <button class="btn sm ghost" id="toggleAdvancedBtn" data-i18n="btnAdvancedShow">고급 설정 열기</button>
+          </div>
+
+          <div class="row hidden" id="advancedFiltersRow">
+            <div class="inline-note" data-i18n="advancedHint">프로필 추천값을 덮어쓰고 싶을 때만 직접 조정하세요.</div>
+          </div>
+        </section>
+
+        <section class="scan-block">
+          <div class="scan-block-head">
+            <div class="scan-step">4</div>
+            <div>
+              <div class="scan-block-title" data-i18n="scanBlockVerify">직접 확인할 범위</div>
+              <div class="muted small" data-i18n="scanBlockVerifyDesc">자동 후보를 쓸지, 특정 티커를 바로 검증할지 정합니다.</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <label class="field grow">
+              <div class="label">
+                <span data-i18n="lbSymbols">직접 볼 종목 코드 (선택)</span>
+              </div>
+              <input id="symbols" type="text" data-i18n-ph="phSymbols" placeholder="예: TSLA,NVDA 또는 005930.KS,035420.KS" />
+            </label>
+          </div>
+
+          <div class="row" id="scrRow">
+            <label class="field grow">
+              <div class="label" data-i18n="lbScreeners">US 자동 스크리너</div>
+              <select id="scrPreset">
+                <option value="momentum" data-i18n="scrPresetMomentum">추천: 모멘텀 기본</option>
+                <option value="gainers" data-i18n="scrPresetGainers">상승 강도 중심</option>
+                <option value="liquidity" data-i18n="scrPresetLiquidity">거래량 중심</option>
+                <option value="custom" data-i18n="scrPresetCustom">직접 입력</option>
+              </select>
+            </label>
+            <span class="badge hidden" id="directBadge" data-i18n="directMode">직접입력 모드</span>
+          </div>
+          <div class="row hidden" id="scrCustomRow">
+            <label class="field grow">
+              <div class="label" data-i18n="lbScreenerCustom">직접 스크리너 ID 입력</div>
+              <input id="scrIds" type="text" value="day_gainers,most_actives" />
+            </label>
+          </div>
+          <div class="muted small" id="scrHint" data-i18n="scrHint">
+            추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.
+          </div>
+        </section>
 
         <div class="row">
           <button class="btn primary" id="scanBtn" data-i18n="btnScan">후보 찾기</button>
@@ -131,7 +193,7 @@
       <section class="card" style="margin-top:12px;" id="aiReportAnchor">
         <div class="section-head section-head-inline">
           <div>
-            <div class="h2" data-i18n="hBatch">AI 전달용 리포트</div>
+            <div class="h2" data-i18n="hBatch">데이터 패키지 / 프롬프트</div>
             <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
           </div>
           <div class="row-btns">
@@ -150,10 +212,16 @@
         <div id="aiPadBody">
           <div class="row wrap">
             <button class="btn primary" id="reportSelBtn">
-              <span data-i18n="btnReportSel">선택 종목 리포트 생성</span>
+              <span data-i18n="btnReportSel">선택 종목 데이터 만들기</span>
               <span id="selCount" class="sel-count hidden">(0)</span>
             </button>
-            <button class="btn" id="copyAllBtn" data-i18n="btnCopy">전체 복사</button>
+            <button class="btn" id="promptSelBtn" data-i18n="btnPromptSel">프롬프트 추출</button>
+            <button class="btn icon-only" id="copyAllBtn" aria-label="현재 내용 복사" title="현재 내용 복사">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 9h10v11H9z"></path>
+                <path d="M5 5h10v2H7v8H5z"></path>
+              </svg>
+            </button>
           </div>
           <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
           <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
@@ -173,7 +241,8 @@
       </div>
       <div class="sheetBody" id="detail"></div>
       <div class="sheetFooter">
-        <button class="btn primary" id="copyBtn" data-i18n="btnCopySingle">이 종목 리포트 복사</button>
+        <button class="btn" id="dataCopyBtn" data-i18n="btnCopySingleData">이 종목 데이터 복사</button>
+        <button class="btn primary" id="copyBtn" data-i18n="btnCopySingle">이 종목 프롬프트 복사</button>
       </div>
     </div>
   </div>

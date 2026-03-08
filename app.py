@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import math
+import re
 import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta, time
+from html import unescape
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -32,6 +35,14 @@ YH_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 YH_RSS_URL = "https://feeds.finance.yahoo.com/rss/2.0/headline"
 YH_OPTIONS_URL = "https://query2.finance.yahoo.com/v7/finance/options/{symbol}"
 YH_QUOTE_SUMMARY_URL = "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
+NAVER_STOCK_MAIN_URL = "https://finance.naver.com/item/main.naver"
+NAVER_MARKET_SUM_URL = "https://finance.naver.com/sise/sise_market_sum.naver"
+NAVER_FCHART_URL = "https://fchart.stock.naver.com/sise.nhn"
+NAVER_FRGN_URL = "https://finance.naver.com/item/frgn.naver"
+KRX_JSON_URL = "https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
+KRX_SRT_LOADER_URL = "https://data.krx.co.kr/comm/srt/srtLoader/index.cmd"
+KRX_FINDER_AUTOCOMPLETE_BLD = "/dbms/comm/finder/finder_srtisu_autocomplete"
+KRX_SHORT_OUT_BLD = "dbms/MDC_OUT/STAT/srt/MDCSTAT30001_OUT"
 
 # ---- KR fallback universe (KOSPI/KOSDAQ blue-chips + popular mid-caps) ----
 _KR_FALLBACK_SYMBOLS = [
@@ -65,6 +76,14 @@ _cache_options: TTLCache = TTLCache(maxsize=512, ttl=60)                # 1 minu
 _cache_quote_summary: TTLCache = TTLCache(maxsize=512, ttl=60 * 5)      # 5 minutes
 _cache_sec_tickers: TTLCache = TTLCache(maxsize=1, ttl=60 * 60 * 24)    # 1 day
 _cache_sec_submissions: TTLCache = TTLCache(maxsize=512, ttl=60 * 10)   # 10 minutes
+_cache_kr_names: TTLCache = TTLCache(maxsize=2048, ttl=60 * 60 * 24)    # 1 day
+_cache_kr_news: TTLCache = TTLCache(maxsize=1024, ttl=60 * 10)          # 10 minutes
+_cache_kr_market_page: TTLCache = TTLCache(maxsize=32, ttl=60 * 5)      # 5 minutes
+_cache_kr_snapshot: TTLCache = TTLCache(maxsize=1024, ttl=30)           # 30 seconds
+_cache_kr_chart: TTLCache = TTLCache(maxsize=1024, ttl=60 * 5)          # 5 minutes
+_cache_kr_flow: TTLCache = TTLCache(maxsize=1024, ttl=60 * 10)          # 10 minutes
+_cache_kr_short: TTLCache = TTLCache(maxsize=1024, ttl=60 * 10)         # 10 minutes
+_cache_krx_full_code: TTLCache = TTLCache(maxsize=2048, ttl=60 * 60 * 24)  # 1 day
 
 # ---- http client ----
 _client: Optional[httpx.AsyncClient] = None
@@ -117,9 +136,29 @@ def _session_from_market_state(market_state: Optional[str], fallback_now_et: dat
     return _market_session_label_us(fallback_now_et)
 
 
+def _market_session_label_kr(now_kst: datetime) -> str:
+    if now_kst.weekday() >= 5:
+        return "Closed"
+    t = now_kst.timetz().replace(tzinfo=None)
+    if time(8, 30) <= t < time(9, 0):
+        return "PreOpen"
+    if time(9, 0) <= t < time(15, 30):
+        return "RTH"
+    return "Closed"
+
+
 def _is_korea_symbol(sym: str) -> bool:
     s = sym.upper().strip()
     return s.endswith(".KS") or s.endswith(".KQ")
+
+
+def _kr_code_from_symbol(sym: str) -> Optional[str]:
+    s = (sym or "").upper().strip()
+    if s.endswith(".KS") or s.endswith(".KQ"):
+        s = s[:-3]
+    if len(s) == 6 and s.isdigit():
+        return s
+    return None
 
 
 def _safe_pct(last: float, base: float) -> Optional[float]:
@@ -337,6 +376,51 @@ async def _fetch_text(url: str, params: Optional[Dict[str, Any]] = None) -> str:
     if r.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Upstream error {r.status_code} from {url}")
     return r.text
+
+
+async def _fetch_naver_text(url: str, params: Optional[Dict[str, Any]] = None) -> str:
+    client = await _get_client()
+    r = await client.get(
+        url,
+        params=params,
+        headers={
+            "User-Agent": YF_UA,
+            "Referer": "https://finance.naver.com/",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+        },
+    )
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Upstream error {r.status_code} from {url}")
+    if not r.encoding:
+        r.encoding = "euc-kr"
+    return r.text
+
+
+async def _post_json(url: str, data: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Any:
+    client = await _get_client()
+    req_headers = {
+        "User-Agent": YF_UA,
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    if headers:
+        req_headers.update(headers)
+    r = await client.post(url, data=data, headers=req_headers)
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Upstream error {r.status_code} from {url}")
+    return r.json()
+
+
+async def _fetch_krx_json(data: Dict[str, Any], *, referer: str) -> Any:
+    return await _post_json(
+        KRX_JSON_URL,
+        data=data,
+        headers={
+            "Origin": "https://data.krx.co.kr",
+            "Referer": referer,
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+        },
+    )
 
 
 # ---- upstream fetchers ----
@@ -613,6 +697,574 @@ async def fetch_yahoo_quote_summary(symbol: str, *, region: str) -> Dict[str, An
     return out
 
 
+def _parse_naver_company_name(html: str) -> Optional[str]:
+    if not html:
+        return None
+
+    title_m = re.search(r"<title>\s*(.*?)\s*</title>", html, re.IGNORECASE | re.DOTALL)
+    if title_m:
+        title = unescape(re.sub(r"\s+", " ", title_m.group(1))).strip()
+        for suffix in (" : 네이버페이 증권", " : 네이버 증권"):
+            if title.endswith(suffix):
+                name = title[: -len(suffix)].strip()
+                if name:
+                    return name
+
+    h2_m = re.search(r'<div class="wrap_company">.*?<h2>\s*<a [^>]*>(.*?)</a>', html, re.IGNORECASE | re.DOTALL)
+    if h2_m:
+        name = unescape(re.sub(r"\s+", " ", h2_m.group(1))).strip()
+        if name:
+            return name
+
+    return None
+
+
+async def fetch_kr_company_name(symbol: str) -> Optional[str]:
+    sym = (symbol or "").upper().strip()
+    if sym in _cache_kr_names:
+        return _cache_kr_names[sym]
+
+    code = _kr_code_from_symbol(sym)
+    if not code:
+        _cache_kr_names[sym] = None
+        return None
+
+    try:
+        html = await _fetch_naver_text(NAVER_STOCK_MAIN_URL, params={"code": code})
+        name = _parse_naver_company_name(html)
+    except Exception:
+        name = None
+
+    _cache_kr_names[sym] = name
+    return name
+
+
+async def fetch_kr_company_names(symbols: List[str]) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    if not symbols:
+        return out
+
+    async def get_one(sym: str) -> Tuple[str, Optional[str]]:
+        return sym, await fetch_kr_company_name(sym)
+
+    results = await asyncio.gather(*[get_one(s) for s in symbols], return_exceptions=True)
+    for item in results:
+        if isinstance(item, Exception):
+            continue
+        sym, name = item
+        if name:
+            out[sym] = name
+    return out
+
+
+def _clean_html_text(s: str) -> str:
+    text = re.sub(r"<[^>]+>", "", s or "")
+    text = unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _parse_num_str(s: Any) -> Optional[float]:
+    if s is None:
+        return None
+    text = str(s).strip().replace(",", "")
+    text = text.replace("%", "").replace("배", "")
+    if text in ("", "N/A", "nan", "None", "-"):
+        return None
+    try:
+        return float(text)
+    except Exception:
+        return None
+
+
+def _parse_int_str(s: Any) -> Optional[int]:
+    v = _parse_num_str(s)
+    if v is None:
+        return None
+    try:
+        return int(round(v))
+    except Exception:
+        return None
+
+
+def _normalize_naver_href(href: str) -> str:
+    h = (href or "").strip()
+    if not h:
+        return ""
+    if h.startswith("//"):
+        return f"https:{h}"
+    if h.startswith("/"):
+        return f"https://finance.naver.com{h}"
+    return h
+
+
+def _parse_naver_news_items(html: str, limit: int = 6) -> List[Dict[str, Any]]:
+    if not html:
+        return []
+
+    block_m = re.search(
+        r'<div class="section new_bbs">.*?<div class="sub_section news_section">(.*?)</div>\s*</div>',
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not block_m:
+        return []
+
+    block = block_m.group(1)
+    item_matches = re.findall(
+        r"<li>\s*<span class=\"txt\">(.*?)</span>\s*<em>\s*([^<]+)\s*</em>\s*</li>",
+        block,
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for inner, date_text in item_matches:
+        link_m = re.search(r'<a href="([^"]+)"[^>]*>(.*?)</a>', inner, re.IGNORECASE | re.DOTALL)
+        if not link_m:
+            continue
+        href, title_html = link_m.groups()
+        title = _clean_html_text(title_html)
+        link = _normalize_naver_href(href)
+        date_label = _clean_html_text(date_text)
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        out.append(
+            {
+                "title": title,
+                "link": link or None,
+                "published": date_label or None,
+                "summary": None,
+                "source": "Naver Finance",
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+async def fetch_kr_naver_news(symbol: str, limit: int = 6) -> List[Dict[str, Any]]:
+    sym = (symbol or "").upper().strip()
+    code = _kr_code_from_symbol(sym)
+    cache_key = (sym, limit)
+    if cache_key in _cache_kr_news:
+        return _cache_kr_news[cache_key]
+    if not code:
+        _cache_kr_news[cache_key] = []
+        return []
+
+    try:
+        html = await _fetch_naver_text(NAVER_STOCK_MAIN_URL, params={"code": code})
+        items = _parse_naver_news_items(html, limit=limit)
+    except Exception:
+        items = []
+
+    _cache_kr_news[cache_key] = items
+    return items
+
+
+async def fetch_kr_market_sum_page(sosok: int, page: int) -> str:
+    key = (sosok, page)
+    if key in _cache_kr_market_page:
+        return _cache_kr_market_page[key]
+    html = await _fetch_naver_text(NAVER_MARKET_SUM_URL, params={"sosok": sosok, "page": page})
+    _cache_kr_market_page[key] = html
+    return html
+
+
+def _parse_kr_market_sum_rows(html: str, *, suffix: str) -> List[Dict[str, Any]]:
+    rows = re.findall(
+        r'<tr\s+onMouseOver="mouseOver\(this\)"\s+onMouseOut="mouseOut\(this\)">(.*?)</tr>',
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        title_m = re.search(r'/item/main\.naver\?code=(\d+)" class="tltle">(.*?)</a>', row, re.IGNORECASE | re.DOTALL)
+        if not title_m:
+            continue
+        code, name_html = title_m.groups()
+        name = _clean_html_text(name_html)
+        nums_html = re.findall(r'<td class="number">(.*?)</td>', row, re.IGNORECASE | re.DOTALL)
+        nums = [_clean_html_text(x) for x in nums_html]
+        if len(nums) < 8:
+            continue
+        last = _parse_num_str(nums[0])
+        day_chg_pct = _parse_num_str(nums[2])
+        day_volume = _parse_int_str(nums[7])
+        if last is None or day_chg_pct is None or day_volume is None:
+            continue
+        out.append(
+            {
+                "symbol": f"{code}{suffix}",
+                "code": code,
+                "name": name,
+                "currency": "KRW",
+                "last": float(last),
+                "day_chg_pct": float(day_chg_pct),
+                "day_volume": int(day_volume),
+                "day_turnover": float(last) * float(day_volume),
+            }
+        )
+    return out
+
+
+async def fetch_kr_market_universe(pages_per_market: int = 8) -> List[Dict[str, Any]]:
+    tasks = []
+    for sosok in (0, 1):
+        for page in range(1, max(1, pages_per_market) + 1):
+            tasks.append(fetch_kr_market_sum_page(sosok, page))
+
+    html_pages = await asyncio.gather(*tasks, return_exceptions=True)
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    idx = 0
+    for sosok in (0, 1):
+        suffix = ".KS" if sosok == 0 else ".KQ"
+        for _page in range(1, max(1, pages_per_market) + 1):
+            html = html_pages[idx]
+            idx += 1
+            if isinstance(html, Exception):
+                continue
+            for row in _parse_kr_market_sum_rows(str(html), suffix=suffix):
+                sym = row["symbol"]
+                if sym in seen:
+                    continue
+                seen.add(sym)
+                out.append(row)
+    return out
+
+
+async def fetch_kr_daily_history(symbol: str, count: int = 130) -> List[Dict[str, Any]]:
+    sym = (symbol or "").upper().strip()
+    cache_key = (sym, count)
+    if cache_key in _cache_kr_chart:
+        return _cache_kr_chart[cache_key]
+
+    code = _kr_code_from_symbol(sym)
+    if not code:
+        _cache_kr_chart[cache_key] = []
+        return []
+
+    text = await _fetch_naver_text(
+        NAVER_FCHART_URL,
+        params={"symbol": code, "timeframe": "day", "count": count, "requestType": "0"},
+    )
+    items = re.findall(r'<item data="(\d{8})\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^"]+)"\s*/>', text)
+    out: List[Dict[str, Any]] = []
+    for date_s, open_s, high_s, low_s, close_s, vol_s in items:
+        try:
+            out.append(
+                {
+                    "date": date_s,
+                    "open": float(open_s.replace(",", "")),
+                    "high": float(high_s.replace(",", "")),
+                    "low": float(low_s.replace(",", "")),
+                    "close": float(close_s.replace(",", "")),
+                    "volume": int(float(vol_s.replace(",", ""))),
+                }
+            )
+        except Exception:
+            continue
+    _cache_kr_chart[cache_key] = out
+    return out
+
+
+def _extract_blind_value(block: str, label: str) -> Optional[str]:
+    m = re.search(
+        rf'<span class="sptxt [^"]*">{re.escape(label)}</span>\s*<em>.*?<span class="blind">([^<]+)</span>',
+        block,
+        re.IGNORECASE | re.DOTALL,
+    )
+    return _clean_html_text(m.group(1)) if m else None
+
+
+async def fetch_kr_snapshot(symbol: str) -> Dict[str, Any]:
+    sym = (symbol or "").upper().strip()
+    if sym in _cache_kr_snapshot:
+        return _cache_kr_snapshot[sym]
+
+    code = _kr_code_from_symbol(sym)
+    if not code:
+        _cache_kr_snapshot[sym] = {}
+        return {}
+
+    html = await _fetch_naver_text(NAVER_STOCK_MAIN_URL, params={"code": code})
+    block_m = re.search(
+        r'<div class="rate_info" id="rate_info_krx".*?>(.*?)</table>',
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not block_m:
+        _cache_kr_snapshot[sym] = {}
+        return {}
+    block = block_m.group(1)
+
+    name = await fetch_kr_company_name(sym)
+
+    current_m = re.search(r'<p class="no_today">.*?<span class="blind">([^<]+)</span>', block, re.IGNORECASE | re.DOTALL)
+    exday_m = re.search(r'<p class="no_exday">(.*?)</p>', block, re.IGNORECASE | re.DOTALL)
+    current = _parse_num_str(_clean_html_text(current_m.group(1))) if current_m else None
+
+    diff_val = None
+    day_chg_pct = None
+    diff_sign = 1.0
+    if exday_m:
+        exday = exday_m.group(1)
+        blinds = re.findall(r'<span class="blind">([^<]+)</span>', exday, re.IGNORECASE | re.DOTALL)
+        if 'ico down' in exday:
+            diff_sign = -1.0
+        elif 'ico up' in exday:
+            diff_sign = 1.0
+        if len(blinds) >= 1:
+            dv = _parse_num_str(_clean_html_text(blinds[0]))
+            diff_val = (dv * diff_sign) if dv is not None else None
+        if len(blinds) >= 2:
+            pv = _parse_num_str(_clean_html_text(blinds[1]))
+            day_chg_pct = (pv * diff_sign) if pv is not None else None
+
+    prev_close = _parse_num_str(_extract_blind_value(block, "전일"))
+    open_ = _parse_num_str(_extract_blind_value(block, "시가"))
+    high = _parse_num_str(_extract_blind_value(block, "고가"))
+    low = _parse_num_str(_extract_blind_value(block, "저가"))
+    volume = _parse_int_str(_extract_blind_value(block, "거래량"))
+    turnover_million = _parse_num_str(_extract_blind_value(block, "거래대금"))
+    turnover = (turnover_million * 1_000_000.0) if turnover_million is not None else None
+
+    if prev_close is None and current is not None and diff_val is not None:
+        prev_close = current - diff_val
+
+    out = {
+        "symbol": sym,
+        "name": name,
+        "currency": "KRW",
+        "last": current,
+        "prev_close": prev_close,
+        "day_chg_pct": day_chg_pct,
+        "day_volume": volume,
+        "day_turnover": turnover,
+        "open": open_,
+        "high": high,
+        "low": low,
+        "bid": None,
+        "ask": None,
+        "market_state": _market_session_label_kr(_now_kst()),
+    }
+    _cache_kr_snapshot[sym] = out
+    return out
+
+
+def _sum_recent(items: List[Optional[int]], n: int) -> Optional[int]:
+    vals = [int(x) for x in items[:n] if x is not None]
+    return sum(vals) if vals else None
+
+
+def _parse_kr_flow_rows(html: str) -> List[Dict[str, Any]]:
+    table_m = re.search(
+        r'<table[^>]+summary="외국인 기관 순매매 거래량에 관한표이며 날짜별로 정보를 제공합니다\."[^>]*>(.*?)</table>',
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not table_m:
+        return []
+
+    rows_html = re.findall(r"<tr[^>]*>(.*?)</tr>", table_m.group(1), re.IGNORECASE | re.DOTALL)
+    out: List[Dict[str, Any]] = []
+    for row_html in rows_html:
+        cols = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row_html, re.IGNORECASE | re.DOTALL)
+        if len(cols) < 9:
+            continue
+        cells = [_clean_html_text(x) for x in cols]
+        date_text = cells[0]
+        if not re.match(r"\d{4}\.\d{2}\.\d{2}", date_text):
+            continue
+        out.append(
+            {
+                "date": date_text,
+                "close": _parse_num_str(cells[1]),
+                "day_change": _parse_num_str(cells[2]),
+                "day_change_pct": _parse_num_str(cells[3]),
+                "volume": _parse_int_str(cells[4]),
+                "institution_net_volume": _parse_int_str(cells[5]),
+                "foreign_net_volume": _parse_int_str(cells[6]),
+                "foreign_holding_shares": _parse_int_str(cells[7]),
+                "foreign_ownership_pct": _parse_num_str(cells[8]),
+            }
+        )
+    return out
+
+
+async def fetch_kr_investor_flows(symbol: str) -> Dict[str, Any]:
+    sym = (symbol or "").upper().strip()
+    if sym in _cache_kr_flow:
+        return _cache_kr_flow[sym]
+
+    code = _kr_code_from_symbol(sym)
+    if not code:
+        _cache_kr_flow[sym] = {}
+        return {}
+
+    try:
+        html = await _fetch_naver_text(NAVER_FRGN_URL, params={"code": code, "page": 1})
+    except Exception:
+        _cache_kr_flow[sym] = {}
+        return {}
+
+    rows = _parse_kr_flow_rows(html)
+    if not rows:
+        _cache_kr_flow[sym] = {}
+        return {}
+
+    foreign_vals = [r.get("foreign_net_volume") for r in rows]
+    institution_vals = [r.get("institution_net_volume") for r in rows]
+    latest = rows[0]
+    result = {
+        "source": "Naver Finance / KRX close data",
+        "as_of": latest.get("date"),
+        "lookbacks": {
+            "1d": {
+                "foreign_net_volume": _sum_recent(foreign_vals, 1),
+                "institution_net_volume": _sum_recent(institution_vals, 1),
+                "individual_net_volume": None,
+            },
+            "5d": {
+                "foreign_net_volume": _sum_recent(foreign_vals, 5),
+                "institution_net_volume": _sum_recent(institution_vals, 5),
+                "individual_net_volume": None,
+            },
+            "20d": {
+                "foreign_net_volume": _sum_recent(foreign_vals, 20),
+                "institution_net_volume": _sum_recent(institution_vals, 20),
+                "individual_net_volume": None,
+            },
+        },
+        "latest": latest,
+        "rows": rows[:20],
+        "note": "외국인/기관 순매매는 확인되지만 개인 순매수는 현재 확인 불가입니다.",
+    }
+    _cache_kr_flow[sym] = result
+    return result
+
+
+async def fetch_krx_full_code(symbol: str, name_hint: Optional[str] = None) -> Optional[str]:
+    sym = (symbol or "").upper().strip()
+    code = _kr_code_from_symbol(sym)
+    if not code:
+        return None
+    if code in _cache_krx_full_code:
+        return _cache_krx_full_code[code]
+
+    query = (name_hint or "").strip() or code
+    try:
+        data = await _fetch_krx_json(
+            {
+                "bld": KRX_FINDER_AUTOCOMPLETE_BLD,
+                "query": query,
+                "mktsel": "ALL",
+                "searchText": query,
+            },
+            referer=f"{KRX_SRT_LOADER_URL}?screenId=MDCSTAT300&isuCd={code}",
+        )
+    except Exception:
+        return None
+
+    for item in (data.get("block1") or []):
+        short_code = str(item.get("tp") or "").strip()
+        full_code = str(item.get("cd") or "").strip()
+        if short_code == code and full_code:
+            _cache_krx_full_code[code] = full_code
+            return full_code
+    return None
+
+
+async def fetch_kr_short_data(symbol: str, *, name_hint: Optional[str] = None) -> Dict[str, Any]:
+    sym = (symbol or "").upper().strip()
+    if sym in _cache_kr_short:
+        return _cache_kr_short[sym]
+
+    code = _kr_code_from_symbol(sym)
+    if not code:
+        _cache_kr_short[sym] = {}
+        return {}
+
+    full_code = await fetch_krx_full_code(sym, name_hint=name_hint)
+    if not full_code:
+        _cache_kr_short[sym] = {}
+        return {}
+
+    end_dd = _now_kst().strftime("%Y%m%d")
+    strt_dd = (_now_kst() - timedelta(days=45)).strftime("%Y%m%d")
+    try:
+        data = await _fetch_krx_json(
+            {
+                "bld": KRX_SHORT_OUT_BLD,
+                "locale": "ko_KR",
+                "isuCd": full_code,
+                "strtDd": strt_dd,
+                "endDd": end_dd,
+                "share": "1",
+                "money": "1",
+            },
+            referer=f"{KRX_SRT_LOADER_URL}?screenId=MDCSTAT300&isuCd={code}",
+        )
+    except Exception:
+        _cache_kr_short[sym] = {}
+        return {}
+
+    rows: List[Dict[str, Any]] = []
+    for row in (data.get("OutBlock_1") or []):
+        rows.append(
+            {
+                "date": str(row.get("TRD_DD") or "").replace("/", "-"),
+                "short_volume": _parse_int_str(row.get("CVSRTSELL_TRDVOL")),
+                "short_value": _parse_int_str(row.get("CVSRTSELL_TRDVAL")),
+                "net_short_balance_qty": _parse_int_str(row.get("STR_CONST_VAL1")),
+                "net_short_balance_value": _parse_int_str(row.get("STR_CONST_VAL2")),
+                "uptick_applied_volume": _parse_int_str(row.get("UPTICKRULE_APPL_TRDVOL")),
+                "uptick_exempt_volume": _parse_int_str(row.get("UPTICKRULE_EXCPT_TRDVOL")),
+            }
+        )
+
+    if not rows:
+        _cache_kr_short[sym] = {}
+        return {}
+
+    short_vols = [r.get("short_volume") for r in rows]
+    short_vals = [r.get("short_value") for r in rows]
+    latest = rows[0]
+    latest_balance = next(
+        (
+            r for r in rows
+            if r.get("net_short_balance_qty") is not None or r.get("net_short_balance_value") is not None
+        ),
+        {},
+    )
+    result = {
+        "source": "KRX Data Marketplace",
+        "as_of": latest.get("date"),
+        "latest": latest,
+        "latest_balance": latest_balance,
+        "lookbacks": {
+            "1d": {
+                "short_volume": _sum_recent(short_vols, 1),
+                "short_value": _sum_recent(short_vals, 1),
+            },
+            "5d": {
+                "short_volume": _sum_recent(short_vols, 5),
+                "short_value": _sum_recent(short_vals, 5),
+            },
+            "20d": {
+                "short_volume": _sum_recent(short_vols, 20),
+                "short_value": _sum_recent(short_vals, 20),
+            },
+        },
+        "rows": rows[:20],
+        "note": "순보유잔고는 KRX 보고 기준 T+2 지연이 반영될 수 있습니다.",
+    }
+    _cache_kr_short[sym] = result
+    return result
+
+
 async def fetch_sec_ticker_map() -> Dict[str, Dict[str, Any]]:
     if "map" in _cache_sec_tickers:
         return _cache_sec_tickers["map"]
@@ -699,6 +1351,7 @@ async def health() -> Dict[str, Any]:
         "horizons": [5, 20],
         "data_sources": [
             "Yahoo Finance chart/quote/screener/trending/options/quoteSummary (unofficial endpoints)",
+            "Naver Finance market summary/item page/fchart (KR scan/detail/news/name)",
             "SEC data.sec.gov (official, no-key)",
             "Yahoo Finance RSS (public)",
         ],
@@ -735,6 +1388,7 @@ async def candidates(
 
     universe: List[str] = []
     universe_source = ""
+    kr_seed_map: Dict[str, Dict[str, Any]] = {}
 
     if explicit:
         universe = explicit
@@ -764,36 +1418,61 @@ async def candidates(
 
             universe_source = f"screeners:{','.join(scr_list)}"
         else:
-            # KR: predefined screeners return US stocks; use Yahoo trending + fallback list.
-            universe = await fetch_yahoo_trending(region=region)
-            if not universe:
+            kr_rows = await fetch_kr_market_universe(pages_per_market=8)
+            if not kr_rows:
                 universe = list(_KR_FALLBACK_SYMBOLS)
                 universe_source = "kr_fallback"
             else:
-                universe_source = "trending"
+                # Pre-filter by price/liquidity before fetching histories.
+                pre_rows = []
+                for row in kr_rows:
+                    last = row.get("last")
+                    turnover = row.get("day_turnover")
+                    if last is None or turnover is None:
+                        continue
+                    if max_price > 0 and float(last) > float(max_price):
+                        continue
+                    if float(turnover) < min(float(min_avg_turnover) * 0.2, 1_000_000_000.0):
+                        continue
+                    pre_rows.append(row)
+                if not pre_rows:
+                    pre_rows = kr_rows[:120]
+                pre_rows.sort(key=lambda r: (float(r.get("day_turnover") or 0.0), abs(float(r.get("day_chg_pct") or 0.0))), reverse=True)
+                pre_rows = pre_rows[:160]
+                universe = [str(r["symbol"]) for r in pre_rows]
+                kr_seed_map = {str(r["symbol"]): r for r in pre_rows}
+                universe_source = "naver_market_sum"
 
     # polite cap
-    universe = universe[:80]
+    universe = universe[:160] if market_u == "KR" else universe[:80]
 
-    quote_map = await fetch_yahoo_quote(universe, region=region)
+    quote_map: Dict[str, Dict[str, Any]] = {}
+    if market_u == "US":
+        quote_map = await fetch_yahoo_quote(universe, region=region)
 
     sem = asyncio.Semaphore(12)
 
     async def build_candidate(sym: str) -> Optional[Candidate]:
-        q = quote_map.get(sym) or {}
-
-        name = q.get("shortName") or q.get("longName") or ""
-        currency = q.get("currency")
-
-        last = q.get("regularMarketPrice")
-        prev_close = q.get("regularMarketPreviousClose")
-
-        day_chg_pct = None
-        if last is not None and prev_close is not None:
-            try:
-                day_chg_pct = _safe_pct(float(last), float(prev_close))
-            except Exception:
-                day_chg_pct = None
+        if market_u == "KR":
+            q = kr_seed_map.get(sym) or await fetch_kr_snapshot(sym)
+            name = q.get("name") or ""
+            currency = "KRW"
+            last = q.get("last")
+            day_chg_pct = q.get("day_chg_pct")
+            day_volume = q.get("day_volume")
+        else:
+            q = quote_map.get(sym) or {}
+            name = q.get("shortName") or q.get("longName") or ""
+            currency = q.get("currency")
+            last = q.get("regularMarketPrice")
+            prev_close = q.get("regularMarketPreviousClose")
+            day_chg_pct = None
+            if last is not None and prev_close is not None:
+                try:
+                    day_chg_pct = _safe_pct(float(last), float(prev_close))
+                except Exception:
+                    day_chg_pct = None
+            day_volume = q.get("regularMarketVolume")
 
         # price filter (local currency)
         try:
@@ -803,12 +1482,17 @@ async def candidates(
             pass
 
         # daily chart for returns & avg volume
-        async with sem:
-            daily = await fetch_yahoo_chart(sym, range_="3mo", interval="1d", include_prepost=False)
-
-        _ts, _o, _h, _l, _c, _v = _extract_ohlcv(daily)
-        closes = _drop_none_float(_c)
-        vols = _drop_none_int(_v)
+        if market_u == "KR":
+            async with sem:
+                daily_rows = await fetch_kr_daily_history(sym, count=80)
+            closes = [float(x["close"]) for x in daily_rows if x.get("close") is not None]
+            vols = [int(x["volume"]) for x in daily_rows if x.get("volume") is not None]
+        else:
+            async with sem:
+                daily = await fetch_yahoo_chart(sym, range_="3mo", interval="1d", include_prepost=False)
+            _ts, _o, _h, _l, _c, _v = _extract_ohlcv(daily)
+            closes = _drop_none_float(_c)
+            vols = _drop_none_int(_v)
 
         ret_3d_pct = _compute_return_pct(closes, 3)
         ret_5d_pct = _compute_return_pct(closes, 5)
@@ -820,7 +1504,6 @@ async def candidates(
         elif len(vols) >= 10:
             avg20_volume = statistics.fmean(vols[-10:])
 
-        day_volume = q.get("regularMarketVolume")
         if day_volume is None and vols:
             day_volume = vols[-1]
 
@@ -880,6 +1563,10 @@ async def candidates(
     cands.sort(key=lambda x: x.score, reverse=True)
     cands = cands[:top_n]
 
+    kr_name_map: Dict[str, str] = {}
+    if market_u == "KR" and cands:
+        kr_name_map = {c.symbol: c.name for c in cands}
+
     # market context (best-effort)
     context: Dict[str, Any] = {}
     try:
@@ -928,7 +1615,7 @@ async def candidates(
         "candidates": [
             {
                 "symbol": c.symbol,
-                "name": c.name,
+                "name": kr_name_map.get(c.symbol) or c.name,
                 "currency": c.currency,
                 "last": c.last,
                 "day_chg_pct": c.day_chg_pct,
@@ -965,68 +1652,120 @@ async def ticker_detail(
     if horizon_days not in (5, 20):
         horizon_days = 5 if horizon_days < 12 else 20
 
-    quote_map = await fetch_yahoo_quote([sym], region=market_u)
-    q = quote_map.get(sym)
-    if not q:
-        raise HTTPException(status_code=404, detail="symbol not found (Yahoo)")
+    if market_u == "KR":
+        q = await fetch_kr_snapshot(sym)
+        if not q or q.get("last") is None:
+            raise HTTPException(status_code=404, detail="symbol not found (Naver)")
 
-    name = q.get("shortName") or q.get("longName") or ""
-    currency = q.get("currency")
+        name = q.get("name") or ""
+        currency = q.get("currency") or "KRW"
+        last = q.get("last")
+        prev_close = q.get("prev_close")
+        day_chg_pct = q.get("day_chg_pct")
+        market_state = q.get("market_state")
+        session = _market_session_label_kr(_now_kst())
 
-    last = q.get("regularMarketPrice")
-    prev_close = q.get("regularMarketPreviousClose")
+        daily_rows = await fetch_kr_daily_history(sym, count=130)
+        d_highs = [float(x["high"]) for x in daily_rows if x.get("high") is not None]
+        d_lows = [float(x["low"]) for x in daily_rows if x.get("low") is not None]
+        d_closes = [float(x["close"]) for x in daily_rows if x.get("close") is not None]
+        d_vols = [int(x["volume"]) for x in daily_rows if x.get("volume") is not None]
 
-    day_chg_pct = None
-    if last is not None and prev_close is not None:
-        try:
-            day_chg_pct = _safe_pct(float(last), float(prev_close))
-        except Exception:
-            day_chg_pct = None
+        lookback_high = d_highs[-20:] if len(d_highs) >= 20 else d_highs
+        lookback_low = d_lows[-20:] if len(d_lows) >= 20 else d_lows
+        resistance_20d, support_20d = _swing_levels(lookback_high, lookback_low)
 
-    market_state = q.get("marketState")
-    session = _session_from_market_state(market_state, _now_et())
+        day_high = q.get("high") if q.get("high") is not None else (d_highs[-1] if d_highs else None)
+        day_low = q.get("low") if q.get("low") is not None else (d_lows[-1] if d_lows else None)
+        day_open = q.get("open")
+        day_volume = q.get("day_volume")
+        day_turnover = q.get("day_turnover")
 
-    # charts
-    daily = await fetch_yahoo_chart(sym, range_="6mo", interval="1d", include_prepost=False)
-    intraday = await fetch_yahoo_chart(sym, range_="1d", interval="1m", include_prepost=True)
+        avg20_volume = None
+        if len(d_vols) >= 20:
+            avg20_volume = statistics.fmean(d_vols[-20:])
+        elif len(d_vols) >= 10:
+            avg20_volume = statistics.fmean(d_vols[-10:])
 
-    d_ts, d_o, d_h, d_l, d_c, d_v = _extract_ohlcv(daily)
-    i_ts, i_o, i_h, i_l, i_c, i_v = _extract_ohlcv(intraday)
-
-    d_highs = _drop_none_float(d_h)
-    d_lows = _drop_none_float(d_l)
-    d_closes = _drop_none_float(d_c)
-    d_vols = _drop_none_int(d_v)
-
-    # levels: use 20 trading days for local swing levels
-    lookback_high = d_highs[-20:] if len(d_highs) >= 20 else d_highs
-    lookback_low = d_lows[-20:] if len(d_lows) >= 20 else d_lows
-    resistance_20d, support_20d = _swing_levels(lookback_high, lookback_low)
-
-    day_high = max(_drop_none_float(i_h)) if i_h else None
-    day_low = min(_drop_none_float(i_l)) if i_l else None
-
-    # volume stats
-    avg20_volume = None
-    if len(d_vols) >= 20:
-        avg20_volume = statistics.fmean(d_vols[-20:])
-    elif len(d_vols) >= 10:
-        avg20_volume = statistics.fmean(d_vols[-10:])
-
-    day_volume = q.get("regularMarketVolume")
-    rel_vol_20d = None
-    try:
-        if day_volume is not None and avg20_volume is not None and avg20_volume > 0:
-            rel_vol_20d = float(day_volume) / float(avg20_volume)
-    except Exception:
         rel_vol_20d = None
+        try:
+            if day_volume is not None and avg20_volume is not None and avg20_volume > 0:
+                rel_vol_20d = float(day_volume) / float(avg20_volume)
+        except Exception:
+            rel_vol_20d = None
 
-    ret_3d_pct = _compute_return_pct(d_closes, 3)
-    ret_5d_pct = _compute_return_pct(d_closes, 5)
-    ret_20d_pct = _compute_return_pct(d_closes, 20)
-    ret_horizon_pct = ret_5d_pct if horizon_days == 5 else ret_20d_pct
+        ret_3d_pct = _compute_return_pct(d_closes, 3)
+        ret_5d_pct = _compute_return_pct(d_closes, 5)
+        ret_20d_pct = _compute_return_pct(d_closes, 20)
+        ret_horizon_pct = ret_5d_pct if horizon_days == 5 else ret_20d_pct
+        atr14 = _atr14(d_highs, d_lows, d_closes)
+        kr_flow, kr_short = await asyncio.gather(
+            fetch_kr_investor_flows(sym),
+            fetch_kr_short_data(sym, name_hint=name),
+        )
+    else:
+        quote_map = await fetch_yahoo_quote([sym], region=market_u)
+        q = quote_map.get(sym)
+        if not q:
+            raise HTTPException(status_code=404, detail="symbol not found (Yahoo)")
 
-    atr14 = _atr14(d_highs, d_lows, d_closes)
+        name = q.get("shortName") or q.get("longName") or ""
+        currency = q.get("currency")
+
+        last = q.get("regularMarketPrice")
+        prev_close = q.get("regularMarketPreviousClose")
+
+        day_chg_pct = None
+        if last is not None and prev_close is not None:
+            try:
+                day_chg_pct = _safe_pct(float(last), float(prev_close))
+            except Exception:
+                day_chg_pct = None
+
+        market_state = q.get("marketState")
+        session = _session_from_market_state(market_state, _now_et())
+
+        daily = await fetch_yahoo_chart(sym, range_="6mo", interval="1d", include_prepost=False)
+        intraday = await fetch_yahoo_chart(sym, range_="1d", interval="1m", include_prepost=True)
+
+        d_ts, d_o, d_h, d_l, d_c, d_v = _extract_ohlcv(daily)
+        i_ts, i_o, i_h, i_l, i_c, i_v = _extract_ohlcv(intraday)
+
+        d_highs = _drop_none_float(d_h)
+        d_lows = _drop_none_float(d_l)
+        d_closes = _drop_none_float(d_c)
+        d_vols = _drop_none_int(d_v)
+
+        lookback_high = d_highs[-20:] if len(d_highs) >= 20 else d_highs
+        lookback_low = d_lows[-20:] if len(d_lows) >= 20 else d_lows
+        resistance_20d, support_20d = _swing_levels(lookback_high, lookback_low)
+
+        day_high = max(_drop_none_float(i_h)) if i_h else None
+        day_low = min(_drop_none_float(i_l)) if i_l else None
+        day_open = None
+        day_volume = q.get("regularMarketVolume")
+        day_turnover = (float(last) * float(day_volume)) if last is not None and day_volume is not None else None
+
+        avg20_volume = None
+        if len(d_vols) >= 20:
+            avg20_volume = statistics.fmean(d_vols[-20:])
+        elif len(d_vols) >= 10:
+            avg20_volume = statistics.fmean(d_vols[-10:])
+
+        rel_vol_20d = None
+        try:
+            if day_volume is not None and avg20_volume is not None and avg20_volume > 0:
+                rel_vol_20d = float(day_volume) / float(avg20_volume)
+        except Exception:
+            rel_vol_20d = None
+
+        ret_3d_pct = _compute_return_pct(d_closes, 3)
+        ret_5d_pct = _compute_return_pct(d_closes, 5)
+        ret_20d_pct = _compute_return_pct(d_closes, 20)
+        ret_horizon_pct = ret_5d_pct if horizon_days == 5 else ret_20d_pct
+        atr14 = _atr14(d_highs, d_lows, d_closes)
+        kr_flow = {}
+        kr_short = {}
 
     # plan-like (rules output):
     # - entry: break above 20D high if below; else break day_high
@@ -1062,6 +1801,10 @@ async def ticker_detail(
 
     async def get_rss() -> List[Dict[str, Any]]:
         async with sem:
+            if market_u == "KR":
+                items = await fetch_kr_naver_news(sym, limit=6)
+                if items:
+                    return items
             return await fetch_yahoo_rss(sym, region=market_u, limit=6)
 
     async def get_sec() -> List[Dict[str, Any]]:
@@ -1090,6 +1833,21 @@ async def ticker_detail(
     opt_sum: Dict[str, Any] = {} if isinstance(opt, Exception) else (opt or {})
     qs_sum: Dict[str, Any] = {} if isinstance(qs, Exception) else (qs or {})
 
+    if market_u == "KR" and kr_short:
+        latest_short = kr_short.get("latest") or {}
+        try:
+            sv = latest_short.get("short_volume")
+            if sv is not None and day_volume:
+                latest_short["short_volume_ratio_pct"] = round(float(sv) / float(day_volume) * 100.0, 4)
+        except Exception:
+            pass
+        try:
+            sval = latest_short.get("short_value")
+            if sval is not None and day_turnover:
+                latest_short["short_value_ratio_pct"] = round(float(sval) / float(day_turnover) * 100.0, 4)
+        except Exception:
+            pass
+
     now_et = _now_et()
     return {
         "asof_et": _fmt_dt(now_et),
@@ -1106,11 +1864,15 @@ async def ticker_detail(
             "last": last,
             "prev_close": prev_close,
             "day_chg_pct": day_chg_pct,
-            "day_volume": q.get("regularMarketVolume"),
+            "day_volume": day_volume,
+            "day_turnover": day_turnover,
             "bid": q.get("bid"),
             "ask": q.get("ask"),
+            "open": day_open,
+            "high": day_high,
+            "low": day_low,
             "market_state": market_state,
-            "regular_market_time": q.get("regularMarketTime"),
+            "regular_market_time": q.get("regularMarketTime") if market_u != "KR" else None,
         },
         "stats": {
             "ret_3d_pct": ret_3d_pct,
@@ -1130,6 +1892,8 @@ async def ticker_detail(
         "extras": {
             "quote_summary": qs_sum,
             "options": opt_sum,
+            "kr_flow": kr_flow,
+            "kr_short": kr_short,
         },
         "trade_plan_like": {
             "hold_days_max": horizon_days,
@@ -1169,6 +1933,148 @@ def _fmt_pct(x: Any) -> str:
         return f"{v:+.2f}%"
     except Exception:
         return "확인 불가"
+
+
+def _to_float(x: Any, default: float = 0.0) -> float:
+    try:
+        return float(x)
+    except Exception:
+        return default
+
+
+def _spread_pct_from_quote(q: Dict[str, Any]) -> Optional[float]:
+    b = q.get("bid")
+    a = q.get("ask")
+    try:
+        bf = float(b)
+        af = float(a)
+        if bf > 0 and af > 0:
+            return (af / bf - 1.0) * 100.0
+    except Exception:
+        return None
+    return None
+
+
+def _score_breakdown_detail(d: Dict[str, Any]) -> Dict[str, float]:
+    q = d.get("quote", {}) or {}
+    st = d.get("stats", {}) or {}
+    ex = d.get("extras", {}) or {}
+    qs = (ex.get("quote_summary") or {})
+    opt = (ex.get("options") or {})
+    kr_flow = (ex.get("kr_flow") or {})
+    kr_short = (ex.get("kr_short") or {})
+
+    relv = _to_float(st.get("rel_vol_20d"), 0.0)
+    hret = _to_float(st.get("ret_horizon_pct"), -50.0)
+    dayp = _to_float(q.get("day_chg_pct"), 0.0)
+    atr = _to_float(st.get("atr14"), 0.0)
+    last = _to_float(q.get("last"), 0.0)
+    vol = _to_float(q.get("day_volume"), 0.0)
+    turnover = last * vol
+    call_put = _to_float(opt.get("call_put_vol_ratio"), 1.0)
+    short_ratio = _to_float(qs.get("short_ratio"), 0.0)
+    short_float = _to_float(qs.get("short_percent_of_float"), 0.0)
+
+    atr_pct = (atr / last * 100.0) if last > 0 and atr > 0 else 0.0
+
+    momentum = 0.0
+    momentum += max(-20.0, min(25.0, hret)) * 1.8
+    momentum += max(-8.0, min(10.0, dayp)) * 1.2
+
+    liquidity = 0.0
+    liquidity += min(4.0, relv) * 14.0
+    if turnover >= 1_000_000_000:
+        liquidity += 18.0
+    elif turnover >= 300_000_000:
+        liquidity += 12.0
+    elif turnover >= 100_000_000:
+        liquidity += 7.0
+
+    flow_proxy = 0.0
+    if str(d.get("market") or "").upper() == "KR" and (kr_flow or kr_short):
+        flow_1d = (kr_flow.get("lookbacks") or {}).get("1d") or {}
+        flow_5d = (kr_flow.get("lookbacks") or {}).get("5d") or {}
+        latest_short = (kr_short.get("latest") or {})
+        foreign_1d = abs(_to_float(flow_1d.get("foreign_net_volume"), 0.0))
+        institution_1d = abs(_to_float(flow_1d.get("institution_net_volume"), 0.0))
+        foreign_5d = abs(_to_float(flow_5d.get("foreign_net_volume"), 0.0))
+        institution_5d = abs(_to_float(flow_5d.get("institution_net_volume"), 0.0))
+        short_ratio_vol = _to_float(latest_short.get("short_volume_ratio_pct"), 0.0)
+
+        flow_proxy += min(20.0, foreign_1d / 500_000.0)
+        flow_proxy += min(16.0, institution_1d / 500_000.0)
+        flow_proxy += min(10.0, foreign_5d / 2_000_000.0)
+        flow_proxy += min(8.0, institution_5d / 2_000_000.0)
+        if short_ratio_vol >= 8.0:
+            flow_proxy += 2.0
+        elif short_ratio_vol >= 5.0:
+            flow_proxy += 1.0
+    else:
+        flow_proxy += max(0.0, min(3.0, call_put)) * 7.0
+        flow_proxy += max(0.0, min(12.0, short_float)) * 1.1
+        if short_ratio >= 5.0:
+            flow_proxy += 4.0
+
+    risk = 0.0
+    if atr_pct > 7.0:
+        risk += 16.0
+    elif atr_pct > 5.0:
+        risk += 9.0
+    elif atr_pct > 3.5:
+        risk += 4.0
+    if relv < 0.7:
+        risk += 5.0
+
+    total = momentum + liquidity + flow_proxy - risk
+    return {
+        "total": round(total, 1),
+        "momentum": round(momentum, 1),
+        "liquidity": round(liquidity, 1),
+        "flow_proxy": round(flow_proxy, 1),
+        "risk_penalty": round(risk, 1),
+        "turnover": round(turnover, 1),
+        "atr_pct": round(atr_pct, 2),
+    }
+
+
+def _risk_flags_detail(d: Dict[str, Any], score: Dict[str, float]) -> List[str]:
+    flags: List[str] = []
+    q = d.get("quote", {}) or {}
+    ex = d.get("extras", {}) or {}
+    qs = (ex.get("quote_summary") or {})
+    sec = d.get("sec_filings_last_7d", []) or []
+    spread = _spread_pct_from_quote(q)
+    if qs.get("earnings_dates"):
+        flags.append("earnings")
+    if spread is not None and spread > 0.35:
+        flags.append("wide_spread")
+    if score.get("atr_pct", 0.0) > 6.0:
+        flags.append("high_volatility")
+    if sec:
+        flags.append(f"sec_{len(sec)}")
+    return flags
+
+
+def _macro_regime(macro_rows: List[Dict[str, Any]], market_code: str) -> str:
+    m = {str(x.get("label")): x for x in (macro_rows or [])}
+    if market_code.upper() == "US":
+        spy = _to_float((m.get("SPY") or {}).get("day_chg_pct"), 0.0)
+        qqq = _to_float((m.get("QQQ") or {}).get("day_chg_pct"), 0.0)
+        vix = _to_float((m.get("VIX") or {}).get("day_chg_pct"), 0.0)
+        if spy > 0 and qqq > 0 and vix <= 0:
+            return "RISK_ON"
+        if spy < 0 and qqq < 0 and vix > 0:
+            return "RISK_OFF"
+        return "MIXED"
+
+    kospi = _to_float((m.get("KOSPI") or {}).get("day_chg_pct"), 0.0)
+    kosdaq = _to_float((m.get("KOSDAQ") or {}).get("day_chg_pct"), 0.0)
+    usdkrw = _to_float((m.get("USD/KRW") or {}).get("day_chg_pct"), 0.0)
+    if kospi > 0 and kosdaq > 0 and usdkrw <= 0:
+        return "RISK_ON"
+    if kospi < 0 and kosdaq < 0 and usdkrw > 0:
+        return "RISK_OFF"
+    return "MIXED"
 
 
 async def _fetch_macro_snapshot(market: str) -> List[Dict[str, Any]]:
@@ -1220,6 +2126,217 @@ async def _fetch_macro_snapshot(market: str) -> List[Dict[str, Any]]:
     return out
 
 
+async def _collect_symbol_details(
+    symbols: str,
+    *,
+    market: str,
+    horizon_days: int,
+    max_items: int,
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    syms = [s.strip().upper() for s in (symbols or "").split(",") if s.strip()]
+    if not syms:
+        raise HTTPException(status_code=400, detail="symbols required")
+
+    if horizon_days not in (5, 20):
+        horizon_days = 5 if horizon_days < 12 else 20
+
+    syms = syms[:max_items]
+    sem = asyncio.Semaphore(4)
+
+    async def get_one(s: str) -> Tuple[str, Optional[Dict[str, Any]], Optional[str]]:
+        async with sem:
+            try:
+                d = await ticker_detail(s, market=market, horizon_days=horizon_days)
+                return s, d, None
+            except Exception as e:
+                return s, None, str(e)
+
+    results = await asyncio.gather(*[get_one(s) for s in syms])
+
+    ok_details: List[Dict[str, Any]] = []
+    errors: List[str] = []
+    for s, d, err in results:
+        if d is not None:
+            ok_details.append(d)
+        else:
+            errors.append(f"{s}: {err or '확인 불가'}")
+    return ok_details, errors
+
+
+def _build_data_package(
+    details: List[Dict[str, Any]],
+    *,
+    market: str,
+    horizon_days: int,
+    macro: List[Dict[str, Any]],
+    errors: Optional[List[str]] = None,
+    scan_context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    ranked_rows: List[Tuple[float, Dict[str, Any], Dict[str, float]]] = []
+    for d in details:
+        sc = _score_breakdown_detail(d)
+        ranked_rows.append((sc["total"], d, sc))
+    ranked_rows.sort(key=lambda x: x[0], reverse=True)
+
+    candidates: List[Dict[str, Any]] = []
+    for idx, (total, d, sc) in enumerate(ranked_rows, start=1):
+        q = d.get("quote", {}) or {}
+        st = d.get("stats", {}) or {}
+        lv = d.get("levels", {}) or {}
+        plan = d.get("trade_plan_like", {}) or {}
+        ex = d.get("extras", {}) or {}
+        qs = ex.get("quote_summary") or {}
+        opt = ex.get("options") or {}
+        kr_flow = ex.get("kr_flow") or {}
+        kr_short = ex.get("kr_short") or {}
+        spread = _spread_pct_from_quote(q)
+        risk_flags = _risk_flags_detail(d, sc)
+
+        candidates.append(
+            {
+                "rank": idx,
+                "symbol": d.get("symbol"),
+                "name": d.get("name"),
+                "currency": d.get("currency"),
+                "session": d.get("session"),
+                "quote": {
+                    "last": q.get("last"),
+                    "prev_close": q.get("prev_close"),
+                    "day_chg_pct": q.get("day_chg_pct"),
+                    "day_volume": q.get("day_volume"),
+                    "bid": q.get("bid"),
+                    "ask": q.get("ask"),
+                    "spread_pct": round(spread, 4) if spread is not None else None,
+                    "market_state": q.get("market_state"),
+                },
+                "stats": {
+                    "ret_3d_pct": st.get("ret_3d_pct"),
+                    "ret_5d_pct": st.get("ret_5d_pct"),
+                    "ret_20d_pct": st.get("ret_20d_pct"),
+                    "ret_horizon_pct": st.get("ret_horizon_pct"),
+                    "avg20_volume": st.get("avg20_volume"),
+                    "rel_vol_20d": st.get("rel_vol_20d"),
+                    "atr14": st.get("atr14"),
+                },
+                "levels": {
+                    "resistance_20d": lv.get("resistance_20d"),
+                    "support_20d": lv.get("support_20d"),
+                    "day_high": lv.get("day_high"),
+                    "day_low": lv.get("day_low"),
+                },
+                "trade_plan_ref": {
+                    "entry_trigger": plan.get("entry_trigger"),
+                    "stop": plan.get("stop"),
+                    "target": plan.get("target"),
+                    "time_stop": plan.get("time_stop"),
+                    "hold_days_max": plan.get("hold_days_max"),
+                },
+                "derived": {
+                    "score_total": sc.get("total"),
+                    "score_momentum": sc.get("momentum"),
+                    "score_liquidity": sc.get("liquidity"),
+                    "score_flow_proxy": sc.get("flow_proxy"),
+                    "risk_penalty": sc.get("risk_penalty"),
+                    "turnover_est": sc.get("turnover"),
+                    "atr_pct": sc.get("atr_pct"),
+                    "risk_flags": risk_flags,
+                },
+                "events": {
+                    "news": (d.get("news") or [])[:3],
+                    "sec_filings_last_7d": (d.get("sec_filings_last_7d") or [])[:6],
+                    "earnings_dates": (qs.get("earnings_dates") or [])[:2],
+                },
+                "market_micro": {
+                    "short_percent_of_float": qs.get("short_percent_of_float"),
+                    "short_ratio": qs.get("short_ratio"),
+                    "call_volume": opt.get("call_volume"),
+                    "put_volume": opt.get("put_volume"),
+                    "call_put_vol_ratio": opt.get("call_put_vol_ratio"),
+                    "expiration": opt.get("expiration"),
+                    "kr_flow": kr_flow,
+                    "kr_short": kr_short,
+                },
+            }
+        )
+
+    return {
+        "generated_at_et": _fmt_dt(_now_et()),
+        "generated_at_kst": _fmt_dt(_now_kst()),
+        "market": market.upper().strip(),
+        "horizon_days": horizon_days,
+        "market_regime": _macro_regime(macro, market),
+        "macro": macro,
+        "scan_setup": scan_context or {},
+        "errors": errors or [],
+        "notes": [
+            "데이터 중심 패키지입니다.",
+            "미국 가격/차트는 Yahoo public endpoint best-effort 기준입니다.",
+            "한국 가격/차트/뉴스/종목명은 Naver Finance best-effort 기준입니다.",
+            "한국 수급은 외국인/기관 순매매와 공매도 데이터를 포함합니다.",
+            "개인 순매수는 현재 확인 불가로 남깁니다.",
+        ],
+        "candidates": candidates,
+    }
+
+
+def _build_ai_prompt_from_package(pkg: Dict[str, Any]) -> str:
+    market = str(pkg.get("market") or "US").upper().strip()
+    horizon_days = int(pkg.get("horizon_days") or 5)
+    candidates = pkg.get("candidates") or []
+    scan_setup = pkg.get("scan_setup") or {}
+    interest = ", ".join(
+        [f"{c.get('name') or '이름 확인 불가'}({c.get('symbol')})" for c in candidates]
+    ) or "없음"
+    payload = json.dumps(pkg, ensure_ascii=False, indent=2)
+
+    if market == "KR":
+        lines = [
+            f"너는 한국 주식 단기 모멘텀(1~{horizon_days}거래일) 스윙 트레이딩 분석가다.",
+            "반드시 최신 데이터 기반으로만 말하고, 확인 못한 건 추정하지 말고 '확인 불가'라고 써라.",
+            "",
+            "0) 먼저 KST 기준 현재 날짜/시간을 한 줄로 쓰고, 가격/뉴스/지표의 데이터 기준 시각(장중/장마감/장전)을 각각 명시해라.",
+            "1) 아래 JSON은 사전 수집 데이터다. 이것을 출발점으로 쓰되, 웹검색으로 최신 수치와 뉴스/공시를 보강해라.",
+            f"2) KOSPI+KOSDAQ 전체 관점에서 단기 모멘텀 후보를 1~3개만 뽑아라. 우선 검토 대상: {interest}",
+            "3) 각 후보는 반드시 숫자 중심으로 정리하고, 거래대금/수급/촉매/차트 레벨을 구분해서 써라.",
+            f"4) 트레이드 플랜은 최대 {horizon_days}거래일 기준으로 진입가, 손절가, 목표가, 시간손절 규칙까지 포함해라.",
+            "5) 마지막에 가장 가능성이 높은 1개를 고르고, 근거는 가장 최신 시각 기준 데이터만 사용해라.",
+            "",
+            "내 조건:",
+            "- 스타일: 공격적 단기 스윙",
+            f"- 최대 보유기간: {horizon_days} 거래일",
+            "- 손실 허용: 1트레이드 기준 최대 [-X%] (X 미입력 시 5% 가정)",
+            f"- 관심종목: {interest}",
+            f"- 탐색 조건: {(scan_setup.get('scan_label') or scan_setup.get('scan_profile') or '기본')} / {(scan_setup.get('scan_note') or '설명 없음')}",
+            "",
+            "아래 JSON 데이터 패키지:",
+            payload,
+        ]
+        return "\n".join(lines)
+
+    lines = [
+        f"You are a US equities short-term momentum swing trading analyst for a 1-{horizon_days} trading day holding period.",
+        "Use only latest verified data. If a field cannot be verified, write '확인 불가'.",
+        "",
+        "0) Start with current ET and KST times, then label whether each price/news datapoint is RTH, PM, or AH.",
+        "1) The JSON below is a pre-collected data package. Use it as a starting point, then verify and refresh with web search.",
+        f"2) Pick only 1-3 short-term momentum candidates. Priority watchlist: {interest}",
+        "3) For each candidate, give fact-based momentum reasons: volume/dollar volume anomaly, catalyst, options/short structure if available, chart levels, and index/sector context.",
+        f"4) Build a trade plan with entry, invalidation, target, and time stop within a max {horizon_days} trading day hold.",
+        "5) End with the single highest-probability candidate using the most recent timestamped data only.",
+        "",
+        "User constraints:",
+        "- Style: aggressive short-term swing",
+        f"- Max hold: {horizon_days} trading days",
+        "- Max loss per trade: [-X%] (default 6% if X missing)",
+        f"- Priority tickers: {interest}",
+        f"- Scan setup: {(scan_setup.get('scan_label') or scan_setup.get('scan_profile') or 'default')} / {(scan_setup.get('scan_note') or 'no note')}",
+        "",
+        "JSON data package:",
+        payload,
+    ]
+    return "\n".join(lines)
+
+
 def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]] = None) -> str:
     now_et = _now_et()
     now_kst = _now_kst()
@@ -1233,6 +2350,8 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
     extras = d.get("extras", {}) or {}
     qs = (extras.get("quote_summary") or {})
     opt = (extras.get("options") or {})
+    kr_flow = (extras.get("kr_flow") or {})
+    kr_short = (extras.get("kr_short") or {})
 
     horizon = int(d.get("horizon_days") or 5)
     market = d.get("market") or "US"
@@ -1240,7 +2359,8 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
     lines: List[str] = []
     lines.append(f"현재 시간 ET: {_fmt_dt(now_et)}")
     lines.append(f"현재 시간 KST: {_fmt_dt(now_kst)}")
-    lines.append(f"마켓: {market} / 데이터 세션: {d.get('session','Unknown')} (Yahoo/SEC best-effort)")
+    source_hint = "Naver Finance best-effort" if market == "KR" else "Yahoo/SEC best-effort"
+    lines.append(f"마켓: {market} / 데이터 세션: {d.get('session','Unknown')} ({source_hint})")
     lines.append(f"기준: {horizon} 거래일 모멘텀(보유기한 최대 {horizon} 거래일)")
     lines.append("")
     lines.append("AI 판단 요청(복붙용):")
@@ -1270,6 +2390,50 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
     )
     lines.append(f"- 변동성: ATR(14): {_fnum(stats.get('atr14'))}")
 
+    if market == "KR" and (kr_flow or kr_short):
+        lines.append("")
+        lines.append("KR 수급/공매도(가능한 범위):")
+        if kr_flow:
+            flow_1d = (kr_flow.get("lookbacks") or {}).get("1d") or {}
+            flow_5d = (kr_flow.get("lookbacks") or {}).get("5d") or {}
+            flow_20d = (kr_flow.get("lookbacks") or {}).get("20d") or {}
+            lines.append(
+                "  - 외국인 순매수(주): "
+                f"1D {_fint(flow_1d.get('foreign_net_volume'))} / "
+                f"5D {_fint(flow_5d.get('foreign_net_volume'))} / "
+                f"20D {_fint(flow_20d.get('foreign_net_volume'))}"
+            )
+            lines.append(
+                "  - 기관 순매수(주): "
+                f"1D {_fint(flow_1d.get('institution_net_volume'))} / "
+                f"5D {_fint(flow_5d.get('institution_net_volume'))} / "
+                f"20D {_fint(flow_20d.get('institution_net_volume'))}"
+            )
+            lines.append("  - 개인 순매수(주): 확인 불가")
+        if kr_short:
+            short_1d = (kr_short.get("lookbacks") or {}).get("1d") or {}
+            short_5d = (kr_short.get("lookbacks") or {}).get("5d") or {}
+            short_20d = (kr_short.get("lookbacks") or {}).get("20d") or {}
+            latest_short = kr_short.get("latest") or {}
+            latest_balance = kr_short.get("latest_balance") or {}
+            lines.append(
+                "  - 공매도 거래량(주): "
+                f"1D {_fint(short_1d.get('short_volume'))} / "
+                f"5D {_fint(short_5d.get('short_volume'))} / "
+                f"20D {_fint(short_20d.get('short_volume'))}"
+            )
+            lines.append(
+                "  - 최신 공매도 비중: "
+                f"거래량 {_fnum(latest_short.get('short_volume_ratio_pct'), 4)}% / "
+                f"거래대금 {_fnum(latest_short.get('short_value_ratio_pct'), 4)}%"
+            )
+            lines.append(
+                "  - 공매도 순보유잔고(최신): "
+                f"수량 {_fint(latest_balance.get('net_short_balance_qty'))} / "
+                f"금액 {_fint(latest_balance.get('net_short_balance_value'))} "
+                f"(기준 {latest_balance.get('date') or '확인 불가'})"
+            )
+
     # short/options/earnings
     if qs or opt:
         lines.append("")
@@ -1294,7 +2458,8 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
                 lines.append(f"  - Options(near exp {exp or 'N/A'}): CallVol {_fint(cv)} / PutVol {_fint(pv)} / Call:Put {_fnum(cpr,2)}")
 
     lines.append("")
-    lines.append("촉매(최근 Yahoo RSS):")
+    news_label = "촉매(최근 Naver Finance 뉴스):" if market == "KR" else "촉매(최근 Yahoo RSS):"
+    lines.append(news_label)
     if not news:
         lines.append("  - 확인 불가")
     else:
@@ -1336,6 +2501,89 @@ async def report(symbol: str, market: str = Query(default="US"), horizon_days: i
     d = await ticker_detail(symbol, market=market, horizon_days=horizon_days)
     macro = await _fetch_macro_snapshot(market)
     return _build_single_report(d, macro=macro)
+
+
+@app.get("/report_multi_data")
+async def report_multi_data(
+    symbols: str = Query(..., description="Comma-separated symbols"),
+    market: str = Query(default="US"),
+    horizon_days: int = Query(default=5),
+    max_items: int = Query(default=5, ge=1, le=10),
+    scan_profile: str = Query(default=""),
+    scan_label: str = Query(default=""),
+    scan_note: str = Query(default=""),
+) -> Dict[str, Any]:
+    details, errors = await _collect_symbol_details(
+        symbols,
+        market=market,
+        horizon_days=horizon_days,
+        max_items=max_items,
+    )
+    if horizon_days not in (5, 20):
+        horizon_days = 5 if horizon_days < 12 else 20
+    macro = await _fetch_macro_snapshot(market)
+    return _build_data_package(
+        details,
+        market=market,
+        horizon_days=horizon_days,
+        macro=macro,
+        errors=errors,
+        scan_context={
+            "scan_profile": scan_profile,
+            "scan_label": scan_label,
+            "scan_note": scan_note,
+        },
+    )
+
+
+@app.get("/prompt/{symbol}", response_class=PlainTextResponse)
+async def prompt_single(
+    symbol: str,
+    market: str = Query(default="US"),
+    horizon_days: int = Query(default=5),
+    scan_profile: str = Query(default=""),
+    scan_label: str = Query(default=""),
+    scan_note: str = Query(default=""),
+) -> str:
+    d = await ticker_detail(symbol, market=market, horizon_days=horizon_days)
+    if horizon_days not in (5, 20):
+        horizon_days = 5 if horizon_days < 12 else 20
+    macro = await _fetch_macro_snapshot(market)
+    pkg = _build_data_package(
+        [d],
+        market=market,
+        horizon_days=horizon_days,
+        macro=macro,
+        errors=[],
+        scan_context={
+            "scan_profile": scan_profile,
+            "scan_label": scan_label,
+            "scan_note": scan_note,
+        },
+    )
+    return _build_ai_prompt_from_package(pkg)
+
+
+@app.get("/prompt_multi", response_class=PlainTextResponse)
+async def prompt_multi(
+    symbols: str = Query(..., description="Comma-separated symbols"),
+    market: str = Query(default="US"),
+    horizon_days: int = Query(default=5),
+    max_items: int = Query(default=5, ge=1, le=10),
+    scan_profile: str = Query(default=""),
+    scan_label: str = Query(default=""),
+    scan_note: str = Query(default=""),
+) -> str:
+    pkg = await report_multi_data(
+        symbols=symbols,
+        market=market,
+        horizon_days=horizon_days,
+        max_items=max_items,
+        scan_profile=scan_profile,
+        scan_label=scan_label,
+        scan_note=scan_note,
+    )
+    return _build_ai_prompt_from_package(pkg)
 
 
 @app.get("/report_multi", response_class=PlainTextResponse)
@@ -1415,6 +2663,8 @@ async def report_multi(
         ex = d.get("extras", {}) or {}
         qs = (ex.get("quote_summary") or {})
         opt = (ex.get("options") or {})
+        kr_flow = (ex.get("kr_flow") or {})
+        kr_short = (ex.get("kr_short") or {})
 
         relv = _to_float(st.get("rel_vol_20d"), 0.0)
         hret = _to_float(st.get("ret_horizon_pct"), -50.0)
@@ -1443,10 +2693,29 @@ async def report_multi(
             liquidity += 7.0
 
         flow_proxy = 0.0
-        flow_proxy += max(0.0, min(3.0, call_put)) * 7.0
-        flow_proxy += max(0.0, min(12.0, short_float)) * 1.1
-        if short_ratio >= 5.0:
-            flow_proxy += 4.0
+        if str(d.get("market") or "").upper() == "KR" and (kr_flow or kr_short):
+            flow_1d = (kr_flow.get("lookbacks") or {}).get("1d") or {}
+            flow_5d = (kr_flow.get("lookbacks") or {}).get("5d") or {}
+            latest_short = (kr_short.get("latest") or {})
+            foreign_1d = abs(_to_float(flow_1d.get("foreign_net_volume"), 0.0))
+            institution_1d = abs(_to_float(flow_1d.get("institution_net_volume"), 0.0))
+            foreign_5d = abs(_to_float(flow_5d.get("foreign_net_volume"), 0.0))
+            institution_5d = abs(_to_float(flow_5d.get("institution_net_volume"), 0.0))
+            short_ratio_vol = _to_float(latest_short.get("short_volume_ratio_pct"), 0.0)
+
+            flow_proxy += min(20.0, foreign_1d / 500_000.0)
+            flow_proxy += min(16.0, institution_1d / 500_000.0)
+            flow_proxy += min(10.0, foreign_5d / 2_000_000.0)
+            flow_proxy += min(8.0, institution_5d / 2_000_000.0)
+            if short_ratio_vol >= 8.0:
+                flow_proxy += 2.0
+            elif short_ratio_vol >= 5.0:
+                flow_proxy += 1.0
+        else:
+            flow_proxy += max(0.0, min(3.0, call_put)) * 7.0
+            flow_proxy += max(0.0, min(12.0, short_float)) * 1.1
+            if short_ratio >= 5.0:
+                flow_proxy += 4.0
 
         risk = 0.0
         if atr_pct > 7.0:
@@ -1544,7 +2813,10 @@ async def report_multi(
         lines.append("")
         lines.append(f"우선순위 TOP3: {', '.join([str(x) for x in top3])}")
         lines.append(f"1순위 후보: {best.get('symbol')} (총점 {ranked[0][0]})")
-        lines.append("주의: FLOW는 기관/외국인 순매수 원데이터가 아닌 프록시(거래강도/옵션/숏지표)입니다.")
+        if market.upper() == "KR":
+            lines.append("주의: KR은 외국인/기관 원데이터와 공매도 데이터를 포함합니다. 개인 순매수는 확인 불가입니다.")
+        else:
+            lines.append("주의: FLOW는 기관/외국인 순매수 원데이터가 아닌 프록시(거래강도/옵션/숏지표)입니다.")
 
     # 종목별 AI 해석 블록
     lines.append("")
@@ -1557,6 +2829,8 @@ async def report_multi(
         ex = d.get("extras", {}) or {}
         qs = (ex.get("quote_summary") or {})
         opt = (ex.get("options") or {})
+        kr_flow = (ex.get("kr_flow") or {})
+        kr_short = (ex.get("kr_short") or {})
         news = d.get("news", []) or []
         sec = d.get("sec_filings_last_7d", []) or []
         lines.append("-" * 42)
@@ -1572,9 +2846,29 @@ async def report_multi(
         lines.append(
             f"plan_ref: entry={_fnum(plan.get('entry_trigger'))}, stop={_fnum(plan.get('stop'))}, target={_fnum(plan.get('target'))}"
         )
-        lines.append(
-            f"flow_proxy_details: turnover={_fint(sc['turnover'])}, call_put={_fnum(opt.get('call_put_vol_ratio'))}, short_float={_fnum(qs.get('short_percent_of_float'),4)}, short_ratio={_fnum(qs.get('short_ratio'))}"
-        )
+        if str(d.get("market") or "").upper() == "KR" and (kr_flow or kr_short):
+            flow_1d = (kr_flow.get("lookbacks") or {}).get("1d") or {}
+            flow_5d = (kr_flow.get("lookbacks") or {}).get("5d") or {}
+            short_1d = (kr_short.get("lookbacks") or {}).get("1d") or {}
+            latest_short = kr_short.get("latest") or {}
+            lines.append(
+                "kr_flow_details: "
+                f"foreign_1d={_fint(flow_1d.get('foreign_net_volume'))}, "
+                f"inst_1d={_fint(flow_1d.get('institution_net_volume'))}, "
+                f"foreign_5d={_fint(flow_5d.get('foreign_net_volume'))}, "
+                f"inst_5d={_fint(flow_5d.get('institution_net_volume'))}, "
+                "individual=확인 불가"
+            )
+            lines.append(
+                "kr_short_details: "
+                f"short_1d={_fint(short_1d.get('short_volume'))}, "
+                f"short_ratio_vol={_fnum(latest_short.get('short_volume_ratio_pct'),4)}%, "
+                f"net_balance_qty={_fint(latest_short.get('net_short_balance_qty'))}"
+            )
+        else:
+            lines.append(
+                f"flow_proxy_details: turnover={_fint(sc['turnover'])}, call_put={_fnum(opt.get('call_put_vol_ratio'))}, short_float={_fnum(qs.get('short_percent_of_float'),4)}, short_ratio={_fnum(qs.get('short_ratio'))}"
+            )
         if qs.get("earnings_dates"):
             lines.append(f"event: earnings={', '.join((qs.get('earnings_dates') or [])[:2])}")
         if sec:
