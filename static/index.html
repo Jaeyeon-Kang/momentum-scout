@@ -51,7 +51,7 @@
             </div>
           </div>
           <div class="row">
-            <label class="field grow">
+            <label class="field grow" id="scanProfileField">
               <div class="label" data-i18n="lbScanProfile">탐색 프로필</div>
               <select id="scanProfile">
                 <option value="surge" data-i18n="profileSurge">단기 급등 추적</option>
@@ -61,6 +61,7 @@
               </select>
             </label>
           </div>
+          <div class="inline-note hidden" id="krFixedMode" data-i18n="krFixedModeNote">KR은 기본 모드 하나로만 스캔합니다.</div>
           <div class="plan-summary" id="planSummary"></div>
         </section>
 
@@ -80,7 +81,7 @@
                 <option value="KR">KR (KOSPI / KOSDAQ)</option>
               </select>
             </label>
-            <label class="field">
+            <label class="field" id="horizonField">
               <div class="label" data-i18n="lbHorizon">보유 기간</div>
               <select id="horizon">
                 <option value="5" data-i18n="opt5d">5일 (빠른 탐색)</option>
@@ -98,8 +99,8 @@
               <div class="muted small" data-i18n="scanBlockFilterDesc">너무 무거운 종목인지, 거래가 너무 약한지 먼저 거릅니다.</div>
             </div>
           </div>
-          <div class="row">
-            <label class="field">
+          <div class="row" id="filterFieldsRow">
+            <label class="field" id="liquidityField">
               <div class="label" data-i18n="lbLiquidityLevel">유동성 기준</div>
               <select id="liquidityLevel">
                 <option value="tight" data-i18n="liqTight">빡세게</option>
@@ -107,14 +108,14 @@
                 <option value="aggressive" data-i18n="liqAggressive">공격적으로</option>
               </select>
             </label>
-            <label class="field">
+            <label class="field" id="priceField">
               <div class="label"><span data-i18n="lbMaxPrice">최대 가격</span> <span id="currencyTag" class="currency-tag">($)</span></div>
               <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
             </label>
           </div>
 
           <div class="row">
-            <label class="field grow">
+            <label class="field grow" id="turnoverField">
               <div class="label" data-i18n="lbMinTurnover">최소 평균 거래대금 (20일)</div>
               <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
             </label>
@@ -123,6 +124,13 @@
 
           <div class="row hidden" id="advancedFiltersRow">
             <div class="inline-note" data-i18n="advancedHint">프로필 추천값을 덮어쓰고 싶을 때만 직접 조정하세요.</div>
+            <input id="marketCapMin" type="hidden" value="500000000000" />
+            <input id="todayTurnoverMin" type="hidden" value="30000000000" />
+            <input id="relVolMin" type="hidden" value="1.8" />
+            <input id="ret5dMin" type="hidden" value="8" />
+            <input id="ret5dMax" type="hidden" value="30" />
+            <input id="closePosMin" type="hidden" value="0.7" />
+            <input id="freshNewsHours" type="hidden" value="48" />
           </div>
         </section>
 

@@ -40,6 +40,7 @@ const S = {
     liqTight:      'Only very active',
     liqBalanced:   'Balanced',
     liqAggressive: 'Include early moves',
+    krFixedModeNote: 'KR uses one fixed aggressive momentum mode. Main filters stay locked unless you open advanced settings.',
     advancedHint:  'Only edit these when you want to override the suggested values.',
     scrHint:       'Recommended preset is applied automatically. Most users do not need manual IDs.',
     phSymbols:     'e.g. TSLA,NVDA or 005930.KS,035420.KS',
@@ -73,7 +74,7 @@ const S = {
     iosHint:       'iPhone: tap textarea → Select All → Copy.',
     scanning:      'Scanning…',
     detailLoading: 'loading…',
-    noCandidate:   'No candidates found. Try relaxing your filters (raise max price or lower min turnover).',
+    noCandidate:   'No candidates found. Try loosening the scan thresholds or check exact symbols directly.',
     noRss:         'No news available.',
     noSec:         'None / unavailable',
     noSelected:    'Select tickers first by checking the boxes.',
@@ -128,7 +129,7 @@ const S = {
     errUpstream:  'No response from data server. Try again shortly.',
     errUnknown:   'Unexpected error',
     // market switch
-    krDefaults:   'Switched to KR defaults (₩100,000 / ₩5B)',
+    krDefaults:   'Switched to KR aggressive momentum defaults',
     usDefaults:   'Switched to US defaults ($80 / $20M)',
     // dynamic
     asof:         (kst, mkt, h, ctx, n) => `${kst} · ${mkt} · ${h}D · ${ctx} · ${n} candidates`,
@@ -181,6 +182,7 @@ const S = {
     liqTight:      '거래 확실한 종목만',
     liqBalanced:   '적당히',
     liqAggressive: '초기 신호도 포함',
+    krFixedModeNote: 'KR은 메인 화면에서 기준을 거의 고정합니다. 바꾸려면 고급 설정을 여세요.',
     advancedHint:  '추천값을 바꾸고 싶을 때만 직접 수정하세요.',
     scrHint:       '추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.',
     phSymbols:     '예: TSLA,NVDA 또는 005930.KS,035420.KS',
@@ -214,7 +216,7 @@ const S = {
     iosHint:       'iPhone: 텍스트 영역 탭 → 전체 선택 → 복사.',
     scanning:      '스캔 중…',
     detailLoading: '로딩 중…',
-    noCandidate:   '조건에 맞는 종목 없음. 필터를 완화해보세요 (최대가격 올리기 또는 최소거래대금 낮추기).',
+    noCandidate:   '조건에 맞는 종목이 없습니다. 기준을 조금 완화하거나 종목 코드를 직접 넣어보세요.',
     noRss:         '뉴스 없음.',
     noSec:         '없음 / 확인 불가',
     noSelected:    '먼저 후보 보기 탭에서 종목을 체크하세요.',
@@ -265,7 +267,7 @@ const S = {
     errRateLimit: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
     errUpstream:  '데이터 서버 응답 없음. 잠시 후 다시 시도하세요.',
     errUnknown:   '알 수 없는 오류',
-    krDefaults:   'KR 기본값 전환 (₩100,000 / ₩5B)',
+    krDefaults:   'KR 공격형 모멘텀 기본값으로 전환',
     usDefaults:   'US 기본값 전환 ($80 / $20M)',
     asof:         (kst, mkt, h, ctx, n) => `${kst} · ${mkt} · ${h}일 · ${ctx} · ${n}개 종목`,
     loadingRep:   (n) => `데이터 패키지 생성 중 (${n}개 종목)…`,
@@ -404,7 +406,6 @@ const SCREENER_PRESETS = {
 const PROFILE_PRESETS = {
   surge: {
     us: { horizon: 5, maxPrice: 80, minTurnover: 30000000, scrPreset: 'gainers' },
-    kr: { horizon: 5, maxPrice: 120000, minTurnover: 8000000000 },
     desc: {
       ko: '오늘 강하게 붙은 종목을 먼저 봅니다. 거래대금과 당일 탄력이 같이 붙는 후보를 우선합니다.',
       en: 'Start from names already moving hard today. Prioritize names with both price expansion and real turnover.'
@@ -412,7 +413,6 @@ const PROFILE_PRESETS = {
   },
   continuation: {
     us: { horizon: 5, maxPrice: 120, minTurnover: 20000000, scrPreset: 'momentum' },
-    kr: { horizon: 5, maxPrice: 180000, minTurnover: 5000000000 },
     desc: {
       ko: '이미 거래가 붙은 흐름이 하루 더 이어질 수 있는 후보를 봅니다. 급등만 하고 식은 종목은 덜 선호합니다.',
       en: 'Look for moves that can continue for another leg. Avoid one-candle spikes with weak follow-through.'
@@ -420,7 +420,6 @@ const PROFILE_PRESETS = {
   },
   early: {
     us: { horizon: 20, maxPrice: 80, minTurnover: 12000000, scrPreset: 'liquidity' },
-    kr: { horizon: 20, maxPrice: 100000, minTurnover: 3000000000 },
     desc: {
       ko: '아직 과열 전이지만 거래가 조금씩 붙는 종목을 찾습니다. 대신 잡음이 많아서 직접 검증이 더 중요합니다.',
       en: 'Search for early setups before the crowd fully arrives. Expect more noise and verify manually.'
@@ -428,7 +427,6 @@ const PROFILE_PRESETS = {
   },
   manual: {
     us: { horizon: null, maxPrice: null, minTurnover: null, scrPreset: null },
-    kr: { horizon: null, maxPrice: null, minTurnover: null, scrPreset: null },
     desc: {
       ko: '추천값을 강제로 바꾸지 않습니다. 지금 보이는 숫자 그대로 탐색합니다.',
       en: 'Do not force preset values. Use the current numbers exactly as shown.'
@@ -446,6 +444,28 @@ function getLiquidityLevel() { return $('liquidityLevel')?.value || 'balanced'; 
 
 function getScanPlan() {
   const market = getMarket() === 'KR' ? 'kr' : 'us';
+  if (market === 'kr') {
+    return {
+      key: 'kr_attack',
+      label: getLang() === 'ko' ? 'KR 공격형 모멘텀' : 'KR Aggressive Momentum',
+      desc: getLang() === 'ko'
+        ? '중대형 유동성, 당일 거래대금, 5일 수익률, 종가 위치, 신선한 뉴스, 외국인·기관 수급을 같이 봅니다.'
+        : 'Focus on mid/large-cap liquidity, same-day turnover, 5D return, close strength, fresh news, and signed flow.',
+      liquidityKey: 'fixed',
+      liquidityLabel: getLang() === 'ko' ? '고정 기준' : 'Locked',
+      horizon: 5,
+      maxPrice: 0,
+      minTurnover: 15000000000,
+      marketCapMin: 500000000000,
+      todayTurnoverMin: 30000000000,
+      relVolMin: 1.8,
+      ret5dMin: 8,
+      ret5dMax: 30,
+      closePosMin: 0.7,
+      freshNewsHours: 48,
+      scrPreset: null,
+    };
+  }
   const profileKey = getScanProfile();
   const liquidityKey = getLiquidityLevel();
   const profile = PROFILE_PRESETS[profileKey] || PROFILE_PRESETS.surge;
@@ -467,6 +487,13 @@ function getScanPlan() {
     horizon: base.horizon,
     maxPrice: base.maxPrice,
     minTurnover: base.minTurnover != null ? Math.round(base.minTurnover * (liq[market] || 1)) : null,
+    marketCapMin: null,
+    todayTurnoverMin: null,
+    relVolMin: null,
+    ret5dMin: null,
+    ret5dMax: null,
+    closePosMin: null,
+    freshNewsHours: null,
     scrPreset: base.scrPreset,
   };
 }
@@ -476,6 +503,13 @@ function applyScanProfilePreset() {
   if (plan.horizon != null) $('horizon').value = String(plan.horizon);
   if (plan.maxPrice != null) $('maxPrice').value = String(plan.maxPrice);
   if (plan.minTurnover != null) $('minTurnover').value = String(plan.minTurnover);
+  if (plan.marketCapMin != null) $('marketCapMin').value = String(plan.marketCapMin);
+  if (plan.todayTurnoverMin != null) $('todayTurnoverMin').value = String(plan.todayTurnoverMin);
+  if (plan.relVolMin != null) $('relVolMin').value = String(plan.relVolMin);
+  if (plan.ret5dMin != null) $('ret5dMin').value = String(plan.ret5dMin);
+  if (plan.ret5dMax != null) $('ret5dMax').value = String(plan.ret5dMax);
+  if (plan.closePosMin != null) $('closePosMin').value = String(plan.closePosMin);
+  if (plan.freshNewsHours != null) $('freshNewsHours').value = String(plan.freshNewsHours);
   if (getMarket() === 'US' && plan.scrPreset) {
     $('scrPreset').value = plan.scrPreset;
     updateScreenerPresetUI();
@@ -485,6 +519,21 @@ function applyScanProfilePreset() {
 
 function refreshPlanSummary() {
   const plan = getScanPlan();
+  if (getMarket() === 'KR') {
+    $('planSummary').innerHTML = `
+      <div class="plan-summary-title">${plan.label}</div>
+      <div class="plan-summary-body">${plan.desc}</div>
+      <div class="plan-summary-meta">
+        <span class="plan-pill">시총 하한: ${fmtInt(plan.marketCapMin)}</span>
+        <span class="plan-pill">20일 평균 거래대금: ${fmtInt(plan.minTurnover)}</span>
+        <span class="plan-pill">당일 거래대금: ${fmtInt(plan.todayTurnoverMin)}</span>
+        <span class="plan-pill">거래강도: ${plan.relVolMin}x 이상</span>
+        <span class="plan-pill">5일 수익률: ${plan.ret5dMin}% ~ ${plan.ret5dMax}%</span>
+        <span class="plan-pill">종가 위치: ${Math.round(plan.closePosMin * 100)}% 이상</span>
+      </div>
+    `;
+    return;
+  }
   $('planSummary').innerHTML = `
     <div class="plan-summary-title">${t('planProfileTitle', plan.label)}</div>
     <div class="plan-summary-body">${plan.desc}</div>
@@ -512,12 +561,20 @@ function updateMarketUI(notify = true) {
   const m = getMarket();
   // Currency tag
   $('currencyTag').textContent = m === 'KR' ? '(₩)' : '($)';
+  $('scanProfileField')?.classList.toggle('market-hidden', m === 'KR');
+  $('horizonField')?.classList.toggle('market-hidden', m === 'KR');
+  $('liquidityField')?.classList.toggle('market-hidden', m === 'KR');
+  $('priceField')?.classList.toggle('market-hidden', m === 'KR');
+  $('turnoverField')?.classList.toggle('market-hidden', m === 'KR');
+  $('filterFieldsRow')?.classList.toggle('market-hidden', m === 'KR');
+  $('krFixedMode')?.classList.toggle('hidden', m !== 'KR');
   // Hide screener row for KR
   const scrRow = $('scrRow');
   const scrCustomRow = $('scrCustomRow');
   if (m === 'KR') {
     scrRow.classList.add('market-hidden');
     scrCustomRow?.classList.add('market-hidden');
+    $('horizon').value = '5';
   } else {
     scrRow.classList.remove('market-hidden');
     scrCustomRow?.classList.remove('market-hidden');
@@ -598,6 +655,17 @@ function getScanContext() {
     scan_profile: plan.key,
     scan_label: plan.label,
     scan_note: plan.desc,
+    scan_thresholds: JSON.stringify({
+      max_price: plan.maxPrice,
+      min_avg_turnover: plan.minTurnover,
+      market_cap_min: plan.marketCapMin,
+      today_turnover_min: plan.todayTurnoverMin,
+      rel_volume_min: plan.relVolMin,
+      ret_5d_min: plan.ret5dMin,
+      ret_5d_max: plan.ret5dMax,
+      close_position_min: plan.closePosMin,
+      fresh_news_hours: plan.freshNewsHours,
+    }),
   };
 }
 
@@ -620,6 +688,7 @@ async function scan() {
 
   const market    = getMarket();
   const horizon   = getHorizon();
+  const plan      = getScanPlan();
   const maxPrice  = Number($('maxPrice').value || 0);
   const minTurn   = Number($('minTurnover').value || 0);
   const scrIds    = getScreenerIds();
@@ -634,11 +703,20 @@ async function scan() {
   const params = new URLSearchParams({
     market,
     horizon_days:      String(horizon),
-    max_price:         String(maxPrice),
-    min_avg_turnover:  String(minTurn),
+    max_price:         String(market === 'KR' ? 0 : maxPrice),
+    min_avg_turnover:  String(market === 'KR' ? Number($('minTurnover').value || plan.minTurnover || 0) : minTurn),
     size_per_screener: '25',
     top_n:             '10',
   });
+  if (market === 'KR') {
+    params.set('market_cap_min', String(Number($('marketCapMin').value || plan.marketCapMin || 0)));
+    params.set('today_turnover_min', String(Number($('todayTurnoverMin').value || plan.todayTurnoverMin || 0)));
+    params.set('rel_volume_min', String(Number($('relVolMin').value || plan.relVolMin || 0)));
+    params.set('ret_5d_min', String(Number($('ret5dMin').value || plan.ret5dMin || 0)));
+    params.set('ret_5d_max', String(Number($('ret5dMax').value || plan.ret5dMax || 0)));
+    params.set('close_position_min', String(Number($('closePosMin').value || plan.closePosMin || 0)));
+    params.set('fresh_news_hours', String(Number($('freshNewsHours').value || plan.freshNewsHours || 0)));
+  }
   if (scrIds)  params.set('scr_ids', scrIds);
   if (symbols) params.set('symbols', symbols);
 
@@ -698,6 +776,23 @@ function renderList(items, horizonDays) {
             : `${(x.name || '').slice(0, 42)}${x.currency ? ` · ${x.currency}` : ''}`
           }
         </div>
+        ${market === 'KR' ? `
+          <div class="item-meta">
+            <span class="meta-chip">당일 ${fmtInt(x.day_turnover)}</span>
+            <span class="meta-chip">20일 평균 ${fmtInt(x.avg_turnover_20d)}</span>
+            <span class="meta-chip">외국인 1D ${fmtInt(x.extras?.foreign_1d)}</span>
+            <span class="meta-chip">기관 1D ${fmtInt(x.extras?.institution_1d)}</span>
+            <span class="meta-chip">외국인 5D ${fmtInt(x.extras?.foreign_5d)}</span>
+            <span class="meta-chip">기관 5D ${fmtInt(x.extras?.institution_5d)}</span>
+            <span class="meta-chip">뉴스 ${x.extras?.news_asof || '확인 불가'}</span>
+            <span class="meta-chip">${x.extras?.breakout_20d ? '20D 돌파' : '20D 미돌파'}</span>
+            <span class="meta-chip">종가 위치 ${x.extras?.close_position != null ? `${Math.round(Number(x.extras.close_position) * 100)}%` : '확인 불가'}</span>
+          </div>
+          <div class="item-tags">
+            ${(x.scan_reason || []).slice(0, 3).map(tag => `<span class="item-tag good">${tag}</span>`).join('')}
+            ${(x.rejection_flags || []).slice(0, 3).map(tag => `<span class="item-tag bad">${tag}</span>`).join('')}
+          </div>
+        ` : ''}
       </div>
       <div class="cols">
         <div class="kv"><div class="k">${t('colLast')}</div><div class="v">${fmt(x.last, 2)}</div></div>

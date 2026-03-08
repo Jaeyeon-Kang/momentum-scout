@@ -5,7 +5,7 @@ import json
 import math
 import re
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, time
 from html import unescape
 from typing import Any, Dict, List, Optional, Tuple
@@ -260,6 +260,11 @@ class Candidate:
     ret_20d_pct: Optional[float]
     avg_turnover_20d: Optional[float]
     score: float
+    day_turnover: Optional[float] = None
+    market_cap: Optional[float] = None
+    extras: Dict[str, Any] = field(default_factory=dict)
+    scan_reason: List[str] = field(default_factory=list)
+    rejection_flags: List[str] = field(default_factory=list)
 
 
 def _score_candidate(
@@ -312,6 +317,98 @@ def _score_candidate(
             score += 15.0
 
     return float(score)
+
+
+KR_SWING_DEFAULTS: Dict[str, Any] = {
+    "market_cap_min": 500_000_000_000.0,
+    "avg20_turnover_min": 15_000_000_000.0,
+    "today_turnover_min": 30_000_000_000.0,
+    "rel_volume_min": 1.8,
+    "ret_5d_min": 8.0,
+    "ret_5d_max": 30.0,
+    "close_position_min": 0.70,
+    "fresh_news_hours": 48.0,
+}
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, float(v)))
+
+
+def _avg_recent_turnover(closes: List[float], vols: List[int], n: int = 20) -> Optional[float]:
+    if not closes or not vols:
+        return None
+    pairs = list(zip(closes, vols))
+    if len(pairs) >= n:
+        pairs = pairs[-n:]
+    if not pairs:
+        return None
+    vals = [float(c) * float(v) for c, v in pairs if c is not None and v is not None]
+    return statistics.fmean(vals) if vals else None
+
+
+def _close_position(last: Optional[float], high: Optional[float], low: Optional[float]) -> Optional[float]:
+    try:
+        if last is None or high is None or low is None:
+            return None
+        h = float(high)
+        l = float(low)
+        c = float(last)
+        if h <= l:
+            return None
+        return (c - l) / (h - l)
+    except Exception:
+        return None
+
+
+def _parse_kr_news_timestamp(label: Optional[str]) -> Optional[datetime]:
+    text = (label or "").strip()
+    if not text:
+        return None
+    now = _now_kst()
+    for fmt in ("%Y.%m.%d %H:%M", "%Y-%m-%d %H:%M", "%Y.%m.%d", "%Y-%m-%d"):
+        try:
+            dt = datetime.strptime(text, fmt)
+            return dt.replace(tzinfo=KST)
+        except Exception:
+            pass
+    if re.fullmatch(r"\d{2}:\d{2}", text):
+        try:
+            hh, mm = text.split(":")
+            return now.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+        except Exception:
+            return None
+    if re.fullmatch(r"\d{2}/\d{2}", text):
+        try:
+            mm, dd = text.split("/")
+            return datetime(now.year, int(mm), int(dd), tzinfo=KST)
+        except Exception:
+            return None
+    return None
+
+
+def _signed_flow_score(
+    flow_1d: Optional[Dict[str, Any]],
+    flow_5d: Optional[Dict[str, Any]],
+) -> float:
+    flow_1d = flow_1d or {}
+    flow_5d = flow_5d or {}
+    foreign_1d = _to_float(flow_1d.get("foreign_net_volume"), 0.0)
+    inst_1d = _to_float(flow_1d.get("institution_net_volume"), 0.0)
+    foreign_5d = _to_float(flow_5d.get("foreign_net_volume"), 0.0)
+    inst_5d = _to_float(flow_5d.get("institution_net_volume"), 0.0)
+
+    flow_score = 0.0
+    flow_score += _clamp(foreign_1d / 400_000.0, -10.0, 10.0)
+    flow_score += _clamp(inst_1d / 250_000.0, -8.0, 8.0)
+    flow_score += _clamp(foreign_5d / 1_500_000.0, -6.0, 6.0)
+    flow_score += _clamp(inst_5d / 1_000_000.0, -5.0, 5.0)
+
+    if foreign_1d < 0 and inst_1d < 0:
+        flow_score -= 4.0
+    if foreign_5d < 0 and inst_5d < 0:
+        flow_score -= 3.0
+    return flow_score
 
 
 async def _get_client() -> httpx.AsyncClient:
@@ -1034,6 +1131,25 @@ async def fetch_kr_snapshot(symbol: str) -> Dict[str, Any]:
     if prev_close is None and current is not None and diff_val is not None:
         prev_close = current - diff_val
 
+    listed_shares_m = re.search(
+        r"<th scope=\"row\">상장주식수</th>\s*<td><em>([^<]+)</em></td>",
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    market_cap_m = re.search(
+        r"<em id=\"_market_sum\">\s*([^<]+?)\s*</em>",
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    listed_shares = _parse_int_str(_clean_html_text(listed_shares_m.group(1))) if listed_shares_m else None
+    market_cap_eok = _parse_num_str(_clean_html_text(market_cap_m.group(1))) if market_cap_m else None
+    market_cap = (market_cap_eok * 100_000_000.0) if market_cap_eok is not None else None
+    if market_cap is None and current is not None and listed_shares is not None:
+        try:
+            market_cap = float(current) * float(listed_shares)
+        except Exception:
+            market_cap = None
+
     out = {
         "symbol": sym,
         "name": name,
@@ -1048,6 +1164,8 @@ async def fetch_kr_snapshot(symbol: str) -> Dict[str, Any]:
         "low": low,
         "bid": None,
         "ask": None,
+        "listed_shares": listed_shares,
+        "market_cap": market_cap,
         "market_state": _market_session_label_kr(_now_kst()),
     }
     _cache_kr_snapshot[sym] = out
@@ -1368,6 +1486,13 @@ async def candidates(
     size_per_screener: int = Query(default=25, ge=5, le=50),
     max_price: float = Query(default=80.0, ge=0.0, le=1_000_000.0),
     min_avg_turnover: float = Query(default=20_000_000.0, ge=0.0, description="20d average turnover filter (price*volume, local currency)"),
+    market_cap_min: float = Query(default=0.0, ge=0.0),
+    today_turnover_min: float = Query(default=0.0, ge=0.0),
+    rel_volume_min: float = Query(default=0.0, ge=0.0),
+    ret_5d_min: float = Query(default=-100.0, ge=-100.0, le=500.0),
+    ret_5d_max: float = Query(default=500.0, ge=-100.0, le=500.0),
+    close_position_min: float = Query(default=0.0, ge=0.0, le=1.0),
+    fresh_news_hours: float = Query(default=0.0, ge=0.0, le=240.0),
     top_n: int = Query(default=10, ge=1, le=25),
 ) -> Dict[str, Any]:
     """Returns momentum candidates for short swing (5 trading days default). No keys."""
@@ -1389,6 +1514,20 @@ async def candidates(
     universe: List[str] = []
     universe_source = ""
     kr_seed_map: Dict[str, Dict[str, Any]] = {}
+    scan_defaults: Dict[str, Any] = {}
+
+    if market_u == "KR":
+        scan_defaults = {
+            "market_cap_min": market_cap_min or KR_SWING_DEFAULTS["market_cap_min"],
+            "avg20_turnover_min": min_avg_turnover if min_avg_turnover >= 1_000_000_000.0 else KR_SWING_DEFAULTS["avg20_turnover_min"],
+            "today_turnover_min": today_turnover_min or KR_SWING_DEFAULTS["today_turnover_min"],
+            "rel_volume_min": rel_volume_min or KR_SWING_DEFAULTS["rel_volume_min"],
+            "ret_5d_min": ret_5d_min if ret_5d_min > -100.0 else KR_SWING_DEFAULTS["ret_5d_min"],
+            "ret_5d_max": ret_5d_max if ret_5d_max < 500.0 else KR_SWING_DEFAULTS["ret_5d_max"],
+            "close_position_min": close_position_min or KR_SWING_DEFAULTS["close_position_min"],
+            "fresh_news_hours": fresh_news_hours or KR_SWING_DEFAULTS["fresh_news_hours"],
+        }
+        min_avg_turnover = float(scan_defaults["avg20_turnover_min"])
 
     if explicit:
         universe = explicit
@@ -1418,33 +1557,47 @@ async def candidates(
 
             universe_source = f"screeners:{','.join(scr_list)}"
         else:
-            kr_rows = await fetch_kr_market_universe(pages_per_market=8)
+            kr_rows = await fetch_kr_market_universe(pages_per_market=20)
             if not kr_rows:
                 universe = list(_KR_FALLBACK_SYMBOLS)
                 universe_source = "kr_fallback"
             else:
-                # Pre-filter by price/liquidity before fetching histories.
-                pre_rows = []
-                for row in kr_rows:
-                    last = row.get("last")
-                    turnover = row.get("day_turnover")
-                    if last is None or turnover is None:
-                        continue
-                    if max_price > 0 and float(last) > float(max_price):
-                        continue
-                    if float(turnover) < min(float(min_avg_turnover) * 0.2, 1_000_000_000.0):
-                        continue
-                    pre_rows.append(row)
-                if not pre_rows:
-                    pre_rows = kr_rows[:120]
-                pre_rows.sort(key=lambda r: (float(r.get("day_turnover") or 0.0), abs(float(r.get("day_chg_pct") or 0.0))), reverse=True)
-                pre_rows = pre_rows[:160]
-                universe = [str(r["symbol"]) for r in pre_rows]
-                kr_seed_map = {str(r["symbol"]): r for r in pre_rows}
-                universe_source = "naver_market_sum"
+                turnover_bucket = sorted(
+                    kr_rows,
+                    key=lambda r: float(r.get("day_turnover") or 0.0),
+                    reverse=True,
+                )[:180]
+                mover_bucket = sorted(
+                    [
+                        r for r in kr_rows
+                        if float(r.get("day_turnover") or 0.0) >= scan_defaults["today_turnover_min"]
+                    ],
+                    key=lambda r: float(r.get("day_chg_pct") or 0.0),
+                    reverse=True,
+                )[:120]
+                base_bucket = sorted(
+                    [
+                        r for r in kr_rows
+                        if float(r.get("day_turnover") or 0.0) >= (scan_defaults["avg20_turnover_min"] * 0.6)
+                    ],
+                    key=lambda r: (float(r.get("day_turnover") or 0.0), float(r.get("day_chg_pct") or 0.0)),
+                    reverse=True,
+                )[:160]
+                union_rows: List[Dict[str, Any]] = []
+                seen_syms: set[str] = set()
+                for bucket in (turnover_bucket, mover_bucket, base_bucket, kr_rows[:120]):
+                    for row in bucket:
+                        sym = str(row.get("symbol") or "")
+                        if not sym or sym in seen_syms:
+                            continue
+                        seen_syms.add(sym)
+                        union_rows.append(row)
+                universe = [str(r["symbol"]) for r in union_rows]
+                kr_seed_map = {str(r["symbol"]): r for r in union_rows}
+                universe_source = "naver_market_sum_union"
 
     # polite cap
-    universe = universe[:160] if market_u == "KR" else universe[:80]
+    universe = universe[:120] if market_u == "KR" else universe[:80]
 
     quote_map: Dict[str, Dict[str, Any]] = {}
     if market_u == "US":
@@ -1454,12 +1607,16 @@ async def candidates(
 
     async def build_candidate(sym: str) -> Optional[Candidate]:
         if market_u == "KR":
-            q = kr_seed_map.get(sym) or await fetch_kr_snapshot(sym)
+            seed_q = kr_seed_map.get(sym) or {}
+            snap_q = await fetch_kr_snapshot(sym)
+            q = {**seed_q, **(snap_q or {})}
             name = q.get("name") or ""
             currency = "KRW"
             last = q.get("last")
             day_chg_pct = q.get("day_chg_pct")
             day_volume = q.get("day_volume")
+            day_turnover = q.get("day_turnover")
+            market_cap = q.get("market_cap")
         else:
             q = quote_map.get(sym) or {}
             name = q.get("shortName") or q.get("longName") or ""
@@ -1473,10 +1630,12 @@ async def candidates(
                 except Exception:
                     day_chg_pct = None
             day_volume = q.get("regularMarketVolume")
+            day_turnover = (float(last) * float(day_volume)) if last is not None and day_volume is not None else None
+            market_cap = q.get("marketCap")
 
         # price filter (local currency)
         try:
-            if max_price > 0 and last is not None and float(last) > float(max_price):
+            if market_u != "KR" and max_price > 0 and last is not None and float(last) > float(max_price):
                 return None
         except Exception:
             pass
@@ -1487,6 +1646,12 @@ async def candidates(
                 daily_rows = await fetch_kr_daily_history(sym, count=80)
             closes = [float(x["close"]) for x in daily_rows if x.get("close") is not None]
             vols = [int(x["volume"]) for x in daily_rows if x.get("volume") is not None]
+            latest_row = daily_rows[-1] if daily_rows else {}
+            prev_row = daily_rows[-2] if len(daily_rows) >= 2 else {}
+            q["open"] = q.get("open") if q.get("open") is not None else latest_row.get("open")
+            q["high"] = q.get("high") if q.get("high") is not None else latest_row.get("high")
+            q["low"] = q.get("low") if q.get("low") is not None else latest_row.get("low")
+            q["prev_close"] = q.get("prev_close") if q.get("prev_close") is not None else prev_row.get("close")
         else:
             async with sem:
                 daily = await fetch_yahoo_chart(sym, range_="3mo", interval="1d", include_prepost=False)
@@ -1514,16 +1679,93 @@ async def candidates(
         except Exception:
             rel_vol_20d = None
 
-        avg_turnover_20d = None
-        try:
-            if avg20_volume is not None and last is not None:
-                avg_turnover_20d = float(avg20_volume) * float(last)
-        except Exception:
-            avg_turnover_20d = None
+        avg_turnover_20d = _avg_recent_turnover(closes, vols, 20)
+        if day_turnover is None and last is not None and day_volume is not None:
+            try:
+                day_turnover = float(last) * float(day_volume)
+            except Exception:
+                day_turnover = None
 
         # liquidity filter
         if avg_turnover_20d is None or avg_turnover_20d < float(min_avg_turnover):
             return None
+
+        extras: Dict[str, Any] = {}
+        scan_reason: List[str] = []
+        rejection_flags: List[str] = []
+
+        if market_u == "KR":
+            highs_20 = [float(x["high"]) for x in daily_rows[-21:-1] if x.get("high") is not None]
+            highs_60 = [float(x["high"]) for x in daily_rows[-61:-1] if x.get("high") is not None]
+            prev_20_high = max(highs_20) if highs_20 else None
+            prev_60_high = max(highs_60) if highs_60 else None
+            close_position = _close_position(last, q.get("high"), q.get("low"))
+            gap_pct = None
+            try:
+                if q.get("open") is not None and q.get("prev_close") is not None and float(q.get("prev_close")) > 0:
+                    gap_pct = _safe_pct(float(q.get("open")), float(q.get("prev_close")))
+            except Exception:
+                gap_pct = None
+            turnover_ratio_20d = None
+            try:
+                if day_turnover is not None and avg_turnover_20d is not None and avg_turnover_20d > 0:
+                    turnover_ratio_20d = float(day_turnover) / float(avg_turnover_20d)
+            except Exception:
+                turnover_ratio_20d = None
+
+            extras = {
+                "close_position": close_position,
+                "gap_pct": gap_pct,
+                "breakout_20d": bool(last is not None and prev_20_high is not None and float(last) > float(prev_20_high)),
+                "breakout_60d": bool(last is not None and prev_60_high is not None and float(last) > float(prev_60_high)),
+                "close_near_high": bool(close_position is not None and close_position >= 0.70),
+                "turnover_ratio_20d": turnover_ratio_20d,
+            }
+
+            if market_cap is None or float(market_cap) < scan_defaults["market_cap_min"]:
+                rejection_flags.append("시총 하한 미달")
+            if day_turnover is None or float(day_turnover) < scan_defaults["today_turnover_min"]:
+                rejection_flags.append("당일 거래대금 부족")
+            if rel_vol_20d is None or float(rel_vol_20d) < scan_defaults["rel_volume_min"]:
+                rejection_flags.append("상대거래량 부족")
+            if ret_5d_pct is None or float(ret_5d_pct) < scan_defaults["ret_5d_min"]:
+                rejection_flags.append("5일 수익률 약함")
+            elif float(ret_5d_pct) > scan_defaults["ret_5d_max"]:
+                rejection_flags.append("과열 구간")
+            if close_position is None or float(close_position) < scan_defaults["close_position_min"]:
+                rejection_flags.append("종가 위치 약함")
+            if gap_pct is not None and gap_pct >= 12.0:
+                rejection_flags.append("갭 과열")
+
+            if day_turnover is not None and day_turnover >= scan_defaults["today_turnover_min"]:
+                scan_reason.append("당일 거래대금 기준 통과")
+            if rel_vol_20d is not None and rel_vol_20d >= scan_defaults["rel_volume_min"]:
+                scan_reason.append("상대거래량 기준 통과")
+            if extras["breakout_20d"]:
+                scan_reason.append("20일 고점 돌파")
+            if extras["close_near_high"]:
+                scan_reason.append("종가 고가권 안착")
+
+            return Candidate(
+                symbol=sym,
+                name=name,
+                currency=currency,
+                last=float(last) if last is not None else None,
+                day_chg_pct=float(day_chg_pct) if day_chg_pct is not None else None,
+                day_volume=int(day_volume) if day_volume is not None else None,
+                avg20_volume=float(avg20_volume) if avg20_volume is not None else None,
+                rel_vol_20d=float(rel_vol_20d) if rel_vol_20d is not None else None,
+                ret_3d_pct=float(ret_3d_pct) if ret_3d_pct is not None else None,
+                ret_5d_pct=float(ret_5d_pct) if ret_5d_pct is not None else None,
+                ret_20d_pct=float(ret_20d_pct) if ret_20d_pct is not None else None,
+                avg_turnover_20d=float(avg_turnover_20d) if avg_turnover_20d is not None else None,
+                score=0.0,
+                day_turnover=float(day_turnover) if day_turnover is not None else None,
+                market_cap=float(market_cap) if market_cap is not None else None,
+                extras=extras,
+                scan_reason=scan_reason,
+                rejection_flags=rejection_flags,
+            )
 
         score = _score_candidate(
             day_chg_pct,
@@ -1549,6 +1791,8 @@ async def candidates(
             ret_20d_pct=float(ret_20d_pct) if ret_20d_pct is not None else None,
             avg_turnover_20d=float(avg_turnover_20d) if avg_turnover_20d is not None else None,
             score=float(score),
+            day_turnover=float(day_turnover) if day_turnover is not None else None,
+            market_cap=float(market_cap) if market_cap is not None else None,
         )
 
     tasks = [build_candidate(s) for s in universe]
@@ -1559,6 +1803,107 @@ async def candidates(
         if isinstance(r, Exception) or r is None:
             continue
         cands.append(r)
+
+    if market_u == "KR":
+        discovered = (cands if explicit else [c for c in cands if not c.rejection_flags])[:48]
+        if not discovered:
+            discovered = sorted(
+                cands,
+                key=lambda c: (
+                    _to_float(c.extras.get("turnover_ratio_20d"), 0.0),
+                    _to_float(c.day_turnover, 0.0),
+                    _to_float(c.ret_5d_pct, 0.0),
+                ),
+                reverse=True,
+            )[:24]
+
+        async def enrich_kr_candidate(base: Candidate) -> Candidate:
+            news_items, flow = await asyncio.gather(
+                fetch_kr_naver_news(base.symbol, limit=3),
+                fetch_kr_investor_flows(base.symbol),
+            )
+            flow_1d = (flow.get("lookbacks") or {}).get("1d") or {}
+            flow_5d = (flow.get("lookbacks") or {}).get("5d") or {}
+            signed_flow = _signed_flow_score(flow_1d, flow_5d)
+            news_dt = _parse_kr_news_timestamp((news_items[0] or {}).get("published")) if news_items else None
+            news_age_hours = None
+            if news_dt is not None:
+                try:
+                    news_age_hours = (_now_kst() - news_dt).total_seconds() / 3600.0
+                except Exception:
+                    news_age_hours = None
+            catalyst_freshness = 0.0
+            if news_age_hours is not None:
+                catalyst_freshness = _clamp(
+                    (scan_defaults["fresh_news_hours"] - news_age_hours) / max(scan_defaults["fresh_news_hours"], 1.0),
+                    -1.0,
+                    1.0,
+                ) * 12.0
+
+            close_position = _to_float(base.extras.get("close_position"), 0.0)
+            breakout_strength = 0.0
+            if base.extras.get("breakout_20d"):
+                breakout_strength += 12.0
+            if base.extras.get("breakout_60d"):
+                breakout_strength += 10.0
+            breakout_strength += _clamp(close_position, 0.0, 1.0) * 10.0
+            if base.extras.get("close_near_high"):
+                breakout_strength += 5.0
+
+            liquidity_accel = _clamp(_to_float(base.extras.get("turnover_ratio_20d"), 0.0), 0.0, 5.0) * 6.0
+            junk_risk = 0.0
+            gap_pct = _to_float(base.extras.get("gap_pct"), 0.0)
+            if close_position < scan_defaults["close_position_min"]:
+                junk_risk += 12.0
+            if gap_pct >= 12.0:
+                junk_risk += 8.0
+            if base.ret_5d_pct is not None and base.ret_5d_pct > scan_defaults["ret_5d_max"]:
+                junk_risk += 10.0
+
+            conviction_score = (
+                0.30 * breakout_strength
+                + 0.25 * liquidity_accel
+                + 0.20 * signed_flow
+                + 0.15 * catalyst_freshness
+                - 0.10 * junk_risk
+            )
+
+            scan_reason = list(base.scan_reason)
+            rejection_flags = list(base.rejection_flags)
+            if signed_flow > 0:
+                scan_reason.append("외국인/기관 수급 부호 양호")
+            elif signed_flow < 0:
+                rejection_flags.append("수급 엇갈림")
+            if news_items and news_age_hours is not None and news_age_hours <= scan_defaults["fresh_news_hours"]:
+                scan_reason.append("48시간 내 뉴스 확인")
+            else:
+                rejection_flags.append("촉매 약함")
+
+            extras = dict(base.extras)
+            extras.update(
+                {
+                    "news_items": news_items,
+                    "news_asof": (news_items[0] or {}).get("published") if news_items else None,
+                    "flow_asof": flow.get("as_of"),
+                    "signed_flow_score": round(signed_flow, 2),
+                    "conviction_score": round(conviction_score, 2),
+                    "catalyst_freshness": round(catalyst_freshness, 2),
+                    "foreign_1d": flow_1d.get("foreign_net_volume"),
+                    "foreign_5d": flow_5d.get("foreign_net_volume"),
+                    "institution_1d": flow_1d.get("institution_net_volume"),
+                    "institution_5d": flow_5d.get("institution_net_volume"),
+                }
+            )
+            return replace(
+                base,
+                score=round(conviction_score, 2),
+                extras=extras,
+                scan_reason=scan_reason,
+                rejection_flags=list(dict.fromkeys(rejection_flags)),
+            )
+
+        enriched = await asyncio.gather(*[enrich_kr_candidate(c) for c in discovered], return_exceptions=True)
+        cands = [c for c in enriched if isinstance(c, Candidate)]
 
     cands.sort(key=lambda x: x.score, reverse=True)
     cands = cands[:top_n]
@@ -1609,7 +1954,18 @@ async def candidates(
         "horizon_days": horizon_days,
         "hold_days_max": horizon_days,
         "universe_source": universe_source,
-        "filters": {"max_price": max_price, "min_avg_turnover": min_avg_turnover},
+        "filters": {
+            "max_price": max_price,
+            "min_avg_turnover": scan_defaults.get("avg20_turnover_min", min_avg_turnover),
+            "market_cap_min": scan_defaults.get("market_cap_min", market_cap_min),
+            "today_turnover_min": scan_defaults.get("today_turnover_min", today_turnover_min),
+            "rel_volume_min": scan_defaults.get("rel_volume_min", rel_volume_min),
+            "ret_5d_min": scan_defaults.get("ret_5d_min", ret_5d_min),
+            "ret_5d_max": scan_defaults.get("ret_5d_max", ret_5d_max),
+            "close_position_min": scan_defaults.get("close_position_min", close_position_min),
+            "fresh_news_hours": scan_defaults.get("fresh_news_hours", fresh_news_hours),
+        },
+        "scan_defaults": scan_defaults or None,
         "context": context,
         "note": "Educational prototype. Not financial advice. Data best-effort and may be delayed/incomplete.",
         "candidates": [
@@ -1627,7 +1983,12 @@ async def candidates(
                 "ret_20d_pct": c.ret_20d_pct,
                 "ret_horizon_pct": c.ret_5d_pct if horizon_days == 5 else c.ret_20d_pct,
                 "avg_turnover_20d": c.avg_turnover_20d,
+                "day_turnover": c.day_turnover,
+                "market_cap": c.market_cap,
                 "score": c.score,
+                "extras": c.extras,
+                "scan_reason": c.scan_reason,
+                "rejection_flags": c.rejection_flags,
             }
             for c in cands
         ],
@@ -1674,6 +2035,7 @@ async def ticker_detail(
         lookback_high = d_highs[-20:] if len(d_highs) >= 20 else d_highs
         lookback_low = d_lows[-20:] if len(d_lows) >= 20 else d_lows
         resistance_20d, support_20d = _swing_levels(lookback_high, lookback_low)
+        resistance_60d = max(d_highs[-60:]) if len(d_highs) >= 60 else (max(d_highs) if d_highs else None)
 
         day_high = q.get("high") if q.get("high") is not None else (d_highs[-1] if d_highs else None)
         day_low = q.get("low") if q.get("low") is not None else (d_lows[-1] if d_lows else None)
@@ -1699,6 +2061,10 @@ async def ticker_detail(
         ret_20d_pct = _compute_return_pct(d_closes, 20)
         ret_horizon_pct = ret_5d_pct if horizon_days == 5 else ret_20d_pct
         atr14 = _atr14(d_highs, d_lows, d_closes)
+        close_position = _close_position(last, day_high, day_low)
+        gap_pct = _safe_pct(day_open, prev_close) if day_open is not None and prev_close is not None else None
+        avg20_turnover = _avg_recent_turnover(d_closes, d_vols, 20)
+        turnover_ratio_20d = (float(day_turnover) / float(avg20_turnover)) if day_turnover and avg20_turnover else None
         kr_flow, kr_short = await asyncio.gather(
             fetch_kr_investor_flows(sym),
             fetch_kr_short_data(sym, name_hint=name),
@@ -1848,6 +2214,22 @@ async def ticker_detail(
         except Exception:
             pass
 
+    scan_reason: List[str] = []
+    rejection_flags: List[str] = []
+    if market_u == "KR":
+        if day_turnover is not None and day_turnover >= KR_SWING_DEFAULTS["today_turnover_min"]:
+            scan_reason.append("당일 거래대금 기준 통과")
+        if rel_vol_20d is not None and rel_vol_20d >= KR_SWING_DEFAULTS["rel_volume_min"]:
+            scan_reason.append("상대거래량 기준 통과")
+        if close_position is not None and close_position >= KR_SWING_DEFAULTS["close_position_min"]:
+            scan_reason.append("종가 고가권 안착")
+        if resistance_20d is not None and last is not None and float(last) > float(resistance_20d):
+            scan_reason.append("20일 고점 돌파")
+        if q.get("market_cap") is not None and float(q.get("market_cap")) < KR_SWING_DEFAULTS["market_cap_min"]:
+            rejection_flags.append("시총 하한 미달")
+        if close_position is not None and close_position < KR_SWING_DEFAULTS["close_position_min"]:
+            rejection_flags.append("종가 위치 약함")
+
     now_et = _now_et()
     return {
         "asof_et": _fmt_dt(now_et),
@@ -1860,12 +2242,15 @@ async def ticker_detail(
         "symbol": sym,
         "name": name,
         "currency": currency,
+        "scan_reason": scan_reason,
+        "rejection_flags": rejection_flags,
         "quote": {
             "last": last,
             "prev_close": prev_close,
             "day_chg_pct": day_chg_pct,
             "day_volume": day_volume,
             "day_turnover": day_turnover,
+            "market_cap": q.get("market_cap") if market_u == "KR" else qs_sum.get("market_cap"),
             "bid": q.get("bid"),
             "ask": q.get("ask"),
             "open": day_open,
@@ -1880,11 +2265,16 @@ async def ticker_detail(
             "ret_20d_pct": ret_20d_pct,
             "ret_horizon_pct": ret_horizon_pct,
             "avg20_volume": avg20_volume,
+            "avg20_turnover": avg20_turnover if market_u == "KR" else None,
             "rel_vol_20d": rel_vol_20d,
             "atr14": atr14,
+            "close_position": close_position if market_u == "KR" else None,
+            "gap_pct": gap_pct if market_u == "KR" else None,
+            "turnover_ratio_20d": turnover_ratio_20d if market_u == "KR" else None,
         },
         "levels": {
             "resistance_20d": resistance_20d,
+            "resistance_60d": resistance_60d if market_u == "KR" else None,
             "support_20d": support_20d,
             "day_high": day_high,
             "day_low": day_low,
@@ -1894,6 +2284,12 @@ async def ticker_detail(
             "options": opt_sum,
             "kr_flow": kr_flow,
             "kr_short": kr_short,
+            "timestamps": {
+                "quote_asof_kst": _fmt_dt(_now_kst()) if market_u == "KR" else None,
+                "news_asof_kst": (news_items[0] or {}).get("published") if news_items else None,
+                "flow_asof_kst": kr_flow.get("as_of") if market_u == "KR" else None,
+                "short_asof_kst": (kr_short.get("latest") or {}).get("date") if market_u == "KR" else None,
+            },
         },
         "trade_plan_like": {
             "hold_days_max": horizon_days,
@@ -1995,20 +2391,17 @@ def _score_breakdown_detail(d: Dict[str, Any]) -> Dict[str, float]:
         flow_1d = (kr_flow.get("lookbacks") or {}).get("1d") or {}
         flow_5d = (kr_flow.get("lookbacks") or {}).get("5d") or {}
         latest_short = (kr_short.get("latest") or {})
-        foreign_1d = abs(_to_float(flow_1d.get("foreign_net_volume"), 0.0))
-        institution_1d = abs(_to_float(flow_1d.get("institution_net_volume"), 0.0))
-        foreign_5d = abs(_to_float(flow_5d.get("foreign_net_volume"), 0.0))
-        institution_5d = abs(_to_float(flow_5d.get("institution_net_volume"), 0.0))
+        foreign_1d = _to_float(flow_1d.get("foreign_net_volume"), 0.0)
+        institution_1d = _to_float(flow_1d.get("institution_net_volume"), 0.0)
+        foreign_5d = _to_float(flow_5d.get("foreign_net_volume"), 0.0)
+        institution_5d = _to_float(flow_5d.get("institution_net_volume"), 0.0)
         short_ratio_vol = _to_float(latest_short.get("short_volume_ratio_pct"), 0.0)
 
-        flow_proxy += min(20.0, foreign_1d / 500_000.0)
-        flow_proxy += min(16.0, institution_1d / 500_000.0)
-        flow_proxy += min(10.0, foreign_5d / 2_000_000.0)
-        flow_proxy += min(8.0, institution_5d / 2_000_000.0)
+        flow_proxy += _signed_flow_score(flow_1d, flow_5d)
         if short_ratio_vol >= 8.0:
-            flow_proxy += 2.0
+            flow_proxy -= 2.0
         elif short_ratio_vol >= 5.0:
-            flow_proxy += 1.0
+            flow_proxy -= 1.0
     else:
         flow_proxy += max(0.0, min(3.0, call_put)) * 7.0
         flow_proxy += max(0.0, min(12.0, short_float)) * 1.1
@@ -2204,6 +2597,8 @@ def _build_data_package(
                     "prev_close": q.get("prev_close"),
                     "day_chg_pct": q.get("day_chg_pct"),
                     "day_volume": q.get("day_volume"),
+                    "day_turnover": q.get("day_turnover"),
+                    "market_cap": q.get("market_cap"),
                     "bid": q.get("bid"),
                     "ask": q.get("ask"),
                     "spread_pct": round(spread, 4) if spread is not None else None,
@@ -2215,11 +2610,16 @@ def _build_data_package(
                     "ret_20d_pct": st.get("ret_20d_pct"),
                     "ret_horizon_pct": st.get("ret_horizon_pct"),
                     "avg20_volume": st.get("avg20_volume"),
+                    "avg20_turnover": st.get("avg20_turnover"),
                     "rel_vol_20d": st.get("rel_vol_20d"),
                     "atr14": st.get("atr14"),
+                    "close_position": st.get("close_position"),
+                    "gap_pct": st.get("gap_pct"),
+                    "turnover_ratio_20d": st.get("turnover_ratio_20d"),
                 },
                 "levels": {
                     "resistance_20d": lv.get("resistance_20d"),
+                    "resistance_60d": lv.get("resistance_60d"),
                     "support_20d": lv.get("support_20d"),
                     "day_high": lv.get("day_high"),
                     "day_low": lv.get("day_low"),
@@ -2239,12 +2639,15 @@ def _build_data_package(
                     "risk_penalty": sc.get("risk_penalty"),
                     "turnover_est": sc.get("turnover"),
                     "atr_pct": sc.get("atr_pct"),
+                    "scan_reason": d.get("scan_reason") or [],
+                    "rejection_flags": d.get("rejection_flags") or [],
                     "risk_flags": risk_flags,
                 },
                 "events": {
                     "news": (d.get("news") or [])[:3],
                     "sec_filings_last_7d": (d.get("sec_filings_last_7d") or [])[:6],
                     "earnings_dates": (qs.get("earnings_dates") or [])[:2],
+                    "news_asof_kst": ((ex.get("timestamps") or {}).get("news_asof_kst")),
                 },
                 "market_micro": {
                     "short_percent_of_float": qs.get("short_percent_of_float"),
@@ -2255,6 +2658,7 @@ def _build_data_package(
                     "expiration": opt.get("expiration"),
                     "kr_flow": kr_flow,
                     "kr_short": kr_short,
+                    "timestamps": ex.get("timestamps") or {},
                 },
             }
         )
@@ -2266,6 +2670,7 @@ def _build_data_package(
         "horizon_days": horizon_days,
         "market_regime": _macro_regime(macro, market),
         "macro": macro,
+        "macro_asof_kst": _fmt_dt(_now_kst()),
         "scan_setup": scan_context or {},
         "errors": errors or [],
         "notes": [
@@ -2291,25 +2696,91 @@ def _build_ai_prompt_from_package(pkg: Dict[str, Any]) -> str:
 
     if market == "KR":
         lines = [
-            f"너는 한국 주식 단기 모멘텀(1~{horizon_days}거래일) 스윙 트레이딩 분석가다.",
-            "반드시 최신 데이터 기반으로만 말하고, 확인 못한 건 추정하지 말고 '확인 불가'라고 써라.",
+            "너는 한국 주식 단기 모멘텀 분석기다.",
             "",
-            "0) 먼저 KST 기준 현재 날짜/시간을 한 줄로 쓰고, 가격/뉴스/지표의 데이터 기준 시각(장중/장마감/장전)을 각각 명시해라.",
-            "1) 아래 JSON은 사전 수집 데이터다. 이것을 출발점으로 쓰되, 웹검색으로 최신 수치와 뉴스/공시를 보강해라.",
-            f"2) KOSPI+KOSDAQ 전체 관점에서 단기 모멘텀 후보를 1~3개만 뽑아라. 우선 검토 대상: {interest}",
-            "3) 각 후보는 반드시 숫자 중심으로 정리하고, 거래대금/수급/촉매/차트 레벨을 구분해서 써라.",
-            f"4) 트레이드 플랜은 최대 {horizon_days}거래일 기준으로 진입가, 손절가, 목표가, 시간손절 규칙까지 포함해라.",
-            "5) 마지막에 가장 가능성이 높은 1개를 고르고, 근거는 가장 최신 시각 기준 데이터만 사용해라.",
+            "목표:",
+            "- KRX 전체에서 다음 거래일에 강한 추세 지속 또는 급등 확률이 가장 높은 종목을 찾는다.",
+            "- 단, 저유동성 잡주나 단순 펌프성 종목은 피한다.",
+            "- 공격적이되, 거래대금과 촉매와 수급이 확인되는 종목을 우선한다.",
             "",
-            "내 조건:",
-            "- 스타일: 공격적 단기 스윙",
-            f"- 최대 보유기간: {horizon_days} 거래일",
-            "- 손실 허용: 1트레이드 기준 최대 [-X%] (X 미입력 시 5% 가정)",
-            f"- 관심종목: {interest}",
-            f"- 탐색 조건: {(scan_setup.get('scan_label') or scan_setup.get('scan_profile') or '기본')} / {(scan_setup.get('scan_note') or '설명 없음')}",
+            "중요 원칙:",
+            "1. 아래 데이터 패키지는 출발점이지 검색 범위의 한계가 아니다.",
+            "2. 브라우징/웹검색 기능이 있으면 반드시 최신 시세, 뉴스, 공시, 거래소/증권사 정보를 다시 확인하라.",
+            "3. 데이터 패키지에 없는 종목이 더 좋으면 그 종목을 추천하라.",
+            "4. 브라우징 기능이 없으면 그 제한을 먼저 밝히고, 패키지 내부 데이터만으로 판단하라.",
+            "5. 모든 시간은 KST 기준으로 처리하라.",
+            "6. 확인되지 않은 정보는 추정하지 말고 '확인 불가'라고 적어라.",
+            "7. 수급은 반드시 부호를 반영하라. 순매도는 가산점이 아니다.",
+            "8. 거래량보다 거래대금을 더 중요하게 보라.",
+            "9. 가격 자체보다 시가총액, 거래대금, 촉매 신선도, 종가 위치를 더 중요하게 보라.",
             "",
-            "아래 JSON 데이터 패키지:",
+            "우선순위:",
+            "- 오늘 거래대금이 크고 최근 평균보다 확실히 증가한 종목",
+            "- 최근 48시간 내 뉴스/공시/이벤트 등 신선한 촉매가 있는 종목",
+            "- 외국인/기관 순매수 부호가 긍정적인 종목",
+            "- 20일/60일 고점 돌파 또는 전고 돌파 후 종가가 고가권에서 끝난 종목",
+            "- KOSPI/KOSDAQ 전체에서 테마/섹터 강도가 동반되는 종목",
+            "- 중대형주 또는 최소한 유동성이 충분한 종목",
+            "",
+            "감점/제외:",
+            "- 거래대금이 부족한 종목",
+            "- 전일 급등 후 당일 종가가 약하거나 윗꼬리가 과한 종목",
+            "- 촉매가 불명확한 종목",
+            "- 저유동성, 과도한 변동성, 관리/경고성 리스크가 있는 종목",
+            "- 단순히 이미 많이 올랐다는 이유만으로 유지되는 종목",
+            "",
+            "분석 절차:",
+            "1. 현재 KST 시각을 먼저 적어라.",
+            "2. 데이터 패키지의 각 timestamp/as-of를 먼저 확인하라.",
+            "3. 패키지 내 후보를 검토하라.",
+            "4. 가능하면 패키지 밖에서도 더 나은 종목이 있는지 KRX 전체 기준으로 재탐색하라.",
+            "5. 최종적으로 상위 3개를 뽑고, 그중 1개를 최종 선택하라.",
+            "6. 패키지 후보를 탈락시킨 경우 이유를 적어라.",
+            "",
+            f"사용자 조건: 공격적 단기 스윙 / 최대 보유 {horizon_days}거래일 / 관심 후보 {interest}",
+            f"탐색 조건: {(scan_setup.get('scan_label') or scan_setup.get('scan_profile') or '기본')} / {(scan_setup.get('scan_note') or '설명 없음')}",
+            "",
+            "출력 형식:",
+            "[1] 현재 시각 및 데이터 신선도",
+            "- 현재 KST:",
+            "- quote as-of:",
+            "- news as-of:",
+            "- flow as-of:",
+            "- short as-of:",
+            "- 검증 한계:",
+            "",
+            "[2] 시장 상태 요약",
+            "- KOSPI/KOSDAQ/환율/금리/섹터 흐름을 3~5줄로 요약",
+            "- 오늘의 리스크 온/오프 판단",
+            "",
+            "[3] 상위 3개 후보",
+            "- 종목명(코드):",
+            "- 출처: package / external",
+            "- 핵심 촉매:",
+            "- 오늘 거래대금:",
+            "- 최근 평균 거래대금 대비:",
+            "- 외국인/기관 수급:",
+            "- 차트 상태: 전고/신고가/종가 위치/갭",
+            "- 내일 강세 지속 논리:",
+            "- 리스크:",
+            "- 확신도: 0~100",
+            "",
+            "[4] 최종 1개",
+            "- 종목명(코드):",
+            "- 왜 이 종목이 1순위인지:",
+            "- 내일 봐야 할 핵심 포인트 3개:",
+            "- 무효화 조건 2개:",
+            "",
+            "[5] 패키지 후보 탈락 사유",
+            "- 종목명:",
+            "- 탈락 이유:",
+            "",
+            "[6] 불확실성",
+            "- 확인 불가하거나 지연 가능성이 있는 데이터만 따로 적어라.",
+            "",
+            "[DATA_PACKAGE_JSON_BEGIN]",
             payload,
+            "[DATA_PACKAGE_JSON_END]",
         ]
         return "\n".join(lines)
 
@@ -2512,6 +2983,7 @@ async def report_multi_data(
     scan_profile: str = Query(default=""),
     scan_label: str = Query(default=""),
     scan_note: str = Query(default=""),
+    scan_thresholds: str = Query(default=""),
 ) -> Dict[str, Any]:
     details, errors = await _collect_symbol_details(
         symbols,
@@ -2532,6 +3004,7 @@ async def report_multi_data(
             "scan_profile": scan_profile,
             "scan_label": scan_label,
             "scan_note": scan_note,
+            "thresholds": json.loads(scan_thresholds) if scan_thresholds else {},
         },
     )
 
@@ -2544,6 +3017,7 @@ async def prompt_single(
     scan_profile: str = Query(default=""),
     scan_label: str = Query(default=""),
     scan_note: str = Query(default=""),
+    scan_thresholds: str = Query(default=""),
 ) -> str:
     d = await ticker_detail(symbol, market=market, horizon_days=horizon_days)
     if horizon_days not in (5, 20):
@@ -2559,6 +3033,7 @@ async def prompt_single(
             "scan_profile": scan_profile,
             "scan_label": scan_label,
             "scan_note": scan_note,
+            "thresholds": json.loads(scan_thresholds) if scan_thresholds else {},
         },
     )
     return _build_ai_prompt_from_package(pkg)
@@ -2573,6 +3048,7 @@ async def prompt_multi(
     scan_profile: str = Query(default=""),
     scan_label: str = Query(default=""),
     scan_note: str = Query(default=""),
+    scan_thresholds: str = Query(default=""),
 ) -> str:
     pkg = await report_multi_data(
         symbols=symbols,
@@ -2582,6 +3058,7 @@ async def prompt_multi(
         scan_profile=scan_profile,
         scan_label=scan_label,
         scan_note=scan_note,
+        scan_thresholds=scan_thresholds,
     )
     return _build_ai_prompt_from_package(pkg)
 
@@ -2697,20 +3174,13 @@ async def report_multi(
             flow_1d = (kr_flow.get("lookbacks") or {}).get("1d") or {}
             flow_5d = (kr_flow.get("lookbacks") or {}).get("5d") or {}
             latest_short = (kr_short.get("latest") or {})
-            foreign_1d = abs(_to_float(flow_1d.get("foreign_net_volume"), 0.0))
-            institution_1d = abs(_to_float(flow_1d.get("institution_net_volume"), 0.0))
-            foreign_5d = abs(_to_float(flow_5d.get("foreign_net_volume"), 0.0))
-            institution_5d = abs(_to_float(flow_5d.get("institution_net_volume"), 0.0))
             short_ratio_vol = _to_float(latest_short.get("short_volume_ratio_pct"), 0.0)
 
-            flow_proxy += min(20.0, foreign_1d / 500_000.0)
-            flow_proxy += min(16.0, institution_1d / 500_000.0)
-            flow_proxy += min(10.0, foreign_5d / 2_000_000.0)
-            flow_proxy += min(8.0, institution_5d / 2_000_000.0)
+            flow_proxy += _signed_flow_score(flow_1d, flow_5d)
             if short_ratio_vol >= 8.0:
-                flow_proxy += 2.0
+                flow_proxy -= 2.0
             elif short_ratio_vol >= 5.0:
-                flow_proxy += 1.0
+                flow_proxy -= 1.0
         else:
             flow_proxy += max(0.0, min(3.0, call_put)) * 7.0
             flow_proxy += max(0.0, min(12.0, short_float)) * 1.1
