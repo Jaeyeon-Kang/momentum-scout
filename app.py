@@ -2451,6 +2451,34 @@ def _parse_scan_thresholds(raw: str) -> Dict[str, Any]:
         return {}
 
 
+def _parse_selected_meta(raw: str) -> Dict[str, Dict[str, Any]]:
+    text = (raw or "").strip()
+    if not text:
+        return {}
+    try:
+        obj = json.loads(text)
+    except Exception:
+        return {}
+    if not isinstance(obj, list):
+        return {}
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for idx, row in enumerate(obj, start=1):
+        if not isinstance(row, dict):
+            continue
+        symbol = str(row.get("symbol") or "").upper().strip()
+        if not symbol:
+            continue
+        scan_rank = row.get("scan_rank")
+        selected_order = row.get("selected_order")
+        out[symbol] = {
+            "scan_rank": int(scan_rank) if isinstance(scan_rank, (int, float)) else None,
+            "scan_score": _to_float(row.get("scan_score"), 0.0),
+            "selected_order": int(selected_order) if isinstance(selected_order, (int, float)) else idx,
+        }
+    return out
+
+
 def _spread_pct_from_quote(q: Dict[str, Any]) -> Optional[float]:
     b = q.get("bid")
     a = q.get("ask")
@@ -2677,15 +2705,38 @@ def _build_data_package(
     macro: List[Dict[str, Any]],
     errors: Optional[List[str]] = None,
     scan_context: Optional[Dict[str, Any]] = None,
+    selected_meta: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    ranked_rows: List[Tuple[float, Dict[str, Any], Dict[str, float]]] = []
+    selected_meta = selected_meta or {}
+    ranked_rows: List[Tuple[Any, ...]] = []
     for d in details:
         sc = _score_breakdown_detail(d)
-        ranked_rows.append((sc["total"], d, sc))
-    ranked_rows.sort(key=lambda x: x[0], reverse=True)
+        meta = selected_meta.get(str(d.get("symbol") or "").upper().strip()) or {}
+        if selected_meta:
+            ranked_rows.append(
+                (
+                    int(meta.get("selected_order") or 9999),
+                    int(meta.get("scan_rank") or 9999),
+                    -float(sc["total"]),
+                    d,
+                    sc,
+                    meta,
+                )
+            )
+        else:
+            ranked_rows.append((float(sc["total"]), d, sc, meta))
+    if selected_meta:
+        ranked_rows.sort(key=lambda x: (x[0], x[1], x[2]))
+    else:
+        ranked_rows.sort(key=lambda x: x[0], reverse=True)
 
     candidates: List[Dict[str, Any]] = []
-    for idx, (total, d, sc) in enumerate(ranked_rows, start=1):
+    selected_symbols: List[Dict[str, Any]] = []
+    for idx, row in enumerate(ranked_rows, start=1):
+        if selected_meta:
+            _, _, _, d, sc, meta = row
+        else:
+            _, d, sc, meta = row
         q = d.get("quote", {}) or {}
         st = d.get("stats", {}) or {}
         lv = d.get("levels", {}) or {}
@@ -2697,6 +2748,18 @@ def _build_data_package(
         kr_short = ex.get("kr_short") or {}
         spread = _spread_pct_from_quote(q)
         risk_flags = _risk_flags_detail(d, sc)
+        scan_rank = meta.get("scan_rank")
+        scan_score = meta.get("scan_score")
+        selected_order = meta.get("selected_order") if selected_meta else idx
+
+        selected_symbols.append(
+            {
+                "symbol": d.get("symbol"),
+                "selected_order": selected_order,
+                "scan_rank": scan_rank,
+                "scan_score": scan_score,
+            }
+        )
 
         candidates.append(
             {
@@ -2752,6 +2815,9 @@ def _build_data_package(
                     "risk_penalty": sc.get("risk_penalty"),
                     "turnover_est": sc.get("turnover"),
                     "atr_pct": sc.get("atr_pct"),
+                    "scan_rank": scan_rank,
+                    "scan_score": scan_score,
+                    "selected_order": selected_order,
                     "scan_reason": d.get("scan_reason") or [],
                     "rejection_flags": d.get("rejection_flags") or [],
                     "risk_flags": risk_flags,
@@ -2782,6 +2848,9 @@ def _build_data_package(
             "candidates[].quote",
             "candidates[].stats",
             "candidates[].levels",
+            "candidates[].derived.scan_rank",
+            "candidates[].derived.scan_score",
+            "candidates[].derived.selected_order",
             "candidates[].derived.scan_reason",
             "candidates[].derived.rejection_flags",
             "candidates[].events.news_asof_kst",
@@ -2798,6 +2867,7 @@ def _build_data_package(
         "macro": macro,
         "macro_asof_kst": _fmt_dt(_now_kst()),
         "scan_setup": scan_context or {},
+        "selected_symbols": selected_symbols,
         "errors": errors or [],
         "notes": [
             "데이터 중심 패키지입니다.",
@@ -3110,6 +3180,7 @@ async def report_multi_data(
     scan_label: str = Query(default=""),
     scan_note: str = Query(default=""),
     scan_thresholds: str = Query(default=""),
+    selected_meta: str = Query(default=""),
 ) -> Dict[str, Any]:
     details, errors = await _collect_symbol_details(
         symbols,
@@ -3132,6 +3203,7 @@ async def report_multi_data(
             "scan_note": scan_note,
             "thresholds": _parse_scan_thresholds(scan_thresholds),
         },
+        selected_meta=_parse_selected_meta(selected_meta),
     )
 
 
@@ -3175,6 +3247,7 @@ async def prompt_multi(
     scan_label: str = Query(default=""),
     scan_note: str = Query(default=""),
     scan_thresholds: str = Query(default=""),
+    selected_meta: str = Query(default=""),
 ) -> str:
     pkg = await report_multi_data(
         symbols=symbols,
@@ -3185,6 +3258,7 @@ async def prompt_multi(
         scan_label=scan_label,
         scan_note=scan_note,
         scan_thresholds=scan_thresholds,
+        selected_meta=selected_meta,
     )
     return _build_ai_prompt_from_package(pkg)
 

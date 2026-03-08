@@ -189,7 +189,7 @@
         <div class="section-head section-head-inline">
           <div>
             <div class="h2" data-i18n="listTitle">후보 목록</div>
-            <div class="muted small" data-i18n="listDesc">카드를 눌러 상세를 보고, 체크해서 리포트에 담으세요.</div>
+            <div class="muted small" data-i18n="listDesc">스캔이 끝나면 추천 묶음이 자동 선택됩니다. 필요하면 체크만 바꾸세요.</div>
           </div>
           <div class="list-header" id="listHeader" style="display:none;">
             <button class="btn sm" id="checkAllBtn" data-i18n="btnCheckAll">전체 체크</button>
@@ -211,19 +211,19 @@
         <div class="guide-box">
           <div class="guide-title" data-i18n="reportGuideTitle">리포트 탭 사용 순서</div>
           <div class="guide-text" data-i18n="reportGuideBody">
-            1) 탐색 설정에서 후보 찾기 -> 2) 후보 보기에서 체크 -> 3) 여기서 리포트 생성
+            1) 후보 찾기 -> 2) 자동 선택된 추천 묶음 확인 -> 3) 프롬프트 추출
           </div>
           <div class="guide-text" data-i18n="reportGuideAction">
-            매크로 + 점수분해 + 이벤트 리스크를 함께 담아 AI가 순위를 좁힙니다.
+            주 버튼은 프롬프트 추출입니다. 데이터 패키지는 필요할 때만 보조로 확인하세요.
           </div>
         </div>
         <div id="aiPadBody">
           <div class="row wrap">
-            <button class="btn primary" id="reportSelBtn">
+            <button class="btn primary" id="promptSelBtn" data-i18n="btnPromptSel">추천 묶음 프롬프트 추출</button>
+            <button class="btn sm" id="reportSelBtn">
               <span data-i18n="btnReportSel">선택 종목 데이터 만들기</span>
               <span id="selCount" class="sel-count hidden">(0)</span>
             </button>
-            <button class="btn" id="promptSelBtn" data-i18n="btnPromptSel">프롬프트 추출</button>
             <button class="btn icon-only" id="copyAllBtn" aria-label="현재 내용 복사" title="현재 내용 복사">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M9 9h10v11H9z"></path>
@@ -231,6 +231,7 @@
               </svg>
             </button>
           </div>
+          <div class="muted small" id="reportSelectionSummary">현재 포함: 없음</div>
           <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
           <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
         </div>
@@ -249,8 +250,8 @@
       </div>
       <div class="sheetBody" id="detail"></div>
       <div class="sheetFooter">
-        <button class="btn" id="dataCopyBtn" data-i18n="btnCopySingleData">이 종목 데이터 복사</button>
-        <button class="btn primary" id="copyBtn" data-i18n="btnCopySingle">이 종목 프롬프트 복사</button>
+        <button class="btn sm" id="dataCopyBtn" data-i18n="btnCopySingleData">이 종목 데이터 복사</button>
+        <button class="btn sm" id="copyBtn" data-i18n="btnCopySingle">이 종목 프롬프트 추출</button>
       </div>
     </div>
   </div>

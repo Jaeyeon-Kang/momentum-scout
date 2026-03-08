@@ -19,7 +19,7 @@ const S = {
     scanBlockVerify: 'Direct verification',
     scanBlockVerifyDesc: 'Choose whether to trust auto candidates or inspect exact symbols.',
     listTitle:     'Candidate list',
-    listDesc:      'Tap a card for detail. Check items to build a report.',
+    listDesc:      'Top candidates are selected automatically after each scan. Only change checks if needed.',
     lbScanProfile: 'Scan profile',
     lbLiquidityLevel: 'Turnover filter',
     lbMarket:      'Market',
@@ -44,22 +44,22 @@ const S = {
     advancedHint:  'Only edit these when you want to override the suggested values.',
     scrHint:       'Recommended preset is applied automatically. Most users do not need manual IDs.',
     phSymbols:     'e.g. TSLA,NVDA or 005930.KS,035420.KS',
-    phReport:      'Build a data package or copy a prompt. Output will appear here.',
+    phReport:      'The prompt or data package for the recommended batch will appear here.',
     opt5d:         '5D (quick)',
     opt20d:        '20D (smoother trend)',
     btnScan:       'Find candidates',
     btnScanning:   'Scanning…',
     hBatch:        'Data package / prompt',
-    metaBatch:     'Build structured data for the checked candidates, or copy a prompt for an external AI.',
-    btnReportSel:  'Build data package',
-    btnPromptSel:  'Extract prompt',
+    metaBatch:     'The app prepares a recommended batch first. Use prompt extraction as the main path, and open the data package only when you need the raw JSON.',
+    btnReportSel:  'Open data package',
+    btnPromptSel:  'Extract recommended prompt',
     btnCopy:       'Copy current content',
     btnAdvancedShow: 'Open advanced settings',
     btnAdvancedHide: 'Close advanced settings',
     btnCheckAll:   'Check all',
     btnUncheckAll: 'Clear all checks',
-    btnCopySingle: 'Extract this ticker prompt',
-    btnCopySingleData: 'Copy this ticker data',
+    btnCopySingle: 'Optional: extract this ticker prompt',
+    btnCopySingleData: 'Optional: copy this ticker data',
     directMode:    'Direct mode',
     btnClear:      'Clear',
     btnRefresh:    'Refresh',
@@ -68,8 +68,8 @@ const S = {
     colRelVol:     'RelVol',
     colScore:      'Score',
     reportGuideTitle: 'How to use this panel',
-    reportGuideBody:  '1) Scan in Setup -> 2) Check candidates -> 3) Build structured data here',
-    reportGuideAction:'Use the data package for inspection, and the prompt button for copy-paste into another AI.',
+    reportGuideBody:  '1) Run the scan -> 2) Review the auto-selected batch -> 3) Extract the prompt',
+    reportGuideAction:'Prompt extraction is the main action. The data package stays as a secondary inspection tool.',
     disclaimer:    "No API keys. Data: US uses Yahoo/SEC, KR uses Naver Finance. Not financial advice.",
     iosHint:       'iPhone: tap textarea → Select All → Copy.',
     scanning:      'Scanning…',
@@ -137,6 +137,13 @@ const S = {
     reportReady:  (mkt, h, n) => `Data ready · ${mkt} · ${h}D · ${n} symbols`,
     loadingPrompt:(n) => `Building prompt (${n} symbols)…`,
     promptReady:  (mkt, h, n) => `Prompt ready · ${mkt} · ${h}D · ${n} symbols`,
+    promptPrimary: (n) => `Extract prompt for ${n} picks`,
+    reportSecondary: (n) => `Open data package (${n})`,
+    selectionSummary: (symbols, omitted) => omitted > 0
+      ? `Included in current prompt: ${symbols} (+${omitted} more excluded)`
+      : `Included in current prompt: ${symbols}`,
+    selectionSummaryEmpty: (n) => `Nothing selected yet. The app will recommend up to ${n} symbols after the next scan.`,
+    batchLimitNotice: (selected, included) => `Only the top ${included} of ${selected} selected symbols were included.`,
     horizonLbl:   (h) => h === 20 ? '20d' : '5d',
     entryAbove:   (v) => `above ${v}`,
     holdDays:     (d) => `${d} trading days`,
@@ -161,7 +168,7 @@ const S = {
     scanBlockVerify: '직접 확인 범위',
     scanBlockVerifyDesc: '자동 후보를 볼지, 특정 종목을 바로 검증할지 정합니다.',
     listTitle:     '후보 목록',
-    listDesc:      '카드를 눌러 상세를 보고, 체크해서 리포트에 담으세요.',
+    listDesc:      '스캔이 끝나면 추천 묶음이 자동 선택됩니다. 필요하면 체크만 바꾸세요.',
     lbScanProfile: '탐색 프로필',
     lbLiquidityLevel: '거래대금 기준',
     lbMarket:      '거래 시장',
@@ -186,22 +193,22 @@ const S = {
     advancedHint:  '추천값을 바꾸고 싶을 때만 직접 수정하세요.',
     scrHint:       '추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.',
     phSymbols:     '예: TSLA,NVDA 또는 005930.KS,035420.KS',
-    phReport:      '선택 종목 데이터 또는 프롬프트가 여기에 표시됩니다.',
+    phReport:      '추천 묶음 기준 프롬프트나 데이터 패키지가 여기에 표시됩니다.',
     opt5d:         '5일 (빠른 탐색)',
     opt20d:        '20일 (완만한 흐름)',
     btnScan:       '후보 찾기',
     btnScanning:   '스캔 중…',
     hBatch:        '데이터 패키지 / 프롬프트',
-    metaBatch:     '체크한 후보를 구조화 데이터로 묶거나, 외부 AI에 넣을 프롬프트를 복사합니다.',
-    btnReportSel:  '선택 종목 데이터 만들기',
-    btnPromptSel:  '프롬프트 추출',
+    metaBatch:     '앱이 먼저 추천 묶음을 잡고, 프롬프트 추출을 주동선으로 둡니다. 데이터 패키지는 JSON 확인이 필요할 때만 여세요.',
+    btnReportSel:  '데이터 패키지 보기',
+    btnPromptSel:  '추천 묶음 프롬프트 추출',
     btnCopy:       '현재 내용 복사',
     btnAdvancedShow: '고급 설정 열기',
     btnAdvancedHide: '고급 설정 닫기',
     btnCheckAll:   '전체 체크',
     btnUncheckAll: '전체 해제',
-    btnCopySingle: '이 종목 프롬프트 추출',
-    btnCopySingleData: '이 종목 데이터 복사',
+    btnCopySingle: '보조 기능: 이 종목 프롬프트 추출',
+    btnCopySingleData: '보조 기능: 이 종목 데이터 복사',
     directMode:    '직접입력 모드',
     btnClear:      '지우기',
     btnRefresh:    '새로고침',
@@ -210,8 +217,8 @@ const S = {
     colRelVol:     '거래강도',
     colScore:      '점수',
     reportGuideTitle: '이 영역 사용 순서',
-    reportGuideBody:  '1) 탐색 설정에서 후보 찾기 -> 2) 후보 보기에서 체크 -> 3) 여기서 데이터 만들기',
-    reportGuideAction:'데이터 패키지는 사실 확인용, 프롬프트 버튼은 외부 AI 복붙용입니다.',
+    reportGuideBody:  '1) 후보 찾기 -> 2) 자동 선택된 추천 묶음 확인 -> 3) 프롬프트 추출',
+    reportGuideAction:'주 버튼은 프롬프트 추출입니다. 데이터 패키지는 필요할 때만 보조로 확인하세요.',
     disclaimer:    'API 키 없음. 데이터: 미국은 Yahoo/SEC, 한국은 Naver Finance 기준. 투자 조언 아님.',
     iosHint:       'iPhone: 텍스트 영역 탭 → 전체 선택 → 복사.',
     scanning:      '스캔 중…',
@@ -274,6 +281,13 @@ const S = {
     reportReady:  (mkt, h, n) => `데이터 준비 완료 · ${mkt} · ${h}일 · ${n}개 종목`,
     loadingPrompt:(n) => `프롬프트 생성 중 (${n}개 종목)…`,
     promptReady:  (mkt, h, n) => `프롬프트 준비 완료 · ${mkt} · ${h}일 · ${n}개 종목`,
+    promptPrimary: (n) => `추천 ${n}개 프롬프트 추출`,
+    reportSecondary: (n) => `데이터 패키지 보기 (${n})`,
+    selectionSummary: (symbols, omitted) => omitted > 0
+      ? `현재 프롬프트 포함: ${symbols} · 나머지 ${omitted}개는 제외`
+      : `현재 프롬프트 포함: ${symbols}`,
+    selectionSummaryEmpty: (n) => `아직 선택된 종목이 없습니다. 다음 스캔 후 추천 ${n}개를 자동 선택합니다.`,
+    batchLimitNotice: (selected, included) => `선택 ${selected}개 중 상위 ${included}개만 포함했습니다.`,
     horizonLbl:   (h) => h === 20 ? '20일' : '5일',
     entryAbove:   (v) => `${v} 이상 돌파 시`,
     holdDays:     (d) => `${d} 거래일`,
@@ -581,6 +595,8 @@ function updateMarketUI(notify = true) {
     updateScreenerPresetUI();
   }
   applyScanProfilePreset();
+  updateSelectionSummary();
+  updatePrimaryActionLabel();
   if (notify) showToast(m === 'KR' ? t('krDefaults') : t('usDefaults'), 'info');
 }
 
@@ -606,6 +622,65 @@ let selected = new Set();
 let advancedOpen = false;
 let activePanel = 'panelScan';
 let lastDetailPayload = null;
+
+function getDefaultSelectionLimit(market = getMarket()) {
+  return market === 'KR' ? 4 : 5;
+}
+
+function getSelectedSymbolsInScanOrder() {
+  return lastCandidates
+    .filter(item => selected.has(item.symbol))
+    .map(item => item.symbol);
+}
+
+function getIncludedSelection() {
+  const ordered = getSelectedSymbolsInScanOrder();
+  const limit = getDefaultSelectionLimit();
+  return {
+    ordered,
+    limit,
+    symbols: ordered.slice(0, limit),
+    omittedCount: Math.max(0, ordered.length - limit),
+  };
+}
+
+function buildSelectedMeta(symbols) {
+  const scanMeta = new Map(lastCandidates.map((item, idx) => [
+    item.symbol,
+    {
+      scan_rank: idx + 1,
+      scan_score: item.score,
+    },
+  ]));
+  return symbols.map((symbol, idx) => ({
+    symbol,
+    selected_order: idx + 1,
+    ...(scanMeta.get(symbol) || {}),
+  }));
+}
+
+function syncSelectionUi() {
+  document.querySelectorAll('.pick').forEach(cb => {
+    cb.checked = selected.has(cb.dataset.sym);
+  });
+  allChecked = !!lastCandidates.length && selected.size === lastCandidates.length;
+  $('checkAllBtn').textContent = allChecked ? t('btnUncheckAll') : t('btnCheckAll');
+}
+
+function updateSelectionSummary() {
+  const el = $('reportSelectionSummary');
+  if (!el) return;
+  const { symbols, omittedCount, limit } = getIncludedSelection();
+  el.textContent = symbols.length
+    ? t('selectionSummary', symbols.join(', '), omittedCount)
+    : t('selectionSummaryEmpty', limit);
+}
+
+function updatePrimaryActionLabel() {
+  const includedCount = getIncludedSelection().symbols.length || getDefaultSelectionLimit();
+  $('promptSelBtn').textContent = t('promptPrimary', includedCount);
+  $('reportSelBtn').querySelector('[data-i18n="btnReportSel"]').textContent = t('reportSecondary', includedCount);
+}
 
 function updateMenuLabels() {
   ['menuScan', 'menuList'].forEach(id => {
@@ -638,6 +713,9 @@ function updateSelectedCount() {
   const el = $('selCount');
   if (cnt > 0) { el.textContent = `(${cnt})`; el.classList.remove('hidden'); }
   else         { el.classList.add('hidden'); }
+  syncSelectionUi();
+  updateSelectionSummary();
+  updatePrimaryActionLabel();
   updateReportActionState();
 }
 
@@ -684,6 +762,12 @@ function validateCandidatesContract(payload, market) {
       throw new Error('KR 스캔 필드 누락: day_turnover/market_cap');
     }
   }
+}
+
+function autoSelectTopCandidates() {
+  const limit = getDefaultSelectionLimit();
+  selected = new Set(lastCandidates.slice(0, limit).map(item => item.symbol));
+  updateSelectedCount();
 }
 
 // ─── Health ─────────────────────────────────────────────────────
@@ -750,9 +834,6 @@ async function scan() {
     validateCandidatesContract(j, market);
     lastCandidates = j.candidates || [];
     selected = new Set();
-    allChecked = false;
-    $('checkAllBtn').textContent = t('btnCheckAll');
-    updateSelectedCount();
 
     const ctx = j.context || {};
     const ctxStr = market === 'US'
@@ -760,6 +841,7 @@ async function scan() {
       : `KOSPI ${fmtPct(ctx.KOSPI_day_chg_pct)} · KOSDAQ ${fmtPct(ctx.KOSDAQ_day_chg_pct)}`;
     setStatus(t('asof', j.asof_kst || j.asof_et, market, j.horizon_days, ctxStr, lastCandidates.length));
     renderList(lastCandidates, j.horizon_days);
+    autoSelectTopCandidates();
     switchPanel('panelList');
 
   } catch (e) {
@@ -1085,7 +1167,7 @@ async function copySinglePrompt() {
 }
 
 // ─── Batch report ────────────────────────────────────────────────
-async function generateReport(symbolList) {
+async function generateReport(symbolList, selectedTotal = symbolList.length) {
   if (!symbolList?.length) return;
   const market = getMarket(), horizon = getHorizon();
   switchPanel('panelList');
@@ -1094,10 +1176,12 @@ async function generateReport(symbolList) {
 
   try {
     const scanCtx = getScanContext();
+    const selectedMeta = JSON.stringify(buildSelectedMeta(symbolList));
     const params = new URLSearchParams({
       symbols: symbolList.join(','), market,
       horizon_days: String(horizon),
-      max_items: String(Math.min(10, symbolList.length)),
+      max_items: String(symbolList.length),
+      selected_meta: selectedMeta,
       ...scanCtx,
     });
     const r = await fetch(`/report_multi_data?${params}`);
@@ -1109,7 +1193,9 @@ async function generateReport(symbolList) {
     }
     const j = await r.json();
     $('reportBox').value = JSON.stringify(j, null, 2);
-    $('reportMeta').textContent = t('reportReady', market, horizon, symbolList.length);
+    $('reportMeta').textContent = selectedTotal > symbolList.length
+      ? `${t('reportReady', market, horizon, symbolList.length)} · ${t('batchLimitNotice', selectedTotal, symbolList.length)}`
+      : t('reportReady', market, horizon, symbolList.length);
     showToast(t('reportDone'), 'ok');
     updateReportActionState();
     $('aiReportAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1122,22 +1208,24 @@ async function generateReport(symbolList) {
   }
 }
 async function reportSelected() {
-  const syms = Array.from(selected);
-  if (!syms.length) { showToast(t('noSelected'), 'warn'); return; }
-  await generateReport(syms);
+  const { ordered, symbols } = getIncludedSelection();
+  if (!symbols.length) { showToast(t('noSelected'), 'warn'); return; }
+  await generateReport(symbols, ordered.length);
 }
 async function copyPromptSelected() {
-  const syms = Array.from(selected);
-  if (!syms.length) { showToast(t('noSelected'), 'warn'); return; }
+  const { symbols, omittedCount } = getIncludedSelection();
+  if (!symbols.length) { showToast(t('noSelected'), 'warn'); return; }
   const market = getMarket(), horizon = getHorizon();
-  $('reportMeta').textContent = t('loadingPrompt', syms.length);
+  $('reportMeta').textContent = t('loadingPrompt', symbols.length);
   setReportLoading('promptSelBtn', true);
   try {
     const scanCtx = getScanContext();
+    const selectedMeta = JSON.stringify(buildSelectedMeta(symbols));
     const params = new URLSearchParams({
-      symbols: syms.join(','), market,
+      symbols: symbols.join(','), market,
       horizon_days: String(horizon),
-      max_items: String(Math.min(10, syms.length)),
+      max_items: String(symbols.length),
+      selected_meta: selectedMeta,
       ...scanCtx,
     });
     const r = await fetch(`/prompt_multi?${params}`);
@@ -1149,7 +1237,9 @@ async function copyPromptSelected() {
     }
     const text = await r.text();
     $('reportBox').value = text;
-    $('reportMeta').textContent = t('promptReady', market, horizon, syms.length);
+    $('reportMeta').textContent = omittedCount > 0
+      ? `${t('promptReady', market, horizon, symbols.length)} · ${t('batchLimitNotice', symbols.length + omittedCount, symbols.length)}`
+      : t('promptReady', market, horizon, symbols.length);
     try {
       await navigator.clipboard.writeText(text);
       showToast(t('promptDone'), 'ok');
@@ -1177,11 +1267,8 @@ async function copyAll() {
 function clearReport() {
   $('reportBox').value = '';
   $('reportMeta').textContent = t('reportCleared');
-  selected = new Set();
-  allChecked = false;
-  document.querySelectorAll('.pick').forEach(cb => { cb.checked = false; });
-  $('checkAllBtn').textContent = t('btnCheckAll');
-  updateSelectedCount();
+  updateReportActionState();
+  updateSelectionSummary();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
