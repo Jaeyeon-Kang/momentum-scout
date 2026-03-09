@@ -1,1338 +1,808 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// i18n
-// ═══════════════════════════════════════════════════════════════════════════════
-const S = {
-  en: {
-    appTitle:      'Momentum Scout',
-    tagline:       'Loading market status…',
-    menuScan:      '1. Setup',
-    menuList:      '2. Candidates',
-    menuReport:    '3. Report',
-    scanTitle:     'Set your scan target',
-    scanDesc:      'Choose the setup first, then narrow with liquidity and direct symbols.',
-    scanBlockProfile: 'Pattern to find',
-    scanBlockProfileDesc: 'Start from the situation you want, not from raw numbers.',
-    scanBlockRange: 'Base range',
-    scanBlockRangeDesc: 'Set market and hold period first.',
-    scanBlockFilter: 'Filter out noise',
-    scanBlockFilterDesc: 'Decide how strict you want to be about turnover and tradability.',
-    scanBlockVerify: 'Direct verification',
-    scanBlockVerifyDesc: 'Choose whether to trust auto candidates or inspect exact symbols.',
-    listTitle:     'Candidate list',
-    listDesc:      'Top candidates are selected automatically after each scan. Only change checks if needed.',
-    lbScanProfile: 'Scan profile',
-    lbLiquidityLevel: 'Turnover filter',
-    lbMarket:      'Market',
-    lbHorizon:     'Hold period',
-    lbMaxPrice:    'Max price',
-    lbMinTurnover: 'Min avg turnover (20D)',
-    lbSymbols:     'Symbols to analyze directly (optional)',
-    lbScreeners:   'US auto screeners',
-    lbScreenerCustom: 'Custom screener IDs',
-    scrPresetMomentum: 'Recommended: Momentum core',
-    scrPresetGainers: 'Up movers focus',
-    scrPresetLiquidity: 'Liquidity focus',
-    scrPresetCustom: 'Manual input',
-    profileSurge:  'Chase sharp movers',
-    profileContinuation: 'Volume-backed continuation',
-    profileEarly:  'Early setup',
-    profileManual: 'Manual setup',
-    liqTight:      'Only very active',
-    liqBalanced:   'Balanced',
-    liqAggressive: 'Include early moves',
-    krFixedModeNote: 'KR uses one fixed aggressive momentum mode. Main filters stay locked unless you open advanced settings.',
-    advancedHint:  'Only edit these when you want to override the suggested values.',
-    scrHint:       'Recommended preset is applied automatically. Most users do not need manual IDs.',
-    phSymbols:     'e.g. TSLA,NVDA or 005930.KS,035420.KS',
-    phReport:      'The prompt or data package for the recommended batch will appear here.',
-    opt5d:         '5D (quick)',
-    opt20d:        '20D (smoother trend)',
-    btnScan:       'Find candidates',
-    btnScanning:   'Scanning…',
-    hBatch:        'Data package / prompt',
-    metaBatch:     'The app prepares a recommended batch first. Use prompt extraction as the main path, and open the data package only when you need the raw JSON.',
-    btnReportSel:  'Open data package',
-    btnPromptSel:  'Extract recommended prompt',
-    btnCopy:       'Copy current content',
-    btnAdvancedShow: 'Open advanced settings',
-    btnAdvancedHide: 'Close advanced settings',
-    btnCheckAll:   'Check all',
-    btnUncheckAll: 'Clear all checks',
-    btnCopySingle: 'Optional: extract this ticker prompt',
-    btnCopySingleData: 'Optional: copy this ticker data',
-    directMode:    'Direct mode',
-    btnClear:      'Clear',
-    btnRefresh:    'Refresh',
-    btnClose:      'Close',
-    colLast:       'Last',
-    colRelVol:     'RelVol',
-    colScore:      'Score',
-    reportGuideTitle: 'How to use this panel',
-    reportGuideBody:  '1) Run the scan -> 2) Review the auto-selected batch -> 3) Extract the prompt',
-    reportGuideAction:'Prompt extraction is the main action. The data package stays as a secondary inspection tool.',
-    disclaimer:    "No API keys. Data: US uses Yahoo/SEC, KR uses Naver Finance. Not financial advice.",
-    iosHint:       'iPhone: tap textarea → Select All → Copy.',
-    scanning:      'Scanning…',
-    detailLoading: 'loading…',
-    noCandidate:   'No candidates found. Try loosening the scan thresholds or check exact symbols directly.',
-    noRss:         'No news available.',
-    noSec:         'None / unavailable',
-    noSelected:    'Select tickers first by checking the boxes.',
-    reportEmpty:   'There is no content yet.',
-    reportCleared: 'Cleared.',
-    copied:        'Copied',
-    reportDone:    'Data package generated ✓',
-    promptDone:    'Prompt extracted ✓',
-    // sections
-    secQuote:  'Quote',
-    secLevels: 'Levels',
-    secPlan:   'Rule-based plan (not advice)',
-    secExtras: 'Extras (best-effort)',
-    secKrFlow: 'KR flow / short',
-    secNews:   'News',
-    secSec:    'SEC filings (last 7d)',
-    secStructured: 'Structured data',
-    // detail labels
-    dlLast:       'Last',
-    dlDayPct:     'Day %',
-    dlVolume:     'Volume',
-    dlRelVol:     'RelVol(20d)',
-    dlReturns:    '3d / 5d / 20d',
-    dlHorizon:    'Horizon return',
-    dlAtr:        'ATR(14)',
-    dlBidAsk:     'Bid / Ask',
-    dlResist:     'Resistance (20d high)',
-    dlSupport:    'Support (20d low)',
-    dlDayHL:      'Day high / low',
-    dlEntry:      'Entry (breakout above)',
-    dlStop:       'Stop loss',
-    dlTarget:     'Target price',
-    dlHoldMax:    'Max hold',
-    dlShortFloat: 'Short % of float',
-    dlShortRatio: 'Short ratio',
-    dlEarnings:   'Earnings (ET)',
-    dlOptVol:     'Options Call / Put vol',
-    dlCallPut:    'Call:Put ratio',
-    dlExpiry:     'Nearest expiry (ET)',
-    dlKrFlow:     'Investor flow',
-    dlKrShort:    'Short selling',
-    dlKrPersonal: 'Individual',
-    dlKrForeign:  'Foreign',
-    dlKrInstitution: 'Institution',
-    dlKrRatio:    'Ratio',
-    dlKrBalance:  'Balance',
-    disclaimer2:  'Prototype. Data may be delayed/incomplete. Your money, your responsibility.',
-    // errors
-    errNetwork:   'Check your internet connection.',
-    errAuth:      'Data auth expired. Please refresh the page.',
-    errRateLimit: 'Too many requests. Please wait a moment.',
-    errUpstream:  'No response from data server. Try again shortly.',
-    errUnknown:   'Unexpected error',
-    // market switch
-    krDefaults:   'Switched to KR aggressive momentum defaults',
-    usDefaults:   'Switched to US defaults ($80 / $20M)',
-    // dynamic
-    asof:         (kst, mkt, h, ctx, n) => `${kst} · ${mkt} · ${h}D · ${ctx} · ${n} candidates`,
-    loadingRep:   (n) => `Building data package (${n} symbols)…`,
-    reportReady:  (mkt, h, n) => `Data ready · ${mkt} · ${h}D · ${n} symbols`,
-    loadingPrompt:(n) => `Building prompt (${n} symbols)…`,
-    promptReady:  (mkt, h, n) => `Prompt ready · ${mkt} · ${h}D · ${n} symbols`,
-    promptPrimary: (n) => `Extract prompt for ${n} picks`,
-    reportSecondary: (n) => `Open data package (${n})`,
-    selectionSummary: (symbols, omitted) => omitted > 0
-      ? `Included in current prompt: ${symbols} (+${omitted} more excluded)`
-      : `Included in current prompt: ${symbols}`,
-    selectionSummaryEmpty: (n) => `Nothing selected yet. The app will recommend up to ${n} symbols after the next scan.`,
-    batchLimitNotice: (selected, included) => `Only the top ${included} of ${selected} selected symbols were included.`,
-    horizonLbl:   (h) => h === 20 ? '20d' : '5d',
-    entryAbove:   (v) => `above ${v}`,
-    holdDays:     (d) => `${d} trading days`,
-    directScan:   (n) => `Analyzing ${n} symbols (direct mode)…`,
-    planProfileTitle: (label) => `Scan plan · ${label}`,
-    planProfileMeta:  (h, l, p) => `${h} hold · ${l} liquidity · ${p}`,
-  },
-  ko: {
-    appTitle:      'Momentum Scout',
-    tagline:       '시장 상태 불러오는 중…',
-    menuScan:      '1. 탐색 설정',
-    menuList:      '2. 후보 보기',
-    menuReport:    '3. 리포트',
-    scanTitle:     '무엇을 찾을지 정해요',
-    scanDesc:      '찾고 싶은 상황부터 고르고, 유동성과 직접 확인 범위를 정하세요.',
-    scanBlockProfile: '찾을 상황',
-    scanBlockProfileDesc: '숫자부터 만지지 말고 어떤 패턴을 찾는지 먼저 정합니다.',
-    scanBlockRange: '기본 범위',
-    scanBlockRangeDesc: '시장과 보유 기간으로 후보 성격을 정합니다.',
-    scanBlockFilter: '거를 기준',
-    scanBlockFilterDesc: '거래대금이 확실한 종목만 볼지, 초기 신호까지 넓게 볼지 정합니다.',
-    scanBlockVerify: '직접 확인 범위',
-    scanBlockVerifyDesc: '자동 후보를 볼지, 특정 종목을 바로 검증할지 정합니다.',
-    listTitle:     '후보 목록',
-    listDesc:      '스캔이 끝나면 추천 묶음이 자동 선택됩니다. 필요하면 체크만 바꾸세요.',
-    lbScanProfile: '탐색 프로필',
-    lbLiquidityLevel: '거래대금 기준',
-    lbMarket:      '거래 시장',
-    lbHorizon:     '보유 기간',
-    lbMaxPrice:    '최대 가격',
-    lbMinTurnover: '최소 평균 거래대금 (20일)',
-    lbSymbols:     '직접 볼 종목 코드 (선택)',
-    lbScreeners:   'US 자동 스크리너',
-    lbScreenerCustom: '직접 스크리너 ID 입력',
-    scrPresetMomentum: '추천: 모멘텀 기본',
-    scrPresetGainers: '상승 강도 중심',
-    scrPresetLiquidity: '거래량 중심',
-    scrPresetCustom: '직접 입력',
-    profileSurge:  '단기 급등 추적',
-    profileContinuation: '거래량 동반 추세 지속',
-    profileEarly:  '초기 포착',
-    profileManual: '직접 조정',
-    liqTight:      '거래 확실한 종목만',
-    liqBalanced:   '적당히',
-    liqAggressive: '초기 신호도 포함',
-    krFixedModeNote: 'KR은 메인 화면에서 기준을 거의 고정합니다. 바꾸려면 고급 설정을 여세요.',
-    advancedHint:  '추천값을 바꾸고 싶을 때만 직접 수정하세요.',
-    scrHint:       '추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.',
-    phSymbols:     '예: TSLA,NVDA 또는 005930.KS,035420.KS',
-    phReport:      '추천 묶음 기준 프롬프트나 데이터 패키지가 여기에 표시됩니다.',
-    opt5d:         '5일 (빠른 탐색)',
-    opt20d:        '20일 (완만한 흐름)',
-    btnScan:       '후보 찾기',
-    btnScanning:   '스캔 중…',
-    hBatch:        '데이터 패키지 / 프롬프트',
-    metaBatch:     '앱이 먼저 추천 묶음을 잡고, 프롬프트 추출을 주동선으로 둡니다. 데이터 패키지는 JSON 확인이 필요할 때만 여세요.',
-    btnReportSel:  '데이터 패키지 보기',
-    btnPromptSel:  '추천 묶음 프롬프트 추출',
-    btnCopy:       '현재 내용 복사',
-    btnAdvancedShow: '고급 설정 열기',
-    btnAdvancedHide: '고급 설정 닫기',
-    btnCheckAll:   '전체 체크',
-    btnUncheckAll: '전체 해제',
-    btnCopySingle: '보조 기능: 이 종목 프롬프트 추출',
-    btnCopySingleData: '보조 기능: 이 종목 데이터 복사',
-    directMode:    '직접입력 모드',
-    btnClear:      '지우기',
-    btnRefresh:    '새로고침',
-    btnClose:      '닫기',
-    colLast:       '현재가',
-    colRelVol:     '거래강도',
-    colScore:      '점수',
-    reportGuideTitle: '이 영역 사용 순서',
-    reportGuideBody:  '1) 후보 찾기 -> 2) 자동 선택된 추천 묶음 확인 -> 3) 프롬프트 추출',
-    reportGuideAction:'주 버튼은 프롬프트 추출입니다. 데이터 패키지는 필요할 때만 보조로 확인하세요.',
-    disclaimer:    'API 키 없음. 데이터: 미국은 Yahoo/SEC, 한국은 Naver Finance 기준. 투자 조언 아님.',
-    iosHint:       'iPhone: 텍스트 영역 탭 → 전체 선택 → 복사.',
-    scanning:      '스캔 중…',
-    detailLoading: '로딩 중…',
-    noCandidate:   '조건에 맞는 종목이 없습니다. 기준을 조금 완화하거나 종목 코드를 직접 넣어보세요.',
-    noRss:         '뉴스 없음.',
-    noSec:         '없음 / 확인 불가',
-    noSelected:    '먼저 후보 보기 탭에서 종목을 체크하세요.',
-    reportEmpty:   '아직 생성된 내용이 없습니다.',
-    reportCleared: '초기화됨.',
-    copied:        '복사됨',
-    reportDone:    '데이터 생성 완료 ✓',
-    promptDone:    '프롬프트 추출 완료 ✓',
-    secQuote:  '시세',
-    secLevels: '레벨',
-    secPlan:   '규칙 기반 플랜 (투자 조언 아님)',
-    secExtras: '추가 정보',
-    secKrFlow: 'KR 수급 / 공매도',
-    secNews:   '뉴스',
-    secSec:    'SEC 공시 (최근 7일)',
-    secStructured: '구조화 데이터',
-    dlLast:       '현재가',
-    dlDayPct:     '등락',
-    dlVolume:     '거래량',
-    dlRelVol:     '상대거래량 (20일)',
-    dlReturns:    '3일 / 5일 / 20일',
-    dlHorizon:    '선택 기간 수익률',
-    dlAtr:        'ATR(14)',
-    dlBidAsk:     'Bid / Ask',
-    dlResist:     '저항 (20일 고점)',
-    dlSupport:    '지지 (20일 저점)',
-    dlDayHL:      '당일 고가 / 저가',
-    dlEntry:      '진입 (돌파 시)',
-    dlStop:       '손절가',
-    dlTarget:     '목표가',
-    dlHoldMax:    '최대 보유',
-    dlShortFloat: '공매도 비율',
-    dlShortRatio: '숏 레이쇼',
-    dlEarnings:   '실적 발표 (ET)',
-    dlOptVol:     '옵션 콜/풋 거래량',
-    dlCallPut:    '콜:풋 비율',
-    dlExpiry:     '가장 가까운 만기 (ET)',
-    dlKrFlow:     '투자자 수급',
-    dlKrShort:    '공매도',
-    dlKrPersonal: '개인',
-    dlKrForeign:  '외국인',
-    dlKrInstitution: '기관',
-    dlKrRatio:    '비중',
-    dlKrBalance:  '잔고',
-    disclaimer2:  '프로토타입. 데이터 지연/누락 가능. 투자 판단은 본인 책임.',
-    errNetwork:   '인터넷 연결을 확인하세요.',
-    errAuth:      '데이터 인증 만료. 페이지를 새로고침하세요.',
-    errRateLimit: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
-    errUpstream:  '데이터 서버 응답 없음. 잠시 후 다시 시도하세요.',
-    errUnknown:   '알 수 없는 오류',
-    krDefaults:   'KR 공격형 모멘텀 기본값으로 전환',
-    usDefaults:   'US 기본값 전환 ($80 / $20M)',
-    asof:         (kst, mkt, h, ctx, n) => `${kst} · ${mkt} · ${h}일 · ${ctx} · ${n}개 종목`,
-    loadingRep:   (n) => `데이터 패키지 생성 중 (${n}개 종목)…`,
-    reportReady:  (mkt, h, n) => `데이터 준비 완료 · ${mkt} · ${h}일 · ${n}개 종목`,
-    loadingPrompt:(n) => `프롬프트 생성 중 (${n}개 종목)…`,
-    promptReady:  (mkt, h, n) => `프롬프트 준비 완료 · ${mkt} · ${h}일 · ${n}개 종목`,
-    promptPrimary: (n) => `추천 ${n}개 프롬프트 추출`,
-    reportSecondary: (n) => `데이터 패키지 보기 (${n})`,
-    selectionSummary: (symbols, omitted) => omitted > 0
-      ? `현재 프롬프트 포함: ${symbols} · 나머지 ${omitted}개는 제외`
-      : `현재 프롬프트 포함: ${symbols}`,
-    selectionSummaryEmpty: (n) => `아직 선택된 종목이 없습니다. 다음 스캔 후 추천 ${n}개를 자동 선택합니다.`,
-    batchLimitNotice: (selected, included) => `선택 ${selected}개 중 상위 ${included}개만 포함했습니다.`,
-    horizonLbl:   (h) => h === 20 ? '20일' : '5일',
-    entryAbove:   (v) => `${v} 이상 돌파 시`,
-    holdDays:     (d) => `${d} 거래일`,
-    directScan:   (n) => `${n}개 종목 직접 분석 중…`,
-    planProfileTitle: (label) => `탐색 계획 · ${label}`,
-    planProfileMeta:  (h, l, p) => `${h} 보유 · ${l} 유동성 · ${p}`,
-  },
+﻿const $ = (id) => document.getElementById(id);
+
+const KR_DEFAULT_PRESET = {
+  marketCapMin: 1000000000000,
+  minTurnover: 30000000000,
+  todayTurnoverMin: 70000000000,
+  relVolMin: 1.3,
+  ret5dMin: 4,
+  ret5dMax: 25,
+  closePosMin: 0.6,
+  freshNewsHours: 72,
+  marketTurnoverRankMax: 60,
+  largecapMin: 2000000000000,
+  largecapQuota: 2,
+  krExcludeFundlike: true,
 };
 
-// ─── i18n helpers ───────────────────────────────────────────────
-function getLang() { return document.documentElement.lang || 'en'; }
-function setLang(lang) {
-  document.documentElement.lang = lang;
-  localStorage.setItem('ms_lang', lang);
-  applyLang();
-}
-function t(key, ...args) {
-  const lang = getLang();
-  const val = (S[lang] || S.en)[key] ?? S.en[key] ?? key;
-  return typeof val === 'function' ? val(...args) : val;
-}
-function applyLang() {
-  $('langBtn').textContent = getLang() === 'ko' ? 'EN' : '한국어';
-  $('refreshBtn').textContent = t('btnRefresh');
-  $('clearBtn').textContent = t('btnClear');
-  $('closeBtn').textContent = t('btnClose');
-  $('toastClose').textContent = t('btnClose');
-  $('copyAllBtn').setAttribute('title', t('btnCopy'));
-  $('copyAllBtn').setAttribute('aria-label', t('btnCopy'));
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const v = t(el.dataset.i18n);
-    if (typeof v === 'string') el.textContent = v;
-  });
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
-    const v = t(el.dataset.i18nPh);
-    if (typeof v === 'string') el.placeholder = v;
-  });
-  updateMarketUI(false);  // refresh labels that depend on market
-  refreshPlanSummary();
-  updateSelectedCount();
-  updateToggleButtons();
-  updateMenuLabels();
-}
-
-// ─── Theme ──────────────────────────────────────────────────────
-function getTheme() { return document.documentElement.dataset.theme; }
-function setTheme(th) {
-  document.documentElement.dataset.theme = th;
-  localStorage.setItem('ms_theme', th);
-  $('themeBtn').textContent = th === 'dark' ? '☀' : '☾';
-}
-
-// ─── Helpers ────────────────────────────────────────────────────
-const $ = (id) => document.getElementById(id);
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
-function fmt(n, d = 2) {
-  if (n == null || Number.isNaN(n)) return '—';
-  const x = Number(n); return Number.isFinite(x) ? x.toFixed(d) : '—';
-}
-function fmtInt(n) {
-  if (n == null) return '—';
-  const x = Number(n); return Number.isFinite(x) ? Math.trunc(x).toLocaleString() : '—';
-}
-function fmtPct(p) {
-  if (p == null || Number.isNaN(p)) return '—';
-  const v = Number(p); if (!Number.isFinite(v)) return '—';
-  return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
-}
-function pillPct(p) {
-  if (p == null) return `<span class="pill">— %</span>`;
-  const v = Number(p);
-  return `<span class="pill ${v >= 0 ? 'good' : 'bad'}">${v >= 0 ? '+' : ''}${fmt(v, 2)}%</span>`;
-}
-function kvRow(k, v) {
-  return `<div class="kv-row"><span class="dk">${k}</span><span class="dv">${v}</span></div>`;
-}
-
-// ─── Toast ──────────────────────────────────────────────────────
-let _toastTimer = null;
-function showToast(msg, type = 'error') {
-  const el = $('toast');
-  $('toastMsg').textContent = msg;
-  el.className = `toast ${type}`;
-  if (_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.add('hidden'), 8000);
-}
-function hideToast() {
-  $('toast').classList.add('hidden');
-  if (_toastTimer) clearTimeout(_toastTimer);
-}
-
-// ─── Error parsing ──────────────────────────────────────────────
-async function parseErr(r) {
-  if (r.status === 401) return t('errAuth');
-  if (r.status === 429) return t('errRateLimit');
-  if (r.status >= 500) {
-    let d = '';
-    try { d = (await r.json()).detail || ''; } catch { try { d = await r.text(); } catch {} }
-    return t('errUpstream') + (d ? ` (${d.slice(0, 120)})` : '');
-  }
-  try { return (await r.json()).detail || `HTTP ${r.status}`; } catch { return `HTTP ${r.status}`; }
-}
-
-// ─── Loading helpers ────────────────────────────────────────────
-function setScanLoading(on) {
-  const btn = $('scanBtn');
-  if (on) { btn.textContent = t('btnScanning'); btn.disabled = true; }
-  else    { btn.textContent = t('btnScan');     btn.disabled = false; }
-}
-function setReportLoading(btnId, on) {
-  const btn = $(btnId);
-  if (on) { btn.classList.add('loading'); }
-  else    { btn.classList.remove('loading'); }
-}
-function setStatus(text) { $('status').textContent = text; }
-
-// ─── Market/mode UI ─────────────────────────────────────────────
-function getMarket()  { return ($('market').value || 'US').toUpperCase(); }
-function getHorizon() { return Number($('horizon').value || 5) === 20 ? 20 : 5; }
-const SCREENER_PRESETS = {
-  momentum: 'day_gainers,most_actives',
-  gainers: 'day_gainers',
-  liquidity: 'most_actives',
-};
-const PROFILE_PRESETS = {
+const PROFILE_HELP = {
   surge: {
-    us: { horizon: 5, maxPrice: 80, minTurnover: 30000000, scrPreset: 'gainers' },
-    desc: {
-      ko: '오늘 강하게 붙은 종목을 먼저 봅니다. 거래대금과 당일 탄력이 같이 붙는 후보를 우선합니다.',
-      en: 'Start from names already moving hard today. Prioritize names with both price expansion and real turnover.'
-    }
+    title: "단기 급등 추적",
+    desc: "가장 강한 종목을 빠르게 확인할 때 좋습니다.",
+    pros: "장점: 오늘 가장 뜨거운 후보를 보기 쉽습니다.",
+    cons: "주의: 과열 구간이 섞일 수 있어 시장 상태를 먼저 봐야 합니다.",
   },
   continuation: {
-    us: { horizon: 5, maxPrice: 120, minTurnover: 20000000, scrPreset: 'momentum' },
-    desc: {
-      ko: '이미 거래가 붙은 흐름이 하루 더 이어질 수 있는 후보를 봅니다. 급등만 하고 식은 종목은 덜 선호합니다.',
-      en: 'Look for moves that can continue for another leg. Avoid one-candle spikes with weak follow-through.'
-    }
+    title: "거래량 동반 추세 지속",
+    desc: "이미 움직인 종목 중에서도 더 이어질 가능성이 있는 쪽을 보려는 설정입니다.",
+    pros: "장점: 급등주보다 상대적으로 덜 과열된 경우가 많습니다.",
+    cons: "주의: 초반 폭발력은 약할 수 있습니다.",
   },
   early: {
-    us: { horizon: 20, maxPrice: 80, minTurnover: 12000000, scrPreset: 'liquidity' },
-    desc: {
-      ko: '아직 과열 전이지만 거래가 조금씩 붙는 종목을 찾습니다. 대신 잡음이 많아서 직접 검증이 더 중요합니다.',
-      en: 'Search for early setups before the crowd fully arrives. Expect more noise and verify manually.'
-    }
+    title: "초기 시동 후보",
+    desc: "막 막히는 자리보다 이제 막 탄력 붙는 후보를 보고 싶을 때 씁니다.",
+    pros: "장점: 진입 단가가 늦지 않을 수 있습니다.",
+    cons: "주의: 실패 후보도 더 많이 섞입니다.",
   },
   manual: {
-    us: { horizon: null, maxPrice: null, minTurnover: null, scrPreset: null },
-    desc: {
-      ko: '추천값을 강제로 바꾸지 않습니다. 지금 보이는 숫자 그대로 탐색합니다.',
-      en: 'Do not force preset values. Use the current numbers exactly as shown.'
-    }
-  }
-};
-const LIQUIDITY_ADJUST = {
-  tight:      { us: 1.5, kr: 1.5, label: { ko: '빡세게', en: 'Tight' } },
-  balanced:   { us: 1.0, kr: 1.0, label: { ko: '균형', en: 'Balanced' } },
-  aggressive: { us: 0.65, kr: 0.7, label: { ko: '공격적으로', en: 'Aggressive' } },
+    title: "직접 조정",
+    desc: "왜 이 종목이 뜨는지 이미 감이 있을 때 세부 조건을 직접 바꾸는 모드입니다.",
+    pros: "장점: 원하는 성향대로 세밀하게 조정할 수 있습니다.",
+    cons: "주의: 기준을 많이 바꾸면 결과 해석이 어려워집니다.",
+  },
 };
 
-function getScanProfile() { return $('scanProfile')?.value || 'surge'; }
-function getLiquidityLevel() { return $('liquidityLevel')?.value || 'balanced'; }
+let lastScanPayload = null;
+let lastCandidates = [];
+let selected = new Set();
+let allChecked = false;
+let activePanel = "panelScan";
+let lastDetailPayload = null;
+let advancedOpen = false;
 
-function getScanPlan() {
-  const market = getMarket() === 'KR' ? 'kr' : 'us';
-  if (market === 'kr') {
-    return {
-      key: 'kr_attack',
-      label: getLang() === 'ko' ? 'KR 공격형 모멘텀' : 'KR Aggressive Momentum',
-      desc: getLang() === 'ko'
-        ? '중대형 유동성, 당일 거래대금, 5일 수익률, 종가 위치, 신선한 뉴스, 외국인·기관 수급을 같이 봅니다.'
-        : 'Focus on mid/large-cap liquidity, same-day turnover, 5D return, close strength, fresh news, and signed flow.',
-      liquidityKey: 'fixed',
-      liquidityLabel: getLang() === 'ko' ? '고정 기준' : 'Locked',
-      horizon: 5,
-      maxPrice: 0,
-      minTurnover: 15000000000,
-      marketCapMin: 500000000000,
-      todayTurnoverMin: 30000000000,
-      relVolMin: 1.8,
-      ret5dMin: 8,
-      ret5dMax: 30,
-      closePosMin: 0.7,
-      freshNewsHours: 48,
-      scrPreset: null,
-    };
+function esc(s) {
+  return String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function fmt(n, d = 2) {
+  const x = Number(n);
+  return Number.isFinite(x) ? x.toFixed(d) : "--";
+}
+
+function fmtInt(n) {
+  const x = Number(n);
+  return Number.isFinite(x) ? Math.trunc(x).toLocaleString() : "--";
+}
+
+function fmtPct(n) {
+  const x = Number(n);
+  return Number.isFinite(x) ? `${x >= 0 ? "+" : ""}${x.toFixed(2)}%` : "--";
+}
+
+function pillPct(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return '<span class="pill">--</span>';
+  return `<span class="pill ${x >= 0 ? "good" : "bad"}">${x >= 0 ? "+" : ""}${x.toFixed(2)}%</span>`;
+}
+
+function showToast(msg, type = "info") {
+  const toast = $("toast");
+  $("toastMsg").textContent = msg;
+  toast.className = `toast ${type}`;
+  toast.classList.remove("hidden");
+  setTimeout(() => toast.classList.add("hidden"), 4500);
+}
+
+function getMarket() {
+  return ($("market")?.value || "US").toUpperCase();
+}
+
+function getHorizon() {
+  return Number($("horizon")?.value || 5) === 20 ? 20 : 5;
+}
+
+function loadKrSettings() {
+  try {
+    return { ...KR_DEFAULT_PRESET, ...(JSON.parse(localStorage.getItem("ms_kr_advanced") || "{}") || {}) };
+  } catch {
+    return { ...KR_DEFAULT_PRESET };
   }
-  const profileKey = getScanProfile();
-  const liquidityKey = getLiquidityLevel();
-  const profile = PROFILE_PRESETS[profileKey] || PROFILE_PRESETS.surge;
-  const liq = LIQUIDITY_ADJUST[liquidityKey] || LIQUIDITY_ADJUST.balanced;
-  const base = profile[market] || {};
-  const lang = getLang();
-  const label = t(
-    profileKey === 'surge' ? 'profileSurge'
-      : profileKey === 'continuation' ? 'profileContinuation'
-      : profileKey === 'early' ? 'profileEarly'
-      : 'profileManual'
-  );
-  return {
-    key: profileKey,
-    label,
-    desc: profile.desc[lang] || profile.desc.ko,
-    liquidityKey,
-    liquidityLabel: liq.label[lang] || liq.label.ko,
-    horizon: base.horizon,
-    maxPrice: base.maxPrice,
-    minTurnover: base.minTurnover != null ? Math.round(base.minTurnover * (liq[market] || 1)) : null,
-    marketCapMin: null,
-    todayTurnoverMin: null,
-    relVolMin: null,
-    ret5dMin: null,
-    ret5dMax: null,
-    closePosMin: null,
-    freshNewsHours: null,
-    scrPreset: base.scrPreset,
+}
+
+function saveKrSettings() {
+  const cfg = {
+    marketCapMin: Number($("marketCapMin")?.value || KR_DEFAULT_PRESET.marketCapMin),
+    minTurnover: Number($("minTurnover")?.value || KR_DEFAULT_PRESET.minTurnover),
+    todayTurnoverMin: Number($("todayTurnoverMin")?.value || KR_DEFAULT_PRESET.todayTurnoverMin),
+    relVolMin: Number($("relVolMin")?.value || KR_DEFAULT_PRESET.relVolMin),
+    ret5dMin: Number($("ret5dMin")?.value || KR_DEFAULT_PRESET.ret5dMin),
+    ret5dMax: Number($("ret5dMax")?.value || KR_DEFAULT_PRESET.ret5dMax),
+    closePosMin: Number($("closePosMin")?.value || KR_DEFAULT_PRESET.closePosMin),
+    freshNewsHours: Number($("freshNewsHours")?.value || KR_DEFAULT_PRESET.freshNewsHours),
+    marketTurnoverRankMax: Number($("marketTurnoverRankMax")?.value || KR_DEFAULT_PRESET.marketTurnoverRankMax),
+    largecapMin: Number($("largecapMin")?.value || KR_DEFAULT_PRESET.largecapMin),
+    largecapQuota: Number($("largecapQuota")?.value || KR_DEFAULT_PRESET.largecapQuota),
+    krExcludeFundlike: (($("krExcludeFundlike")?.value || "true") === "true"),
   };
+  localStorage.setItem("ms_kr_advanced", JSON.stringify(cfg));
 }
 
-function applyScanProfilePreset() {
-  const plan = getScanPlan();
-  if (plan.horizon != null) $('horizon').value = String(plan.horizon);
-  if (plan.maxPrice != null) $('maxPrice').value = String(plan.maxPrice);
-  if (plan.minTurnover != null) $('minTurnover').value = String(plan.minTurnover);
-  if (plan.marketCapMin != null) $('marketCapMin').value = String(plan.marketCapMin);
-  if (plan.todayTurnoverMin != null) $('todayTurnoverMin').value = String(plan.todayTurnoverMin);
-  if (plan.relVolMin != null) $('relVolMin').value = String(plan.relVolMin);
-  if (plan.ret5dMin != null) $('ret5dMin').value = String(plan.ret5dMin);
-  if (plan.ret5dMax != null) $('ret5dMax').value = String(plan.ret5dMax);
-  if (plan.closePosMin != null) $('closePosMin').value = String(plan.closePosMin);
-  if (plan.freshNewsHours != null) $('freshNewsHours').value = String(plan.freshNewsHours);
-  if (getMarket() === 'US' && plan.scrPreset) {
-    $('scrPreset').value = plan.scrPreset;
-    updateScreenerPresetUI();
-  }
-  refreshPlanSummary();
+function applyKrPresetToInputs() {
+  const cfg = loadKrSettings();
+  if ($("marketCapMin")) $("marketCapMin").value = String(cfg.marketCapMin);
+  if ($("minTurnover")) $("minTurnover").value = String(cfg.minTurnover);
+  if ($("todayTurnoverMin")) $("todayTurnoverMin").value = String(cfg.todayTurnoverMin);
+  if ($("relVolMin")) $("relVolMin").value = String(cfg.relVolMin);
+  if ($("ret5dMin")) $("ret5dMin").value = String(cfg.ret5dMin);
+  if ($("ret5dMax")) $("ret5dMax").value = String(cfg.ret5dMax);
+  if ($("closePosMin")) $("closePosMin").value = String(cfg.closePosMin);
+  if ($("freshNewsHours")) $("freshNewsHours").value = String(cfg.freshNewsHours);
+  if ($("marketTurnoverRankMax")) $("marketTurnoverRankMax").value = String(cfg.marketTurnoverRankMax);
+  if ($("largecapMin")) $("largecapMin").value = String(cfg.largecapMin);
+  if ($("largecapQuota")) $("largecapQuota").value = String(cfg.largecapQuota);
+  if ($("krExcludeFundlike")) $("krExcludeFundlike").value = String(cfg.krExcludeFundlike);
+  if ($("activePresetBadge")) $("activePresetBadge").textContent = "Preset: KR 대형주 포함 공격형";
 }
 
-function refreshPlanSummary() {
-  const plan = getScanPlan();
-  if (getMarket() === 'KR') {
-    $('planSummary').innerHTML = `
-      <div class="plan-summary-title">${plan.label}</div>
-      <div class="plan-summary-body">${plan.desc}</div>
+function renderProfileGuide() {
+  const profile = PROFILE_HELP[$("scanProfile")?.value || "surge"] || PROFILE_HELP.surge;
+  $("profileGuide").innerHTML = `
+    <div class="guide-title">지금 선택한 프로필: ${esc(profile.title)}</div>
+    <div class="guide-text">${esc(profile.desc)}</div>
+    <div class="guide-text">${esc(profile.pros)}</div>
+    <div class="guide-text">${esc(profile.cons)}</div>
+  `;
+}
+
+function updatePlanSummary() {
+  const market = getMarket();
+  if (market === "KR") {
+    const cfg = loadKrSettings();
+    $("planSummary").innerHTML = `
+      <div class="plan-summary-title">추천 기본값: KR 대형주 포함 공격형</div>
+      <div class="plan-summary-body">특별한 이유가 없으면 그대로 스캔하세요. ETF/ETN은 기본 제외하고, 거래대금 상위권과 대형주를 우선 챙깁니다.</div>
       <div class="plan-summary-meta">
-        <span class="plan-pill">시총 하한: ${fmtInt(plan.marketCapMin)}</span>
-        <span class="plan-pill">20일 평균 거래대금: ${fmtInt(plan.minTurnover)}</span>
-        <span class="plan-pill">당일 거래대금: ${fmtInt(plan.todayTurnoverMin)}</span>
-        <span class="plan-pill">거래강도: ${plan.relVolMin}x 이상</span>
-        <span class="plan-pill">5일 수익률: ${plan.ret5dMin}% ~ ${plan.ret5dMax}%</span>
-        <span class="plan-pill">종가 위치: ${Math.round(plan.closePosMin * 100)}% 이상</span>
+        <span class="plan-pill">시총 하한 ${fmtInt(cfg.marketCapMin)}</span>
+        <span class="plan-pill">20D 평균 ${fmtInt(cfg.minTurnover)}</span>
+        <span class="plan-pill">당일 거래대금 ${fmtInt(cfg.todayTurnoverMin)}</span>
+        <span class="plan-pill">순위 상한 #${fmtInt(cfg.marketTurnoverRankMax)}</span>
       </div>
     `;
     return;
   }
-  $('planSummary').innerHTML = `
-    <div class="plan-summary-title">${t('planProfileTitle', plan.label)}</div>
-    <div class="plan-summary-body">${plan.desc}</div>
+
+  const profile = PROFILE_HELP[$("scanProfile")?.value || "surge"] || PROFILE_HELP.surge;
+  $("planSummary").innerHTML = `
+    <div class="plan-summary-title">추천 시작값: US ${esc(profile.title)}</div>
+    <div class="plan-summary-body">${esc(profile.desc)}</div>
     <div class="plan-summary-meta">
-      <span class="plan-pill">${t('planProfileMeta', t('horizonLbl', getHorizon()), plan.liquidityLabel, getMarket())}</span>
-      <span class="plan-pill">${t('lbMaxPrice')}: ${getMarket() === 'KR' ? '₩' : '$'}${fmtInt(Number($('maxPrice').value || 0))}</span>
-      <span class="plan-pill">${t('lbMinTurnover')}: ${fmtInt(Number($('minTurnover').value || 0))}</span>
+      <span class="plan-pill">최대 가격 ${fmt($("maxPrice")?.value || 0, 0)}</span>
+      <span class="plan-pill">보유 기간 ${getHorizon()}일</span>
+      <span class="plan-pill">유동성 ${esc($("liquidityLevel")?.selectedOptions?.[0]?.textContent || "균형")}</span>
     </div>
   `;
 }
 
-function getScreenerIds() {
-  if (getMarket() !== 'US') return '';
-  const preset = $('scrPreset')?.value || 'momentum';
-  if (preset === 'custom') return ($('scrIds').value || '').trim();
-  return SCREENER_PRESETS[preset] || SCREENER_PRESETS.momentum;
+function updateScreenerUi() {
+  const custom = ($("scrPreset")?.value || "momentum") === "custom";
+  $("scrCustomRow")?.classList.toggle("hidden", !custom);
 }
 
-function updateScreenerPresetUI() {
-  const isCustom = ($('scrPreset')?.value || 'momentum') === 'custom';
-  $('scrCustomRow')?.classList.toggle('hidden', !isCustom);
-}
+function updateMarketUI(notify = false) {
+  const market = getMarket();
+  $("currencyTag").textContent = market === "KR" ? "(KRW)" : "($)";
 
-function updateMarketUI(notify = true) {
-  const m = getMarket();
-  // Currency tag
-  $('currencyTag').textContent = m === 'KR' ? '(₩)' : '($)';
-  $('scanProfileField')?.classList.toggle('market-hidden', m === 'KR');
-  $('horizonField')?.classList.toggle('market-hidden', m === 'KR');
-  $('liquidityField')?.classList.toggle('market-hidden', m === 'KR');
-  $('priceField')?.classList.toggle('market-hidden', m === 'KR');
-  $('turnoverField')?.classList.toggle('market-hidden', m === 'KR');
-  $('filterFieldsRow')?.classList.toggle('market-hidden', m === 'KR');
-  $('krFixedMode')?.classList.toggle('hidden', m !== 'KR');
-  // Hide screener row for KR
-  const scrRow = $('scrRow');
-  const scrCustomRow = $('scrCustomRow');
-  if (m === 'KR') {
-    scrRow.classList.add('market-hidden');
-    scrCustomRow?.classList.add('market-hidden');
-    $('horizon').value = '5';
+  $("scanProfileField")?.classList.toggle("market-hidden", market === "KR");
+  $("horizonField")?.classList.toggle("market-hidden", market === "KR");
+  $("liquidityField")?.classList.toggle("market-hidden", market === "KR");
+  $("priceField")?.classList.toggle("market-hidden", market === "KR");
+  $("turnoverField")?.classList.toggle("market-hidden", market === "KR");
+  $("filterFieldsRow")?.classList.toggle("market-hidden", market === "KR");
+  $("krFixedMode")?.classList.toggle("hidden", market !== "KR");
+  $("scrRow")?.classList.toggle("market-hidden", market === "KR");
+  $("scrCustomRow")?.classList.toggle("market-hidden", market === "KR" || ($("scrPreset")?.value || "") !== "custom");
+
+  if (market === "KR") {
+    $("horizon").value = "5";
+    applyKrPresetToInputs();
+    $("inputResolveHint").innerHTML = `
+      <div class="guide-title">입력 팁</div>
+      <div class="guide-text">KR은 <code>삼성전자</code>, <code>한화오션</code>처럼 종목명으로 적어도 자동 해석을 시도합니다.</div>
+      <div class="guide-text">보유 종목도 종목명/코드 혼합 입력이 가능합니다.</div>
+    `;
   } else {
-    scrRow.classList.remove('market-hidden');
-    scrCustomRow?.classList.remove('market-hidden');
-    updateScreenerPresetUI();
+    $("inputResolveHint").innerHTML = `
+      <div class="guide-title">입력 팁</div>
+      <div class="guide-text">US는 <code>TSLA</code>, <code>NVDA</code>처럼 티커 입력이 가장 정확합니다.</div>
+      <div class="guide-text">직접 입력이 없으면 기본 스크리너가 자동으로 후보를 모읍니다.</div>
+    `;
   }
-  applyScanProfilePreset();
-  updateSelectionSummary();
-  updatePrimaryActionLabel();
-  if (notify) showToast(m === 'KR' ? t('krDefaults') : t('usDefaults'), 'info');
-}
 
-function updateSymbolsUI() {
-  const hasSymbols = ($('symbols').value || '').trim().length > 0;
-  const scrRow = $('scrRow');
-  const scrCustomRow = $('scrCustomRow');
-  const badge  = $('directBadge');
-  if (hasSymbols && getMarket() !== 'KR') {
-    scrRow.classList.add('dimmed');
-    scrCustomRow?.classList.add('dimmed');
-    badge.classList.remove('hidden');
-  } else {
-    scrRow.classList.remove('dimmed');
-    scrCustomRow?.classList.remove('dimmed');
-    badge.classList.add('hidden');
+  renderProfileGuide();
+  updatePlanSummary();
+  updateScreenerUi();
+
+  if (notify) {
+    showToast(market === "KR" ? "KR 기본값을 적용했습니다." : "US 기본값을 적용했습니다.", "info");
   }
 }
 
-// ─── Selected count ─────────────────────────────────────────────
-let lastCandidates = [];
-let selected = new Set();
-let advancedOpen = false;
-let activePanel = 'panelScan';
-let lastDetailPayload = null;
-
-function getDefaultSelectionLimit(market = getMarket()) {
-  return market === 'KR' ? 4 : 5;
+function switchPanel(id) {
+  activePanel = id;
+  document.querySelectorAll(".panel").forEach((node) => node.classList.toggle("active", node.id === id));
+  document.querySelectorAll(".menu-btn").forEach((node) => node.classList.toggle("active", node.dataset.panel === id));
 }
 
-function getSelectedSymbolsInScanOrder() {
-  return lastCandidates
-    .filter(item => selected.has(item.symbol))
-    .map(item => item.symbol);
+function selectedRows() {
+  return lastCandidates.filter((row) => selected.has(row.symbol));
 }
 
-function getIncludedSelection() {
-  const ordered = getSelectedSymbolsInScanOrder();
-  const limit = getDefaultSelectionLimit();
-  return {
-    ordered,
-    limit,
-    symbols: ordered.slice(0, limit),
-    omittedCount: Math.max(0, ordered.length - limit),
-  };
+function updatePromptActionHelp() {
+  const md = lastScanPayload?.market_decision;
+  const rows = selectedRows();
+  const approvedCnt = rows.filter((row) => row.entry_status === "APPROVED_NEW").length;
+  const watchCnt = rows.length - approvedCnt;
+  const held = ($("heldSymbols")?.value || "").trim();
+
+  if (!md) {
+    $("promptActionHelp").textContent = "스캔 후 어떤 프롬프트를 복사할지 안내합니다.";
+    return;
+  }
+
+  if (!rows.length) {
+    if (md.new_entries_allowed === false) {
+      $("promptActionHelp").textContent = "오늘은 자동 선택이 꺼져 있습니다. 관찰할 종목을 직접 체크하면 관찰/보유 판단용 프롬프트를 만들 수 있습니다.";
+    } else {
+      $("promptActionHelp").textContent = "체크된 종목을 기준으로 AI 판단용 프롬프트를 복사합니다.";
+    }
+    return;
+  }
+
+  const bits = [];
+  if (approvedCnt) bits.push(`신규 진입 후보 ${approvedCnt}개`);
+  if (watchCnt) bits.push(`관찰 후보 ${watchCnt}개`);
+  if (held) bits.push("보유 종목 리뷰 포함");
+  $("promptActionHelp").textContent = `${bits.join(" + ")} 기준으로 AI에 바로 붙여넣을 프롬프트를 만듭니다.`;
 }
 
-function buildSelectedMeta(symbols) {
-  const scanMeta = new Map(lastCandidates.map((item, idx) => [
-    item.symbol,
-    {
-      scan_rank: idx + 1,
-      scan_score: item.score,
-    },
-  ]));
-  return symbols.map((symbol, idx) => ({
-    symbol,
-    selected_order: idx + 1,
-    ...(scanMeta.get(symbol) || {}),
-  }));
+function updateSelectionGuide() {
+  const md = lastScanPayload?.market_decision;
+  const approved = lastCandidates.filter((row) => row.entry_status === "APPROVED_NEW");
+  const watch = lastCandidates.filter((row) => row.entry_status !== "APPROVED_NEW");
+
+  if (!md) {
+    $("selectionGuideText").textContent = "스캔 후 자동 선택과 다음 행동을 여기서 안내합니다.";
+    return;
+  }
+
+  if (md.new_entries_allowed === false) {
+    $("selectionGuideText").textContent = watch.length
+      ? "오늘은 신규 진입 자동 선택이 막혀 있습니다. 관찰할 종목을 직접 체크해서 프롬프트를 복사하세요."
+      : "오늘은 신규 진입도 관찰 후보도 많지 않습니다. 현금 대기 또는 보유 종목 리뷰를 우선 보세요.";
+    return;
+  }
+
+  if (approved.length) {
+    $("selectionGuideText").textContent = "신규 진입 승인 후보가 우선 자동 체크됩니다. 필요하면 체크를 바꿔도 됩니다.";
+    return;
+  }
+
+  $("selectionGuideText").textContent = "승인 후보가 없어서 자동 추천은 비어 있습니다. 관찰 후보를 직접 선택해 보세요.";
 }
 
-function syncSelectionUi() {
-  document.querySelectorAll('.pick').forEach(cb => {
+function updateSelectionUi() {
+  document.querySelectorAll(".pick").forEach((cb) => {
     cb.checked = selected.has(cb.dataset.sym);
   });
+
   allChecked = !!lastCandidates.length && selected.size === lastCandidates.length;
-  $('checkAllBtn').textContent = allChecked ? t('btnUncheckAll') : t('btnCheckAll');
+  $("checkAllBtn").textContent = allChecked ? "전체 해제" : "전체 체크";
+
+  const cnt = selected.size;
+  $("selCount").textContent = `(${cnt})`;
+  $("selCount").classList.toggle("hidden", cnt === 0);
+  $("reportSelectionSummary").textContent = cnt > 0
+    ? `현재 선택: ${Array.from(selected).join(", ")}`
+    : "현재 선택: 없음";
+
+  $("reportSelBtn").disabled = cnt === 0;
+  $("promptSelBtn").disabled = cnt === 0;
+
+  const md = lastScanPayload?.market_decision;
+  if (md?.new_entries_allowed === false) {
+    $("promptSelBtn").textContent = "관찰/보유 판단 프롬프트 복사";
+  } else {
+    const approvedCnt = selectedRows().filter((row) => row.entry_status === "APPROVED_NEW").length;
+    $("promptSelBtn").textContent = approvedCnt > 0
+      ? "신규 진입 판단 프롬프트 복사"
+      : "관찰 후보 프롬프트 복사";
+  }
+
+  updatePromptActionHelp();
+  updateSelectionGuide();
 }
 
-function updateSelectionSummary() {
-  const el = $('reportSelectionSummary');
-  if (!el) return;
-  const { symbols, omittedCount, limit } = getIncludedSelection();
-  el.textContent = symbols.length
-    ? t('selectionSummary', symbols.join(', '), omittedCount)
-    : t('selectionSummaryEmpty', limit);
+function autoSelectCandidates() {
+  selected = new Set();
+  const md = lastScanPayload?.market_decision;
+  if (md?.new_entries_allowed === false) {
+    updateSelectionUi();
+    return;
+  }
+
+  const auto = lastScanPayload?.auto_selected_symbols || [];
+  if (auto.length) {
+    selected = new Set(auto);
+  } else {
+    const approved = lastCandidates
+      .filter((row) => row.entry_status === "APPROVED_NEW")
+      .slice(0, getMarket() === "KR" ? 4 : 5)
+      .map((row) => row.symbol);
+    selected = new Set(approved);
+  }
+
+  updateSelectionUi();
 }
 
-function updatePrimaryActionLabel() {
-  const includedCount = getIncludedSelection().symbols.length || getDefaultSelectionLimit();
-  $('promptSelBtn').textContent = t('promptPrimary', includedCount);
-  $('reportSelBtn').querySelector('[data-i18n="btnReportSel"]').textContent = t('reportSecondary', includedCount);
+function decisionHeadline(md) {
+  if (!md) return "스캔 후 시장 판단이 표시됩니다.";
+  if (md.recommended_action === "CASH") return "오늘은 신규 진입보다 현금 대기가 우선입니다.";
+  if (md.recommended_action === "WATCHLIST_ONLY") return "오늘은 관찰 위주로 보고, 신규 진입은 보수적으로 보세요.";
+  return "오늘은 신규 진입 승인 후보를 검토할 수 있는 날입니다.";
 }
 
-function updateMenuLabels() {
-  ['menuScan', 'menuList'].forEach(id => {
-    const el = $(id);
-    if (!el) return;
-    const key = el.dataset.i18n;
-    if (key) el.textContent = t(key);
+function renderDecisionBanner() {
+  const box = $("marketDecisionBanner");
+  const md = lastScanPayload?.market_decision;
+
+  if (!md) {
+    box.innerHTML = '<div class="guide-title">시장 판단</div><div class="guide-text">스캔 후 자동으로 채워집니다.</div>';
+    return;
+  }
+
+  const reasons = (md.reason || []).map((reason) => `<span class="item-tag bad">${esc(reason)}</span>`).join("");
+  const snap = md.macro_snapshot || {};
+  const snapHtml = Object.keys(snap).map((key) => `<span class="meta-chip">${esc(key)} ${fmtPct(snap[key])}</span>`).join("");
+
+  box.innerHTML = `
+    <div class="guide-title">시장 판단: ${esc(md.regime)} / ${esc(md.recommended_action)}</div>
+    <div class="guide-text">${decisionHeadline(md)}</div>
+    <div class="guide-text">${md.new_entries_allowed ? "신규 진입 허용" : "신규 진입 자동 선택 중지"}</div>
+    <div class="item-tags">${reasons || '<span class="item-tag bad">사유 없음</span>'}</div>
+    <div class="item-meta">${snapHtml}</div>
+  `;
+}
+
+function statusBadge(row) {
+  if (row.entry_status === "APPROVED_NEW") return { text: "신규 진입 가능", cls: "good" };
+  if (row.entry_status === "AVOID") return { text: "비추천", cls: "bad" };
+  return { text: "관찰만", cls: "bad" };
+}
+
+function renderCard(row, idx, groupLabel) {
+  const badge = statusBadge(row);
+  const rank = row.extras?.market_turnover_rank;
+  const tags = row.extras?.bucket_tags || [];
+  const rankChip = rank != null ? `<span class="meta-chip">거래대금 순위 #${rank}</span>` : "";
+  const bucketChip = tags.length ? `<span class="meta-chip">${esc(tags.slice(0, 3).join(" / "))}</span>` : "";
+
+  return `
+    <div class="item" data-sym="${row.symbol}">
+      <div class="chk"><input type="checkbox" class="pick" data-sym="${row.symbol}" aria-label="${row.symbol}" /></div>
+      <div class="left">
+        <div class="sym">
+          <span class="meta-inline">${esc(groupLabel)} #${idx + 1}</span>
+          <span>${esc(getMarket() === "KR" ? (row.name || row.symbol) : row.symbol)}</span>
+          ${pillPct(row.day_chg_pct)}
+          <span class="item-tag ${badge.cls}">${badge.text}</span>
+        </div>
+        <div class="name">${esc(getMarket() === "KR" ? `${row.symbol} · ${row.currency || ""}` : (row.name || row.symbol))}</div>
+        <div class="item-meta">
+          <span class="meta-chip">거래대금 ${fmtInt(row.day_turnover)}</span>
+          <span class="meta-chip">시총 ${fmtInt(row.market_cap)}</span>
+          ${rankChip}
+          ${bucketChip}
+        </div>
+        <div class="item-tags">
+          ${(row.entry_reason || []).slice(0, 4).map((reason) => `<span class="item-tag ${badge.cls}">${esc(reason)}</span>`).join("")}
+        </div>
+      </div>
+      <div class="cols">
+        <div class="kv"><div class="k">현재가</div><div class="v">${fmt(row.last, 2)}</div></div>
+        <div class="kv"><div class="k">상대거래량</div><div class="v">${row.rel_vol_20d ? `${fmt(row.rel_vol_20d, 2)}x` : "--"}</div></div>
+        <div class="kv"><div class="k">${getHorizon()}D 수익률</div><div class="v">${fmt(row.ret_horizon_pct, 2)}%</div></div>
+        <div class="kv"><div class="k">점수</div><div class="v">${fmt(row.score, 1)}</div></div>
+      </div>
+    </div>
+  `;
+}
+
+function attachListHandlers() {
+  document.querySelectorAll(".item").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      if (event.target.closest("input, button, a, .chk")) return;
+      openDetail(node.dataset.sym);
+    });
+  });
+
+  document.querySelectorAll(".pick").forEach((cb) => {
+    cb.addEventListener("click", (event) => event.stopPropagation());
+    cb.addEventListener("change", (event) => {
+      const sym = event.target.dataset.sym;
+      if (event.target.checked) selected.add(sym);
+      else selected.delete(sym);
+      updateSelectionUi();
+    });
   });
 }
 
-function switchPanel(panelId) {
-  const target = document.getElementById(panelId) ? panelId : 'panelScan';
-  activePanel = target;
-  document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === target));
-  document.querySelectorAll('.menu-btn').forEach(el => el.classList.toggle('active', el.dataset.panel === target));
-}
-
-function updateToggleButtons() {
-  $('toggleAdvancedBtn').textContent = t(advancedOpen ? 'btnAdvancedHide' : 'btnAdvancedShow');
-}
-
-function toggleAdvanced() {
-  advancedOpen = !advancedOpen;
-  $('advancedFiltersRow').classList.toggle('hidden', !advancedOpen);
-  updateToggleButtons();
-}
-
-function updateSelectedCount() {
-  const cnt = selected.size;
-  const el = $('selCount');
-  if (cnt > 0) { el.textContent = `(${cnt})`; el.classList.remove('hidden'); }
-  else         { el.classList.add('hidden'); }
-  syncSelectionUi();
-  updateSelectionSummary();
-  updatePrimaryActionLabel();
-  updateReportActionState();
-}
-
-function updateReportActionState() {
-  const hasSelection = selected.size > 0;
-  const hasReport = (($('reportBox')?.value || '').trim().length > 0);
-  $('reportSelBtn').disabled = !hasSelection;
-  $('promptSelBtn').disabled = !hasSelection;
-  $('copyAllBtn').disabled = !hasReport;
-}
-
-function getScanContext() {
-  const plan = getScanPlan();
-  return {
-    scan_profile: plan.key,
-    scan_label: plan.label,
-    scan_note: plan.desc,
-    scan_thresholds: JSON.stringify({
-      max_price: plan.maxPrice,
-      min_avg_turnover: plan.minTurnover,
-      market_cap_min: plan.marketCapMin,
-      today_turnover_min: plan.todayTurnoverMin,
-      rel_volume_min: plan.relVolMin,
-      ret_5d_min: plan.ret5dMin,
-      ret_5d_max: plan.ret5dMax,
-      close_position_min: plan.closePosMin,
-      fresh_news_hours: plan.freshNewsHours,
-    }),
-  };
-}
-
-function validateCandidatesContract(payload, market) {
-  if (!payload || payload.schema_version !== 'candidates.v2') {
-    throw new Error('스캔 응답 스키마가 맞지 않습니다. 서버를 최신 코드로 맞춰주세요.');
+function renderList() {
+  const items = lastCandidates || [];
+  if (!items.length) {
+    $("listHeader").style.display = "none";
+    $("list").innerHTML = '<div class="empty-state">후보가 없습니다. 조건을 조금 완화하거나 직접 확인할 종목을 넣어보세요.</div>';
+    updateSelectionGuide();
+    return;
   }
-  const req = ['symbol', 'name', 'last', 'score', 'scan_reason', 'rejection_flags'];
-  const first = (payload.candidates || [])[0];
-  if (!first) return;
-  for (const k of req) {
-    if (!(k in first)) throw new Error(`스캔 응답 필드 누락: ${k}`);
-  }
-  if (market === 'KR') {
-    if (!('day_turnover' in first) || !('market_cap' in first)) {
-      throw new Error('KR 스캔 필드 누락: day_turnover/market_cap');
-    }
-  }
+
+  $("listHeader").style.display = "flex";
+  const approved = items.filter((row) => row.entry_status === "APPROVED_NEW");
+  const watch = items.filter((row) => row.entry_status !== "APPROVED_NEW");
+
+  $("list").innerHTML = `
+    <div class="sec-hdr">신규 진입 승인 후보</div>
+    ${approved.length ? approved.map((row, idx) => renderCard(row, idx, "APPROVED")).join("") : '<div class="empty-state">오늘은 신규 진입 없음</div>'}
+    <div class="sec-hdr">관찰 / 비추천</div>
+    ${watch.length ? watch.map((row, idx) => renderCard(row, idx, "WATCH")).join("") : '<div class="empty-state">관찰 대상 없음</div>'}
+  `;
+
+  attachListHandlers();
+  updateSelectionGuide();
 }
 
-function autoSelectTopCandidates() {
-  const limit = getDefaultSelectionLimit();
-  selected = new Set(lastCandidates.slice(0, limit).map(item => item.symbol));
-  updateSelectedCount();
+function parseErrText(resp) {
+  return resp.text().then((text) => text || `HTTP ${resp.status}`).catch(() => `HTTP ${resp.status}`);
 }
 
-// ─── Health ─────────────────────────────────────────────────────
-async function health() {
-  try {
-    const r = await fetch('/api/health');
-    if (!r.ok) return;
-    const j = await r.json();
-    $('asof').textContent = `${j.now_kst} · ${j.session_us}`;
-  } catch {}
-}
-
-// ─── Scan ───────────────────────────────────────────────────────
 async function scan() {
-  setScanLoading(true);
-  $('list').innerHTML = '<div class="spinner"></div>';
-  $('listHeader').style.display = 'none';
-  setStatus('');
+  $("scanBtn").disabled = true;
+  $("list").innerHTML = '<div class="spinner"></div>';
+  $("status").textContent = "시장/후보를 읽는 중입니다...";
 
-  const market    = getMarket();
-  const horizon   = getHorizon();
-  const plan      = getScanPlan();
-  const maxPrice  = Number($('maxPrice').value || 0);
-  const minTurn   = Number($('minTurnover').value || 0);
-  const scrIds    = getScreenerIds();
-  const symbols   = ($('symbols').value || '').trim();
-
-  // Direct mode feedback
-  if (symbols) {
-    const n = symbols.split(',').filter(s => s.trim()).length;
-    setStatus(t('directScan', n));
-  }
+  const market = getMarket();
+  const horizon = getHorizon();
+  const symbols = ($("symbols")?.value || "").trim();
+  const heldSymbols = ($("heldSymbols")?.value || "").trim();
 
   const params = new URLSearchParams({
     market,
-    horizon_days:      String(horizon),
-    max_price:         String(market === 'KR' ? 0 : maxPrice),
-    min_avg_turnover:  String(market === 'KR' ? Number($('minTurnover').value || plan.minTurnover || 0) : minTurn),
-    size_per_screener: '25',
-    top_n:             '10',
+    horizon_days: String(horizon),
+    top_n: "10",
+    size_per_screener: "25",
+    max_price: String(market === "KR" ? 0 : Number($("maxPrice")?.value || 0)),
+    min_avg_turnover: String(Number($("minTurnover")?.value || 0)),
   });
-  if (symbols) params.set('direct_mode', 'true');
-  if (market === 'KR') {
-    params.set('market_cap_min', String(Number($('marketCapMin').value || plan.marketCapMin || 0)));
-    params.set('today_turnover_min', String(Number($('todayTurnoverMin').value || plan.todayTurnoverMin || 0)));
-    params.set('rel_volume_min', String(Number($('relVolMin').value || plan.relVolMin || 0)));
-    params.set('ret_5d_min', String(Number($('ret5dMin').value || plan.ret5dMin || 0)));
-    params.set('ret_5d_max', String(Number($('ret5dMax').value || plan.ret5dMax || 0)));
-    params.set('close_position_min', String(Number($('closePosMin').value || plan.closePosMin || 0)));
-    params.set('fresh_news_hours', String(Number($('freshNewsHours').value || plan.freshNewsHours || 0)));
+
+  if (market === "KR") {
+    saveKrSettings();
+    params.set("market_cap_min", String(Number($("marketCapMin")?.value || KR_DEFAULT_PRESET.marketCapMin)));
+    params.set("today_turnover_min", String(Number($("todayTurnoverMin")?.value || KR_DEFAULT_PRESET.todayTurnoverMin)));
+    params.set("rel_volume_min", String(Number($("relVolMin")?.value || KR_DEFAULT_PRESET.relVolMin)));
+    params.set("ret_5d_min", String(Number($("ret5dMin")?.value || KR_DEFAULT_PRESET.ret5dMin)));
+    params.set("ret_5d_max", String(Number($("ret5dMax")?.value || KR_DEFAULT_PRESET.ret5dMax)));
+    params.set("close_position_min", String(Number($("closePosMin")?.value || KR_DEFAULT_PRESET.closePosMin)));
+    params.set("fresh_news_hours", String(Number($("freshNewsHours")?.value || KR_DEFAULT_PRESET.freshNewsHours)));
+    params.set("market_turnover_rank_max", String(Number($("marketTurnoverRankMax")?.value || KR_DEFAULT_PRESET.marketTurnoverRankMax)));
+    params.set("largecap_min", String(Number($("largecapMin")?.value || KR_DEFAULT_PRESET.largecapMin)));
+    params.set("largecap_quota", String(Number($("largecapQuota")?.value || KR_DEFAULT_PRESET.largecapQuota)));
+    params.set("kr_exclude_fundlike", (($("krExcludeFundlike")?.value || "true") === "true") ? "true" : "false");
   }
-  if (scrIds)  params.set('scr_ids', scrIds);
-  if (symbols) params.set('symbols', symbols);
+
+  if (symbols) {
+    params.set("symbols", symbols);
+    params.set("direct_mode", "true");
+  }
+  if (heldSymbols) params.set("held_symbols", heldSymbols);
 
   try {
-    const r = await fetch(`/api/candidates?${params}`);
-    if (!r.ok) {
-      const msg = await parseErr(r);
-      setStatus(''); $('list').innerHTML = `<div class="err-state">${msg}</div>`;
-      showToast(msg);
-      return;
-    }
-    const j = await r.json();
-    validateCandidatesContract(j, market);
-    lastCandidates = j.candidates || [];
-    selected = new Set();
+    const resp = await fetch(`/api/candidates?${params}`);
+    if (!resp.ok) throw new Error(await parseErrText(resp));
 
-    const ctx = j.context || {};
-    const ctxStr = market === 'US'
-      ? `SPY ${fmtPct(ctx.SPY_day_chg_pct)} · QQQ ${fmtPct(ctx.QQQ_day_chg_pct)}`
-      : `KOSPI ${fmtPct(ctx.KOSPI_day_chg_pct)} · KOSDAQ ${fmtPct(ctx.KOSDAQ_day_chg_pct)}`;
-    setStatus(t('asof', j.asof_kst || j.asof_et, market, j.horizon_days, ctxStr, lastCandidates.length));
-    renderList(lastCandidates, j.horizon_days);
-    autoSelectTopCandidates();
-    switchPanel('panelList');
+    const data = await resp.json();
+    if (!data.market_decision) throw new Error("market_decision missing");
 
-  } catch (e) {
-    const msg = e.name === 'TypeError' ? t('errNetwork') : `${t('errUnknown')}: ${e.message}`;
-    setStatus(''); $('list').innerHTML = `<div class="err-state">${msg}</div>`;
-    showToast(msg);
+    lastScanPayload = data;
+    lastCandidates = data.candidates || [];
+
+    renderDecisionBanner();
+    renderList();
+    autoSelectCandidates();
+
+    const ctx = data.context || {};
+    const ctxText = market === "KR"
+      ? `KOSPI ${fmtPct(ctx.KOSPI_day_chg_pct)} · KOSDAQ ${fmtPct(ctx.KOSDAQ_day_chg_pct)} · USD/KRW ${fmtPct(ctx.USDKRW_day_chg_pct)}`
+      : `SPY ${fmtPct(ctx.SPY_day_chg_pct)} · QQQ ${fmtPct(ctx.QQQ_day_chg_pct)} · VIX ${fmtPct(ctx.VIX_day_chg_pct)}`;
+
+    $("status").textContent = `${data.asof_kst || data.asof_et} · ${market} · ${ctxText} · 후보 ${lastCandidates.length}개`;
+    switchPanel("panelList");
+  } catch (err) {
+    $("list").innerHTML = `<div class="err-state">${esc(err.message || String(err))}</div>`;
+    $("status").textContent = "스캔에 실패했습니다.";
+    showToast(String(err.message || err), "error");
   } finally {
-    setScanLoading(false);
+    $("scanBtn").disabled = false;
   }
 }
 
-// ─── Render candidates ──────────────────────────────────────────
-function renderList(items, horizonDays) {
-  if (!items.length) {
-    $('list').innerHTML = `<div class="card"><div class="empty-state">${t('noCandidate')}</div></div>`;
-    $('listHeader').style.display = 'none';
-    return;
-  }
-  $('listHeader').style.display = 'flex';
-  const hl = t('horizonLbl', horizonDays);
-  const market = getMarket();
-  $('list').innerHTML = items.map((x, i) => `
-    <div class="item" data-sym="${x.symbol}">
-      <div class="chk"><input type="checkbox" class="pick" data-sym="${x.symbol}" aria-label="${x.symbol}"/></div>
-      <div class="left">
-        <div class="sym">
-          <span style="font-size:11px;color:var(--muted)">#${i + 1}</span>
-          ${market === 'KR' ? (x.name || x.symbol) : x.symbol} ${pillPct(x.day_chg_pct)}
-        </div>
-        <div class="name">
-          ${market === 'KR'
-            ? `${x.symbol}${x.currency ? ` · ${x.currency}` : ''}`
-            : `${(x.name || '').slice(0, 42)}${x.currency ? ` · ${x.currency}` : ''}`
-          }
-        </div>
-        ${market === 'KR' ? `
-          <div class="item-meta">
-            <span class="meta-chip">당일 ${fmtInt(x.day_turnover)}</span>
-            <span class="meta-chip">20일 평균 ${fmtInt(x.avg_turnover_20d)}</span>
-            <span class="meta-chip">외국인 1D ${fmtInt(x.extras?.foreign_1d)}</span>
-            <span class="meta-chip">기관 1D ${fmtInt(x.extras?.institution_1d)}</span>
-            <span class="meta-chip">외국인 5D ${fmtInt(x.extras?.foreign_5d)}</span>
-            <span class="meta-chip">기관 5D ${fmtInt(x.extras?.institution_5d)}</span>
-            <span class="meta-chip">뉴스 ${x.extras?.news_asof || '확인 불가'}</span>
-            <span class="meta-chip">${x.extras?.breakout_20d ? '20D 돌파' : '20D 미돌파'}</span>
-            <span class="meta-chip">종가 위치 ${x.extras?.close_position != null ? `${Math.round(Number(x.extras.close_position) * 100)}%` : '확인 불가'}</span>
-          </div>
-          <div class="item-tags">
-            ${(x.scan_reason || []).slice(0, 3).map(tag => `<span class="item-tag good">${tag}</span>`).join('')}
-            ${(x.rejection_flags || []).slice(0, 3).map(tag => `<span class="item-tag bad">${tag}</span>`).join('')}
-          </div>
-        ` : `
-          <div class="item-meta">
-            <span class="meta-chip">Day $Vol ${fmtInt(x.day_turnover)}</span>
-            <span class="meta-chip">20D Avg $Vol ${fmtInt(x.avg_turnover_20d)}</span>
-            <span class="meta-chip">MCap ${fmtInt(x.market_cap)}</span>
-            <span class="meta-chip">${x.extras?.us_quote_type || 'EQUITY'}</span>
-          </div>
-          <div class="item-tags">
-            ${(x.extras?.us_filter_flags || []).slice(0, 3).map(tag => `<span class="item-tag bad">${esc(tag)}</span>`).join('')}
-          </div>
-        `}
-      </div>
-      <div class="cols">
-        <div class="kv"><div class="k">${t('colLast')}</div><div class="v">${fmt(x.last, 2)}</div></div>
-        <div class="kv"><div class="k">${t('colRelVol')}</div><div class="v">${x.rel_vol_20d ? `${fmt(x.rel_vol_20d, 2)}×` : '—'}</div></div>
-        <div class="kv"><div class="k">${hl}</div><div class="v">${fmt(x.ret_horizon_pct, 2)}%</div></div>
-        <div class="kv"><div class="k">${t('colScore')}</div><div class="v">${fmt(x.score, 1)}</div></div>
-      </div>
-    </div>`).join('');
-
-  document.querySelectorAll('.item').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('input, button, a, .chk')) return;
-      openDetail(el.dataset.sym);
-    });
-  });
-  document.querySelectorAll('.chk').forEach(box => {
-    box.addEventListener('click', e => e.stopPropagation());
-    box.addEventListener('mousedown', e => e.stopPropagation());
-  });
-  document.querySelectorAll('.pick').forEach(cb => {
-    cb.addEventListener('click', e => e.stopPropagation());
-    cb.addEventListener('mousedown', e => e.stopPropagation());
-    cb.addEventListener('change', e => {
-      e.target.checked ? selected.add(e.target.dataset.sym) : selected.delete(e.target.dataset.sym);
-      updateSelectedCount();
-    });
-  });
-}
-
-// ─── Check all / uncheck all ────────────────────────────────────
-let allChecked = false;
-function toggleCheckAll() {
-  allChecked = !allChecked;
-  document.querySelectorAll('.pick').forEach(cb => {
-    cb.checked = allChecked;
-    allChecked ? selected.add(cb.dataset.sym) : selected.delete(cb.dataset.sym);
-  });
-  $('checkAllBtn').textContent = allChecked ? t('btnUncheckAll') : t('btnCheckAll');
-  updateSelectedCount();
-}
-
-// ─── Detail modal ───────────────────────────────────────────────
 async function openDetail(sym) {
-  const market = getMarket(), horizon = getHorizon();
-  $('modal').classList.remove('hidden');
-  $('mSymbol').textContent = sym;
-  $('mName').textContent = '';
-  $('detail').innerHTML = '<div class="spinner"></div>';
+  $("modal").classList.remove("hidden");
+  $("mSymbol").textContent = sym;
+  $("mName").textContent = "";
+  $("detail").innerHTML = '<div class="spinner"></div>';
   lastDetailPayload = null;
 
   try {
-    const r = await fetch(`/api/ticker/${encodeURIComponent(sym)}?market=${market}&horizon_days=${horizon}`);
-    if (!r.ok) {
-      const msg = await parseErr(r);
-      $('detail').innerHTML = `<div class="err-state">${msg}</div>`;
-      showToast(msg);
-      return;
-    }
-    const j    = await r.json();
-    const q    = j.quote   || {};
-    const s    = j.stats   || {};
-    const lv   = j.levels  || {};
-    const plan = j.trade_plan_like || {};
-    const news = j.news    || [];
-    const sec  = j.sec_filings_last_7d || [];
-    const ex   = j.extras  || {};
-    const qs   = ex.quote_summary || {};
-    const opt  = ex.options       || {};
-    const krFlow = ex.kr_flow || {};
-    const krShort = ex.kr_short || {};
-    lastDetailPayload = j;
+    const market = getMarket();
+    const horizon = getHorizon();
+    const resp = await fetch(`/api/ticker/${encodeURIComponent(sym)}?market=${market}&horizon_days=${horizon}`);
+    if (!resp.ok) throw new Error(await parseErrText(resp));
 
-    $('mName').textContent = j.name || '';
+    const data = await resp.json();
+    lastDetailPayload = data;
+    $("mName").textContent = data.name || "";
 
-    let spread = '—';
-    if (q.bid && q.ask && q.bid > 0) {
-      const pct = (q.ask / q.bid - 1) * 100;
-      spread = `${fmt(q.bid, 2)} / ${fmt(q.ask, 2)} <span style="color:var(--muted)">(${fmt(pct, 3)}%)</span>`;
-    }
+    const quote = data.quote || {};
+    const stats = data.stats || {};
+    const levels = data.levels || {};
+    const plan = data.trade_plan_like || {};
+    const extras = data.extras || {};
+    const times = extras.timestamps || {};
+    const picked = (lastCandidates || []).find((row) => row.symbol === sym) || {};
+    const md = lastScanPayload?.market_decision || {};
+    const badge = statusBadge(picked);
 
-    const newsHtml = news.length
-      ? news.map(n => `
-        <div class="news-item">
-          <div class="news-title">${n.title || '—'}</div>
-          <div class="news-meta">${n.published || '—'} · <a href="${n.link || '#'}" target="_blank" rel="noreferrer">→</a></div>
-        </div>`).join('')
-      : `<div style="color:var(--muted);font-size:13px">${t('noRss')}</div>`;
+    const reasons = (picked.scan_reason || []).map((reason) => `<span class="item-tag good">${esc(reason)}</span>`).join("") || '<span class="item-tag">없음</span>';
+    const rejects = (picked.rejection_flags || []).map((reason) => `<span class="item-tag bad">${esc(reason)}</span>`).join("") || '<span class="item-tag">없음</span>';
 
-    const secHtml = sec.length
-      ? sec.slice(0, 6).map(x => `
-        <div class="sec-row"><code>${x.form || '—'}</code><span style="color:var(--muted)">${x.filingDate || '—'}</span></div>`).join('')
-      : `<div style="color:var(--muted);font-size:13px">${t('noSec')}</div>`;
+    $("detail").innerHTML = `
+      <div class="sec-hdr">1) 현재 판정</div>
+      <div class="item-tags"><span class="item-tag ${badge.cls}">${badge.text}</span></div>
 
-    // Extras
-    const hasShort = qs.short_percent_of_float != null || qs.short_ratio != null;
-    const hasOpt   = opt.call_volume || opt.put_volume;
-    const hasE     = qs.earnings_dates?.length;
-    let extrasHtml = '';
-    if (hasShort || hasOpt || hasE) {
-      extrasHtml = `<div class="sec-hdr">${t('secExtras')}</div>`;
-      if (hasShort) {
-        extrasHtml += kvRow(t('dlShortFloat'), fmt(qs.short_percent_of_float, 4));
-        extrasHtml += kvRow(t('dlShortRatio'), fmt(qs.short_ratio, 2));
-      }
-      if (hasE) extrasHtml += `<div style="font-size:12px;color:var(--muted);margin:6px 0">${t('dlEarnings')}: ${qs.earnings_dates.slice(0, 2).join(', ')}</div>`;
-      if (hasOpt) {
-        extrasHtml += kvRow(t('dlOptVol'), `${fmtInt(opt.call_volume)} / ${fmtInt(opt.put_volume)}`);
-        extrasHtml += kvRow(t('dlCallPut'), opt.call_put_vol_ratio ? fmt(opt.call_put_vol_ratio, 2) : '—');
-        if (opt.expiration) extrasHtml += `<div style="font-size:12px;color:var(--muted);margin:6px 0">${t('dlExpiry')}: ${opt.expiration}</div>`;
-      }
-    }
-
-    let krFlowHtml = '';
-    const flow1d = krFlow.lookbacks?.['1d'] || {};
-    const flow5d = krFlow.lookbacks?.['5d'] || {};
-    const flow20d = krFlow.lookbacks?.['20d'] || {};
-    const short1d = krShort.lookbacks?.['1d'] || {};
-    const short5d = krShort.lookbacks?.['5d'] || {};
-    const short20d = krShort.lookbacks?.['20d'] || {};
-    const shortLatest = krShort.latest || {};
-    const shortBalance = krShort.latest_balance || {};
-    if (j.market === 'KR' && (Object.keys(krFlow).length || Object.keys(krShort).length)) {
-      krFlowHtml = `<div class="sec-hdr">${t('secKrFlow')}</div>`;
-      if (Object.keys(krFlow).length) {
-        krFlowHtml += kvRow(
-          `${t('dlKrFlow')} · ${t('dlKrForeign')}`,
-          `1D ${fmtInt(flow1d.foreign_net_volume)} / 5D ${fmtInt(flow5d.foreign_net_volume)} / 20D ${fmtInt(flow20d.foreign_net_volume)}`
-        );
-        krFlowHtml += kvRow(
-          `${t('dlKrFlow')} · ${t('dlKrInstitution')}`,
-          `1D ${fmtInt(flow1d.institution_net_volume)} / 5D ${fmtInt(flow5d.institution_net_volume)} / 20D ${fmtInt(flow20d.institution_net_volume)}`
-        );
-        krFlowHtml += kvRow(`${t('dlKrFlow')} · ${t('dlKrPersonal')}`, '확인 불가');
-      }
-      if (Object.keys(krShort).length) {
-        krFlowHtml += kvRow(
-          t('dlKrShort'),
-          `1D ${fmtInt(short1d.short_volume)} / 5D ${fmtInt(short5d.short_volume)} / 20D ${fmtInt(short20d.short_volume)}`
-        );
-        krFlowHtml += kvRow(
-          `${t('dlKrShort')} ${t('dlKrRatio')}`,
-          `${fmt(shortLatest.short_volume_ratio_pct, 4)}% / ${fmt(shortLatest.short_value_ratio_pct, 4)}%`
-        );
-        krFlowHtml += kvRow(
-          `${t('dlKrShort')} ${t('dlKrBalance')}`,
-          `${fmtInt(shortBalance.net_short_balance_qty)} / ${fmtInt(shortBalance.net_short_balance_value)}${shortBalance.date ? ` (${shortBalance.date})` : ''}`
-        );
-      }
-    }
-
-    const structuredData = {
-      meta: {
-        asof_et: j.asof_et,
-        asof_kst: j.asof_kst,
-        market: j.market,
-        session: j.session,
-        horizon_days: j.horizon_days,
-        symbol: j.symbol,
-        name: j.name,
-        currency: j.currency,
-      },
-      quote: q,
-      stats: s,
-      levels: lv,
-      trade_plan_ref: plan,
-      news,
-      sec_filings_last_7d: sec,
-      extras: {
-        quote_summary: qs,
-        options: opt,
-        kr_flow: krFlow,
-        kr_short: krShort,
-      },
-    };
-    const structuredHtml = escapeHtml(JSON.stringify(structuredData, null, 2));
-
-    $('detail').innerHTML = `
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
-        ${j.asof_kst || j.asof_et} · ${j.market} · ${j.horizon_days}D · ${j.session} · ${q.market_state || '—'}
+      <div class="sec-hdr">2) 시장 판단</div>
+      <div class="item-meta">
+        <span class="meta-chip">Regime ${esc(md.regime || "--")}</span>
+        <span class="meta-chip">Action ${esc(md.recommended_action || "--")}</span>
+        <span class="meta-chip">${md.new_entries_allowed ? "신규 진입 가능" : "신규 진입 금지"}</span>
       </div>
-      <div class="sec-hdr">${t('secQuote')}</div>
-      ${kvRow(t('dlLast'),    fmt(q.last, 2))}
-      ${kvRow(t('dlDayPct'),  fmtPct(q.day_chg_pct))}
-      ${kvRow(t('dlVolume'),  fmtInt(q.day_volume))}
-      ${kvRow(t('dlRelVol'),  s.rel_vol_20d ? `${fmt(s.rel_vol_20d, 2)}×` : '—')}
-      ${kvRow(t('dlReturns'), `${fmt(s.ret_3d_pct, 2)}% / ${fmt(s.ret_5d_pct, 2)}% / ${fmt(s.ret_20d_pct, 2)}%`)}
-      ${kvRow(t('dlHorizon'), s.ret_horizon_pct != null ? `${fmt(s.ret_horizon_pct, 2)}%` : '—')}
-      ${kvRow(t('dlAtr'),     fmt(s.atr14, 2))}
-      ${kvRow(t('dlBidAsk'),  spread)}
 
-      <div class="sec-hdr">${t('secLevels')}</div>
-      ${kvRow(t('dlResist'),  fmt(lv.resistance_20d, 2))}
-      ${kvRow(t('dlSupport'), fmt(lv.support_20d, 2))}
-      ${kvRow(t('dlDayHL'),   `${fmt(lv.day_high, 2)} / ${fmt(lv.day_low, 2)}`)}
+      <div class="sec-hdr">3) 선정 근거</div>
+      <div class="item-tags">${reasons}</div>
 
-      <div class="sec-hdr">${t('secPlan')}</div>
+      <div class="sec-hdr">4) 탈락 / 경고</div>
+      <div class="item-tags">${rejects}</div>
+
+      <div class="sec-hdr">5) 거래대금 순위</div>
+      <div class="item-meta"><span class="meta-chip">거래대금 순위 #${picked.extras?.market_turnover_rank ?? "--"}</span></div>
+
+      <div class="sec-hdr">6) 데이터 시각</div>
+      <div class="item-meta">
+        <span class="meta-chip">뉴스 ${esc(times.news_asof_kst || picked.extras?.news_asof || "--")}</span>
+        <span class="meta-chip">수급 ${esc(times.flow_asof_kst || picked.extras?.flow_asof || "--")}</span>
+        <span class="meta-chip">공매도 ${esc(times.short_asof_kst || "--")}</span>
+      </div>
+
+      <div class="sec-hdr">7) 규칙 기반 플랜(보조)</div>
       <div class="plan-box">
-        <div class="plan-row">
-          <span class="pk">${t('dlEntry')}</span>
-          <span class="pv">${plan.entry_trigger ? t('entryAbove', fmt(plan.entry_trigger, 2)) : '—'}</span>
-        </div>
-        <div class="plan-row">
-          <span class="pk">${t('dlStop')}</span>
-          <span class="pv" style="color:var(--danger)">${fmt(plan.stop, 2)}</span>
-        </div>
-        <div class="plan-row">
-          <span class="pk">${t('dlTarget')}</span>
-          <span class="pv" style="color:var(--good)">${fmt(plan.target, 2)}</span>
-        </div>
-        <div class="plan-note">${t('dlHoldMax')}: ${t('holdDays', plan.hold_days_max || j.horizon_days)}</div>
+        <div class="plan-row"><span class="pk">현재가</span><span class="pv">${fmt(quote.last, 2)}</span></div>
+        <div class="plan-row"><span class="pk">진입 트리거</span><span class="pv">${fmt(plan.entry_trigger, 2)}</span></div>
+        <div class="plan-row"><span class="pk">손절 기준</span><span class="pv">${fmt(plan.stop, 2)}</span></div>
+        <div class="plan-row"><span class="pk">목표가</span><span class="pv">${fmt(plan.target, 2)}</span></div>
+        <div class="plan-row"><span class="pk">5D 수익률</span><span class="pv">${fmt(stats.ret_5d_pct, 2)}%</span></div>
+        <div class="plan-row"><span class="pk">20D 고점</span><span class="pv">${fmt(levels.resistance_20d, 2)}</span></div>
       </div>
-      ${extrasHtml}
-      ${krFlowHtml}
-      <div class="sec-hdr">${t('secNews')}</div>
-      ${newsHtml}
-      <div class="sec-hdr">${t('secSec')}</div>
-      ${secHtml}
-      <div class="sec-hdr">${t('secStructured')}</div>
-      <pre class="json-box">${structuredHtml}</pre>
-      <div class="disclaimer2">${t('disclaimer2')}</div>
     `;
-  } catch (e) {
-    const msg = e.name === 'TypeError' ? t('errNetwork') : `${t('errUnknown')}: ${e.message}`;
-    $('detail').innerHTML = `<div class="err-state">${msg}</div>`;
-    showToast(msg);
+  } catch (err) {
+    $("detail").innerHTML = `<div class="err-state">${esc(String(err.message || err))}</div>`;
+    showToast(String(err.message || err), "error");
   }
 }
 
-function closeModal() { $('modal').classList.add('hidden'); }
+function closeModal() {
+  $("modal").classList.add("hidden");
+}
 
-// ─── Copy single ticker outputs ─────────────────────────────────
 async function copySingleData() {
   if (!lastDetailPayload) return;
   const text = JSON.stringify(lastDetailPayload, null, 2);
   try {
     await navigator.clipboard.writeText(text);
-    showToast(t('copied'), 'ok');
+    showToast("종목 데이터 복사를 완료했습니다.", "ok");
   } catch {
-    window.prompt('Copy:', text);
+    window.prompt("Copy", text);
   }
 }
 
 async function copySinglePrompt() {
-  const sym = $('mSymbol').textContent.trim();
+  const sym = $("mSymbol").textContent.trim();
   if (!sym) return;
-  const market = getMarket(), horizon = getHorizon();
+  const params = new URLSearchParams({
+    market: getMarket(),
+    horizon_days: String(getHorizon()),
+  });
   try {
-    const params = new URLSearchParams({
-      market,
-      horizon_days: String(horizon),
-      ...getScanContext(),
-    });
-    const r = await fetch(`/prompt/${encodeURIComponent(sym)}?${params}`);
-    if (!r.ok) { showToast(await parseErr(r)); return; }
-    const text = await r.text();
+    const resp = await fetch(`/prompt/${encodeURIComponent(sym)}?${params}`);
+    if (!resp.ok) throw new Error(await parseErrText(resp));
+    const text = await resp.text();
+    $("reportBox").value = text;
+    $("reportMeta").textContent = `${getMarket()} · 단일 종목 프롬프트`;
     await navigator.clipboard.writeText(text);
-    showToast(t('promptDone'), 'ok');
-  } catch (e) {
-    showToast(e.name === 'TypeError' ? t('errNetwork') : e.message);
+    showToast("단일 종목 프롬프트를 복사했습니다.", "ok");
+  } catch (err) {
+    showToast(String(err.message || err), "error");
   }
 }
 
-// ─── Batch report ────────────────────────────────────────────────
-async function generateReport(symbolList, selectedTotal = symbolList.length) {
-  if (!symbolList?.length) return;
-  const market = getMarket(), horizon = getHorizon();
-  switchPanel('panelList');
-  $('reportMeta').textContent = t('loadingRep', symbolList.length);
-  setReportLoading('reportSelBtn', true);
-
-  try {
-    const scanCtx = getScanContext();
-    const selectedMeta = JSON.stringify(buildSelectedMeta(symbolList));
-    const params = new URLSearchParams({
-      symbols: symbolList.join(','), market,
-      horizon_days: String(horizon),
-      max_items: String(symbolList.length),
-      selected_meta: selectedMeta,
-      ...scanCtx,
-    });
-    const r = await fetch(`/report_multi_data?${params}`);
-    if (!r.ok) {
-      const msg = await parseErr(r);
-      $('reportMeta').textContent = msg;
-      showToast(msg);
-      return;
-    }
-    const j = await r.json();
-    $('reportBox').value = JSON.stringify(j, null, 2);
-    $('reportMeta').textContent = selectedTotal > symbolList.length
-      ? `${t('reportReady', market, horizon, symbolList.length)} · ${t('batchLimitNotice', selectedTotal, symbolList.length)}`
-      : t('reportReady', market, horizon, symbolList.length);
-    showToast(t('reportDone'), 'ok');
-    updateReportActionState();
-    $('aiReportAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (e) {
-    const msg = e.name === 'TypeError' ? t('errNetwork') : e.message;
-    $('reportMeta').textContent = msg;
-    showToast(msg);
-  } finally {
-    setReportLoading('reportSelBtn', false);
-  }
-}
-async function reportSelected() {
-  const { ordered, symbols } = getIncludedSelection();
-  if (!symbols.length) { showToast(t('noSelected'), 'warn'); return; }
-  await generateReport(symbols, ordered.length);
-}
-async function copyPromptSelected() {
-  const { symbols, omittedCount } = getIncludedSelection();
-  if (!symbols.length) { showToast(t('noSelected'), 'warn'); return; }
-  const market = getMarket(), horizon = getHorizon();
-  $('reportMeta').textContent = t('loadingPrompt', symbols.length);
-  setReportLoading('promptSelBtn', true);
-  try {
-    const scanCtx = getScanContext();
-    const selectedMeta = JSON.stringify(buildSelectedMeta(symbols));
-    const params = new URLSearchParams({
-      symbols: symbols.join(','), market,
-      horizon_days: String(horizon),
-      max_items: String(symbols.length),
-      selected_meta: selectedMeta,
-      ...scanCtx,
-    });
-    const r = await fetch(`/prompt_multi?${params}`);
-    if (!r.ok) {
-      const msg = await parseErr(r);
-      $('reportMeta').textContent = msg;
-      showToast(msg);
-      return;
-    }
-    const text = await r.text();
-    $('reportBox').value = text;
-    $('reportMeta').textContent = omittedCount > 0
-      ? `${t('promptReady', market, horizon, symbols.length)} · ${t('batchLimitNotice', symbols.length + omittedCount, symbols.length)}`
-      : t('promptReady', market, horizon, symbols.length);
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(t('promptDone'), 'ok');
-    } catch {
-      window.prompt('Copy:', text);
-    }
-    updateReportActionState();
-    $('aiReportAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (e) {
-    const msg = e.name === 'TypeError' ? t('errNetwork') : e.message;
-    $('reportMeta').textContent = msg;
-    showToast(msg);
-  } finally {
-    setReportLoading('promptSelBtn', false);
-  }
-}
-async function copyAll() {
-  const text = $('reportBox').value || '';
-  if (!text.trim()) { showToast(t('reportEmpty'), 'warn'); return; }
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast(t('copied'), 'ok');
-  } catch { window.prompt('Copy:', text); }
-}
-function clearReport() {
-  $('reportBox').value = '';
-  $('reportMeta').textContent = t('reportCleared');
-  updateReportActionState();
-  updateSelectionSummary();
+function getSelectedSymbols() {
+  return selectedRows().map((row) => row.symbol);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Init
-// ═══════════════════════════════════════════════════════════════════════════════
-window.addEventListener('load', async () => {
-  // Theme
-  $('themeBtn').textContent = getTheme() === 'dark' ? '☀' : '☾';
-  $('themeBtn').addEventListener('click', () => setTheme(getTheme() === 'dark' ? 'light' : 'dark'));
+function getScanContextParams() {
+  return {
+    scan_profile: getMarket() === "KR" ? "kr_largecap_aggressive" : ($("scanProfile")?.value || "surge"),
+    scan_label: getMarket() === "KR" ? "KR 대형주 포함 공격형" : ($("scanProfile")?.selectedOptions?.[0]?.textContent || "US Default"),
+    scan_note: getMarket() === "KR"
+      ? "fundlike exclude + turnover rank + largecap priority"
+      : (PROFILE_HELP[$("scanProfile")?.value || "surge"]?.desc || "default"),
+    scan_thresholds: JSON.stringify(loadKrSettings()),
+  };
+}
 
-  // Lang
-  applyLang();
-  $('langBtn').addEventListener('click', () => setLang(getLang() === 'ko' ? 'en' : 'ko'));
-
-  // Toast
-  $('toastClose').addEventListener('click', hideToast);
-
-  // Market switch → UI adaptation
-  $('market').addEventListener('change', () => updateMarketUI(true));
-  $('scanProfile').addEventListener('change', applyScanProfilePreset);
-  $('liquidityLevel').addEventListener('change', applyScanProfilePreset);
-  updateMarketUI(false);
-
-  // Symbols override → dim screener
-  $('symbols').addEventListener('input', () => { updateSymbolsUI(); refreshPlanSummary(); });
-  $('scrPreset').addEventListener('change', updateScreenerPresetUI);
-  $('maxPrice').addEventListener('input', refreshPlanSummary);
-  $('minTurnover').addEventListener('input', refreshPlanSummary);
-  $('horizon').addEventListener('change', refreshPlanSummary);
-  updateScreenerPresetUI();
-  refreshPlanSummary();
-
-  // Toggle buttons
-  $('toggleAdvancedBtn').addEventListener('click', toggleAdvanced);
-
-  // Top menu
-  document.querySelectorAll('.menu-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchPanel(btn.dataset.panel));
+async function generateReport(symbols) {
+  if (!symbols.length) return;
+  const heldSymbols = ($("heldSymbols")?.value || "").trim();
+  const params = new URLSearchParams({
+    symbols: symbols.join(","),
+    market: getMarket(),
+    horizon_days: String(getHorizon()),
+    max_items: String(symbols.length),
+    selected_meta: JSON.stringify(symbols.map((sym, idx) => ({ symbol: sym, selected_order: idx + 1 }))),
+    held_symbols: heldSymbols,
+    ...getScanContextParams(),
   });
 
-  // Scan
-  $('scanBtn').addEventListener('click', scan);
-  $('refreshBtn').addEventListener('click', async () => { await health(); await scan(); });
+  const resp = await fetch(`/report_multi_data?${params}`);
+  if (!resp.ok) throw new Error(await parseErrText(resp));
 
-  // Check all
-  $('checkAllBtn').addEventListener('click', toggleCheckAll);
+  const data = await resp.json();
+  $("reportBox").value = JSON.stringify(data, null, 2);
+  $("reportMeta").textContent = `${getMarket()} · 원본 데이터 ${symbols.length}개`;
+  $("reportHint").textContent = "이 JSON은 개발/검증/원문 확인용입니다.";
+}
 
-  // Batch report
-  $('reportSelBtn').addEventListener('click', reportSelected);
-  $('promptSelBtn').addEventListener('click', copyPromptSelected);
-  $('copyAllBtn').addEventListener('click', copyAll);
-  $('clearBtn').addEventListener('click', clearReport);
+async function copyPromptSelected() {
+  const symbols = getSelectedSymbols();
+  if (!symbols.length) return;
 
-  updateToggleButtons();
-  updateReportActionState();
+  const heldSymbols = ($("heldSymbols")?.value || "").trim();
+  const params = new URLSearchParams({
+    symbols: symbols.join(","),
+    market: getMarket(),
+    horizon_days: String(getHorizon()),
+    max_items: String(symbols.length),
+    selected_meta: JSON.stringify(symbols.map((sym, idx) => ({ symbol: sym, selected_order: idx + 1 }))),
+    held_symbols: heldSymbols,
+    ...getScanContextParams(),
+  });
 
-  // Modal
-  $('closeBtn').addEventListener('click', closeModal);
-  $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
-  $('dataCopyBtn').addEventListener('click', copySingleData);
-  $('copyBtn').addEventListener('click', copySinglePrompt);
+  const resp = await fetch(`/prompt_multi?${params}`);
+  if (!resp.ok) throw new Error(await parseErrText(resp));
 
-  // Go
+  const text = await resp.text();
+  $("reportBox").value = text;
+  $("reportMeta").textContent = `${getMarket()} · AI 프롬프트 준비 완료`;
+  $("reportHint").textContent = "이 텍스트는 ChatGPT 같은 모델에 바로 붙여넣기 좋게 만든 프롬프트입니다.";
+  await navigator.clipboard.writeText(text);
+  showToast("AI 판단용 프롬프트를 복사했습니다.", "ok");
+}
+
+function clearReport() {
+  $("reportBox").value = "";
+  $("reportMeta").textContent = "비워졌습니다.";
+  $("reportHint").textContent = "원하는 종목을 먼저 체크한 뒤 버튼을 누르세요.";
+}
+
+async function reportSelected() {
+  const symbols = getSelectedSymbols();
+  if (!symbols.length) return;
+  try {
+    await generateReport(symbols);
+    showToast("원본 데이터(JSON)를 만들었습니다.", "ok");
+  } catch (err) {
+    showToast(String(err.message || err), "error");
+  }
+}
+
+function toggleAdvanced() {
+  advancedOpen = !advancedOpen;
+  $("advancedFiltersRow")?.classList.toggle("hidden", !advancedOpen);
+  $("toggleAdvancedBtn").textContent = advancedOpen ? "고급 설정 닫기" : "고급 설정 열기";
+}
+
+function toggleCheckAll() {
+  allChecked = !allChecked;
+  document.querySelectorAll(".pick").forEach((cb) => {
+    cb.checked = allChecked;
+    if (allChecked) selected.add(cb.dataset.sym);
+    else selected.delete(cb.dataset.sym);
+  });
+  updateSelectionUi();
+}
+
+function copyAll() {
+  const text = $("reportBox").value || "";
+  if (!text.trim()) return;
+  navigator.clipboard.writeText(text)
+    .then(() => showToast("현재 내용을 복사했습니다.", "ok"))
+    .catch(() => window.prompt("Copy", text));
+}
+
+window.addEventListener("load", () => {
+  $("themeBtn").textContent = document.documentElement.dataset.theme === "dark" ? "Light" : "Dark";
+  $("themeBtn").addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("ms_theme", next);
+    $("themeBtn").textContent = next === "dark" ? "Light" : "Dark";
+  });
+
+  $("langBtn").addEventListener("click", () => {
+    document.documentElement.lang = document.documentElement.lang === "ko" ? "en" : "ko";
+    localStorage.setItem("ms_lang", document.documentElement.lang);
+    showToast("언어 토글은 아직 간단 모드입니다.", "info");
+  });
+
+  $("market").addEventListener("change", () => updateMarketUI(true));
+  $("scanProfile")?.addEventListener("change", () => {
+    renderProfileGuide();
+    updatePlanSummary();
+  });
+  $("scrPreset")?.addEventListener("change", updateScreenerUi);
+
+  $("scanBtn").addEventListener("click", scan);
+  $("refreshBtn").addEventListener("click", async () => { await scan(); });
+  $("toggleAdvancedBtn").addEventListener("click", toggleAdvanced);
+  $("checkAllBtn").addEventListener("click", toggleCheckAll);
+  $("reportSelBtn").addEventListener("click", reportSelected);
+  $("promptSelBtn").addEventListener("click", async () => {
+    try {
+      await copyPromptSelected();
+    } catch (err) {
+      showToast(String(err.message || err), "error");
+    }
+  });
+  $("copyAllBtn").addEventListener("click", copyAll);
+  $("clearBtn").addEventListener("click", clearReport);
+  $("closeBtn").addEventListener("click", closeModal);
+  $("modal").addEventListener("click", (event) => {
+    if (event.target === $("modal")) closeModal();
+  });
+  $("dataCopyBtn").addEventListener("click", copySingleData);
+  $("copyBtn").addEventListener("click", copySinglePrompt);
+  $("toastClose").addEventListener("click", () => $("toast").classList.add("hidden"));
+  $("menuScan").addEventListener("click", () => switchPanel("panelScan"));
+  $("menuList").addEventListener("click", () => switchPanel("panelList"));
+  $("resetKrPresetBtn")?.addEventListener("click", () => {
+    localStorage.setItem("ms_kr_advanced", JSON.stringify(KR_DEFAULT_PRESET));
+    applyKrPresetToInputs();
+    updatePlanSummary();
+    showToast("KR 기본값으로 되돌렸습니다.", "ok");
+  });
+
+  [
+    "marketCapMin", "minTurnover", "todayTurnoverMin", "relVolMin", "ret5dMin", "ret5dMax",
+    "closePosMin", "freshNewsHours", "marketTurnoverRankMax", "largecapMin", "largecapQuota", "krExcludeFundlike",
+  ].forEach((id) => {
+    $(id)?.addEventListener("change", () => {
+      saveKrSettings();
+      updatePlanSummary();
+    });
+  });
+
+  applyKrPresetToInputs();
+  renderProfileGuide();
+  updateMarketUI(false);
+  renderDecisionBanner();
+  updateSelectionUi();
   switchPanel(activePanel);
-  try { await health(); } catch {}
-  setStatus('');
 });
+

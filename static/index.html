@@ -8,60 +8,69 @@
   <link rel="stylesheet" href="/styles.css" />
   <script>
     (function () {
-      const th = localStorage.getItem("ms_theme");
+      const theme = localStorage.getItem("ms_theme");
       const pref = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-      document.documentElement.dataset.theme = th || pref;
-      const lg = localStorage.getItem("ms_lang");
-      if (lg) document.documentElement.lang = lg;
+      document.documentElement.dataset.theme = theme || pref;
+      const lang = localStorage.getItem("ms_lang");
+      if (lang) document.documentElement.lang = lang;
     })();
   </script>
 </head>
 <body>
   <header class="header">
     <div class="title">
-      <div class="h1" data-i18n="appTitle">Momentum Scout</div>
-      <div class="sub" id="asof" data-i18n="tagline">로딩 중…</div>
+      <div class="h1">Momentum Scout</div>
+      <div class="sub" id="asof">오늘 시장 상태 + 신규 진입 가능 여부 + 보유 지속 여부를 같이 보는 스캐너</div>
     </div>
     <div class="hdr-actions">
       <button class="hdr-btn" id="langBtn" aria-label="Switch language">EN</button>
-      <button class="hdr-btn" id="themeBtn" aria-label="Toggle theme">☾</button>
+      <button class="hdr-btn" id="themeBtn" aria-label="Toggle theme">Theme</button>
       <button class="hdr-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">새로고침</button>
     </div>
   </header>
 
   <nav class="top-menu" aria-label="Main menu">
-    <button class="menu-btn active" id="menuScan" data-panel="panelScan" data-i18n="menuScan">1. 탐색 설정</button>
-    <button class="menu-btn" id="menuList" data-panel="panelList" data-i18n="menuList">2. 후보 보기</button>
+    <button class="menu-btn active" id="menuScan" data-panel="panelScan">1. 스캔 설정</button>
+    <button class="menu-btn" id="menuList" data-panel="panelList">2. 결과 보기</button>
   </nav>
 
   <main class="main">
     <section class="panel active" id="panelScan">
       <section class="card">
         <div class="section-head">
-          <div class="h2" data-i18n="scanTitle">무엇을 찾을지 정해요</div>
-          <div class="muted small" data-i18n="scanDesc">찾고 싶은 상황부터 고르고, 유동성과 직접 확인 범위를 정하세요.</div>
+          <div class="h2">처음이면 기본값으로 바로 시작해도 됩니다</div>
+          <div class="muted small">헷갈리는 옵션은 설명을 읽고 그대로 두세요. 기본값은 KR에서 가장 실전적인 쪽으로 맞춰져 있습니다.</div>
+        </div>
+
+        <div class="guide-box" id="quickStartBox">
+          <div class="guide-title">추천 시작법</div>
+          <div class="guide-text">KR은 `대형주 포함 공격형`을 기본 추천합니다. 특별한 이유가 없으면 그대로 스캔하세요.</div>
+          <div class="guide-text">US는 `단기 급등 추적`부터 시작한 뒤, 너무 과열이면 `거래량 동반 추세 지속`으로 바꾸면 됩니다.</div>
         </div>
 
         <section class="scan-block">
           <div class="scan-block-head">
             <div class="scan-step">1</div>
             <div>
-              <div class="scan-block-title" data-i18n="scanBlockProfile">찾을 상황</div>
-              <div class="muted small" data-i18n="scanBlockProfileDesc">급등 추적, 추세 지속, 초기 포착 중 하나를 먼저 고릅니다.</div>
+              <div class="scan-block-title">스캔 프로필</div>
+              <div class="muted small">무엇을 찾고 싶은지 고르면 아래 설명이 같이 바뀝니다.</div>
             </div>
           </div>
+
           <div class="row">
             <label class="field grow" id="scanProfileField">
-              <div class="label" data-i18n="lbScanProfile">탐색 프로필</div>
+              <div class="label">US 스캔 프로필</div>
               <select id="scanProfile">
-                <option value="surge" data-i18n="profileSurge">단기 급등 추적</option>
-                <option value="continuation" data-i18n="profileContinuation">거래량 동반 추세 지속</option>
-                <option value="early" data-i18n="profileEarly">초기 포착</option>
-                <option value="manual" data-i18n="profileManual">직접 조정</option>
+                <option value="surge">단기 급등 추적</option>
+                <option value="continuation">거래량 동반 추세 지속</option>
+                <option value="early">초기 시동 후보</option>
+                <option value="manual">직접 조정</option>
               </select>
             </label>
           </div>
-          <div class="inline-note hidden" id="krFixedMode" data-i18n="krFixedModeNote">KR은 기본 모드 하나로만 스캔합니다.</div>
+
+          <div class="inline-note hidden" id="krFixedMode">KR은 기본 모드가 `대형주 포함 공격형`으로 고정됩니다.</div>
+          <div class="guide-box compact" id="profileGuide"></div>
           <div class="plan-summary" id="planSummary"></div>
         </section>
 
@@ -69,23 +78,24 @@
           <div class="scan-block-head">
             <div class="scan-step">2</div>
             <div>
-              <div class="scan-block-title" data-i18n="scanBlockRange">기본 범위</div>
-              <div class="muted small" data-i18n="scanBlockRangeDesc">시장과 보유 기간을 정해서 후보 성격을 좁힙니다.</div>
+              <div class="scan-block-title">시장과 보유 기간</div>
+              <div class="muted small">어느 시장을 볼지와 모멘텀 유지 기간을 정합니다.</div>
             </div>
           </div>
+
           <div class="row">
             <label class="field">
-              <div class="label" data-i18n="lbMarket">거래 시장</div>
+              <div class="label">거래 시장</div>
               <select id="market">
                 <option value="US">US</option>
                 <option value="KR">KR (KOSPI / KOSDAQ)</option>
               </select>
             </label>
             <label class="field" id="horizonField">
-              <div class="label" data-i18n="lbHorizon">보유 기간</div>
+              <div class="label">보유 기간</div>
               <select id="horizon">
-                <option value="5" data-i18n="opt5d">5일 (빠른 탐색)</option>
-                <option value="20" data-i18n="opt20d">20일 (완만한 흐름)</option>
+                <option value="5">5일 - 빠른 모멘텀 확인</option>
+                <option value="20">20일 - 지속 가능성 확인</option>
               </select>
             </label>
           </div>
@@ -95,42 +105,102 @@
           <div class="scan-block-head">
             <div class="scan-step">3</div>
             <div>
-              <div class="scan-block-title" data-i18n="scanBlockFilter">거를 기준</div>
-              <div class="muted small" data-i18n="scanBlockFilterDesc">너무 무거운 종목인지, 거래가 너무 약한지 먼저 거릅니다.</div>
+              <div class="scan-block-title">기본 필터</div>
+              <div class="muted small">평소에는 아래 한 줄만 보고 시작하면 됩니다. 고급 설정은 정말 바꾸고 싶을 때만 여세요.</div>
             </div>
           </div>
+
           <div class="row" id="filterFieldsRow">
             <label class="field" id="liquidityField">
-              <div class="label" data-i18n="lbLiquidityLevel">유동성 기준</div>
+              <div class="label">유동성 기준</div>
               <select id="liquidityLevel">
-                <option value="tight" data-i18n="liqTight">빡세게</option>
-                <option value="balanced" data-i18n="liqBalanced">균형</option>
-                <option value="aggressive" data-i18n="liqAggressive">공격적으로</option>
+                <option value="tight">보수적 - 실패 줄이기</option>
+                <option value="balanced">균형 - 기본 추천</option>
+                <option value="aggressive">공격적 - 후보 많이 보기</option>
               </select>
             </label>
             <label class="field" id="priceField">
-              <div class="label"><span data-i18n="lbMaxPrice">최대 가격</span> <span id="currencyTag" class="currency-tag">($)</span></div>
+              <div class="label"><span>최대 가격</span> <span id="currencyTag" class="currency-tag">($)</span></div>
               <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
             </label>
           </div>
 
           <div class="row">
             <label class="field grow" id="turnoverField">
-              <div class="label" data-i18n="lbMinTurnover">최소 평균 거래대금 (20일)</div>
+              <div class="label">최소 평균 거래대금 (20일)</div>
               <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
             </label>
-            <button class="btn sm ghost" id="toggleAdvancedBtn" data-i18n="btnAdvancedShow">고급 설정 열기</button>
+            <button class="btn sm ghost" id="toggleAdvancedBtn" type="button">고급 설정 열기</button>
           </div>
 
-          <div class="row hidden" id="advancedFiltersRow">
-            <div class="inline-note" data-i18n="advancedHint">프로필 추천값을 덮어쓰고 싶을 때만 직접 조정하세요.</div>
-            <input id="marketCapMin" type="hidden" value="500000000000" />
-            <input id="todayTurnoverMin" type="hidden" value="30000000000" />
-            <input id="relVolMin" type="hidden" value="1.8" />
-            <input id="ret5dMin" type="hidden" value="8" />
-            <input id="ret5dMax" type="hidden" value="30" />
-            <input id="closePosMin" type="hidden" value="0.7" />
-            <input id="freshNewsHours" type="hidden" value="48" />
+          <div class="advanced-panel hidden" id="advancedFiltersRow">
+            <div class="inline-note">기본값은 `ETF/ETN 제외 + 거래대금 상위권 우선 + 대형주 누락 최소화`를 기준으로 저장됩니다.</div>
+
+            <div class="row advanced-topbar">
+              <div class="muted small" id="activePresetBadge">Preset: KR 대형주 포함 공격형</div>
+              <button class="btn sm ghost" id="resetKrPresetBtn" type="button">KR 기본값으로 되돌리기</button>
+            </div>
+
+            <div class="advanced-grid">
+              <label class="field">
+                <div class="label">KR 시총 하한</div>
+                <input id="marketCapMin" type="number" inputmode="numeric" value="1000000000000" min="0" step="1000000000" />
+                <div class="field-help">너무 작은 종목을 기본 후보에서 밀어냅니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">KR 당일 거래대금 하한</div>
+                <input id="todayTurnoverMin" type="number" inputmode="numeric" value="70000000000" min="0" step="1000000000" />
+                <div class="field-help">시장이 실제로 때리는 종목만 남기기 위한 기준입니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">상대 거래량 하한</div>
+                <input id="relVolMin" type="number" inputmode="decimal" value="1.3" min="0" step="0.1" />
+                <div class="field-help">평소보다 거래가 붙는 종목을 선호합니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">종가 위치 하한</div>
+                <input id="closePosMin" type="number" inputmode="decimal" value="0.6" min="0" max="1" step="0.01" />
+                <div class="field-help">장 막판 힘이 약한 종목은 관찰만으로 내리기 쉽습니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">5일 수익률 최소</div>
+                <input id="ret5dMin" type="number" inputmode="decimal" value="4" min="-100" max="500" step="0.5" />
+                <div class="field-help">너무 느린 종목을 걸러냅니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">5일 수익률 최대</div>
+                <input id="ret5dMax" type="number" inputmode="decimal" value="25" min="-100" max="500" step="0.5" />
+                <div class="field-help">너무 과열된 종목은 무리해서 쫓아가지 않게 합니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">뉴스 신선도(시간)</div>
+                <input id="freshNewsHours" type="number" inputmode="numeric" value="72" min="1" max="240" step="1" />
+                <div class="field-help">너무 오래된 재료만 남은 종목을 약하게 봅니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">거래대금 순위 상한</div>
+                <input id="marketTurnoverRankMax" type="number" inputmode="numeric" value="60" min="1" max="500" step="1" />
+                <div class="field-help">시장 관심이 실제로 붙은 종목만 남기기 위한 핵심 기준입니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">대형주 기준 시총</div>
+                <input id="largecapMin" type="number" inputmode="numeric" value="2000000000000" min="0" step="1000000000" />
+                <div class="field-help">이 기준 이상은 대형주 버킷으로 따로 챙깁니다.</div>
+              </label>
+              <label class="field">
+                <div class="label">대형주 자동 포함 개수</div>
+                <input id="largecapQuota" type="number" inputmode="numeric" value="2" min="0" max="4" step="1" />
+                <div class="field-help">승인 후보에 대형주가 있으면 자동선택에 몇 개까지 섞을지 정합니다.</div>
+              </label>
+              <label class="field grow">
+                <div class="label">ETF / ETN 제외</div>
+                <select id="krExcludeFundlike">
+                  <option value="true">ON - 보통은 그대로 권장</option>
+                  <option value="false">OFF - 필요할 때만</option>
+                </select>
+                <div class="field-help">종목 탐색이 목적이면 ON을 유지하는 편이 좋습니다.</div>
+              </label>
+            </div>
           </div>
         </section>
 
@@ -138,49 +208,56 @@
           <div class="scan-block-head">
             <div class="scan-step">4</div>
             <div>
-              <div class="scan-block-title" data-i18n="scanBlockVerify">직접 확인할 범위</div>
-              <div class="muted small" data-i18n="scanBlockVerifyDesc">자동 후보를 쓸지, 특정 티커를 바로 검증할지 정합니다.</div>
+              <div class="scan-block-title">직접 확인할 종목</div>
+              <div class="muted small">여기서는 종목명이나 코드 둘 다 넣어도 되게 최대한 편하게 처리합니다.</div>
             </div>
           </div>
 
           <div class="row">
             <label class="field grow">
-              <div class="label">
-                <span data-i18n="lbSymbols">직접 볼 종목 코드 (선택)</span>
-              </div>
-              <input id="symbols" type="text" data-i18n-ph="phSymbols" placeholder="예: TSLA,NVDA 또는 005930.KS,035420.KS" />
+              <div class="label">직접 볼 종목 (선택)</div>
+              <input id="symbols" type="text" placeholder="예: 삼성전자, 한화오션 또는 TSLA, NVDA" />
             </label>
+          </div>
+          <div class="row">
+            <label class="field grow">
+              <div class="label">보유 종목 (쉼표 구분)</div>
+              <input id="heldSymbols" type="text" placeholder="예: 삼성전자, 005930.KS, 한화오션" />
+            </label>
+          </div>
+          <div class="guide-box compact" id="inputResolveHint">
+            <div class="guide-title">입력 팁</div>
+            <div class="guide-text">KR은 `삼성전자`, `한화오션`처럼 종목명으로 넣어도 자동 해석을 시도합니다.</div>
+            <div class="guide-text">US는 `TSLA`, `NVDA`처럼 티커 입력이 가장 정확합니다.</div>
           </div>
 
           <div class="row" id="scrRow">
             <label class="field grow">
-              <div class="label" data-i18n="lbScreeners">US 자동 스크리너</div>
+              <div class="label">US 자동 스크리너</div>
               <select id="scrPreset">
-                <option value="momentum" data-i18n="scrPresetMomentum">추천: 모멘텀 기본</option>
-                <option value="gainers" data-i18n="scrPresetGainers">상승 강도 중심</option>
-                <option value="liquidity" data-i18n="scrPresetLiquidity">거래량 중심</option>
-                <option value="custom" data-i18n="scrPresetCustom">직접 입력</option>
+                <option value="momentum">추천 - 모멘텀 기본</option>
+                <option value="gainers">장점 - 강한 종목 많이 보기</option>
+                <option value="liquidity">장점 - 거래량 큰 종목 위주</option>
+                <option value="custom">직접 입력</option>
               </select>
             </label>
-            <span class="badge hidden" id="directBadge" data-i18n="directMode">직접입력 모드</span>
+            <span class="badge hidden" id="directBadge">직접 입력 우선</span>
           </div>
           <div class="row hidden" id="scrCustomRow">
             <label class="field grow">
-              <div class="label" data-i18n="lbScreenerCustom">직접 스크리너 ID 입력</div>
+              <div class="label">직접 스크리너 ID</div>
               <input id="scrIds" type="text" value="day_gainers,most_actives" />
             </label>
           </div>
-          <div class="muted small" id="scrHint" data-i18n="scrHint">
-            추천값은 자동 적용됩니다. 대부분은 건드릴 필요 없습니다.
-          </div>
+          <div class="muted small" id="scrHint">US는 기본 스크리너로 자동 탐색됩니다. 직접 입력 종목이 있으면 그 종목이 우선입니다.</div>
         </section>
 
         <div class="row">
-          <button class="btn primary" id="scanBtn" data-i18n="btnScan">후보 찾기</button>
+          <button class="btn primary" id="scanBtn">후보 스캔 시작</button>
           <div class="status-text" id="status"></div>
         </div>
 
-        <div class="muted small" data-i18n="disclaimer"></div>
+        <div class="muted small">공개 데이터 기반 참고 도구입니다. 실제 주문 전에는 반드시 직접 검증하세요.</div>
       </section>
     </section>
 
@@ -188,12 +265,18 @@
       <section class="card">
         <div class="section-head section-head-inline">
           <div>
-            <div class="h2" data-i18n="listTitle">후보 목록</div>
-            <div class="muted small" data-i18n="listDesc">스캔이 끝나면 추천 묶음이 자동 선택됩니다. 필요하면 체크만 바꾸세요.</div>
+            <div class="h2">스캔 결과</div>
+            <div class="muted small">시장 판단을 먼저 보고, 신규 진입 가능 / 관찰만 / 비추천을 분리해서 확인합니다.</div>
           </div>
           <div class="list-header" id="listHeader" style="display:none;">
-            <button class="btn sm" id="checkAllBtn" data-i18n="btnCheckAll">전체 체크</button>
+            <button class="btn sm" id="checkAllBtn" type="button">전체 체크</button>
           </div>
+        </div>
+
+        <div id="marketDecisionBanner" class="guide-box"></div>
+        <div class="guide-box compact" id="selectionGuide">
+          <div class="guide-title">선택 가이드</div>
+          <div class="guide-text" id="selectionGuideText">스캔 후 자동 선택과 다음 행동을 여기서 안내합니다.</div>
         </div>
         <section class="list" id="list"></section>
       </section>
@@ -201,39 +284,38 @@
       <section class="card" style="margin-top:12px;" id="aiReportAnchor">
         <div class="section-head section-head-inline">
           <div>
-            <div class="h2" data-i18n="hBatch">데이터 패키지 / 프롬프트</div>
-            <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
+            <div class="h2">AI용 프롬프트 / 원본 데이터</div>
+            <div class="sub" id="reportMeta">무엇을 복사할지 먼저 고르고 쓰임새를 확인하세요.</div>
           </div>
           <div class="row-btns">
-            <button class="btn sm" id="clearBtn">지우기</button>
+            <button class="btn sm" id="clearBtn" type="button">비우기</button>
           </div>
         </div>
+
         <div class="guide-box">
-          <div class="guide-title" data-i18n="reportGuideTitle">리포트 탭 사용 순서</div>
-          <div class="guide-text" data-i18n="reportGuideBody">
-            1) 후보 찾기 -> 2) 자동 선택된 추천 묶음 확인 -> 3) 프롬프트 추출
-          </div>
-          <div class="guide-text" data-i18n="reportGuideAction">
-            주 버튼은 프롬프트 추출입니다. 데이터 패키지는 필요할 때만 보조로 확인하세요.
-          </div>
+          <div class="guide-title">버튼 차이</div>
+          <div class="guide-text">`AI 판단용 프롬프트`는 ChatGPT 같은 모델에 바로 붙여넣기 좋은 요약 지시문입니다.</div>
+          <div class="guide-text">`원본 데이터(JSON)`는 숫자와 구조를 그대로 확인하거나 개발/검증할 때 쓰는 자료입니다.</div>
         </div>
+
         <div id="aiPadBody">
           <div class="row wrap">
-            <button class="btn primary" id="promptSelBtn" data-i18n="btnPromptSel">추천 묶음 프롬프트 추출</button>
-            <button class="btn sm" id="reportSelBtn">
-              <span data-i18n="btnReportSel">선택 종목 데이터 만들기</span>
+            <button class="btn primary" id="promptSelBtn" type="button">AI 판단용 프롬프트 복사</button>
+            <button class="btn sm" id="reportSelBtn" type="button">
+              <span>원본 데이터(JSON) 보기</span>
               <span id="selCount" class="sel-count hidden">(0)</span>
             </button>
-            <button class="btn icon-only" id="copyAllBtn" aria-label="현재 내용 복사" title="현재 내용 복사">
+            <button class="btn icon-only" id="copyAllBtn" type="button" aria-label="현재 내용 복사" title="현재 내용 복사">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M9 9h10v11H9z"></path>
                 <path d="M5 5h10v2H7v8H5z"></path>
               </svg>
             </button>
           </div>
-          <div class="muted small" id="reportSelectionSummary">현재 포함: 없음</div>
-          <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
-          <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
+          <div class="muted small" id="reportSelectionSummary">현재 선택: 없음</div>
+          <div class="muted small" id="promptActionHelp">신규 진입이 막힌 날에는 관찰 후보나 보유 종목 판단용 프롬프트로 바뀝니다.</div>
+          <textarea id="reportBox" class="reportBox" readonly spellcheck="false" placeholder="생성된 프롬프트 또는 JSON 데이터가 여기에 표시됩니다."></textarea>
+          <div class="muted small" id="reportHint">원하는 종목을 먼저 체크한 뒤 버튼을 누르세요.</div>
         </div>
       </section>
     </section>
@@ -246,19 +328,22 @@
           <div class="h2" id="mSymbol">-</div>
           <div class="sub" id="mName"></div>
         </div>
-        <button class="btn sm" id="closeBtn">닫기</button>
+        <button class="btn sm" id="closeBtn" type="button">닫기</button>
       </div>
       <div class="sheetBody" id="detail"></div>
-      <div class="sheetFooter">
-        <button class="btn sm" id="dataCopyBtn" data-i18n="btnCopySingleData">이 종목 데이터 복사</button>
-        <button class="btn sm" id="copyBtn" data-i18n="btnCopySingle">이 종목 프롬프트 추출</button>
-      </div>
+      <details class="sheetFooter" id="modalMore">
+        <summary>더보기</summary>
+        <div class="row wrap" style="margin-top:10px;">
+          <button class="btn sm" id="dataCopyBtn" type="button">이 종목 데이터 복사</button>
+          <button class="btn sm" id="copyBtn" type="button">이 종목 프롬프트 추출</button>
+        </div>
+      </details>
     </div>
   </div>
 
   <div class="toast hidden" id="toast">
     <span id="toastMsg"></span>
-    <button class="toast-close" id="toastClose">닫기</button>
+    <button class="toast-close" id="toastClose" type="button">닫기</button>
   </div>
 
   <script src="/app.js"></script>

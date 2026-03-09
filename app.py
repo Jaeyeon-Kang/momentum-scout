@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import json
@@ -265,6 +265,8 @@ class Candidate:
     extras: Dict[str, Any] = field(default_factory=dict)
     scan_reason: List[str] = field(default_factory=list)
     rejection_flags: List[str] = field(default_factory=list)
+    entry_status: str = "WATCHLIST_ONLY"
+    entry_reason: List[str] = field(default_factory=list)
 
 
 def _score_candidate(
@@ -320,15 +322,121 @@ def _score_candidate(
 
 
 KR_SWING_DEFAULTS: Dict[str, Any] = {
-    "market_cap_min": 500_000_000_000.0,
-    "avg20_turnover_min": 15_000_000_000.0,
-    "today_turnover_min": 30_000_000_000.0,
-    "rel_volume_min": 1.8,
-    "ret_5d_min": 8.0,
-    "ret_5d_max": 30.0,
-    "close_position_min": 0.70,
-    "fresh_news_hours": 48.0,
+    "market_cap_min": 1_000_000_000_000.0,
+    "avg20_turnover_min": 30_000_000_000.0,
+    "today_turnover_min": 70_000_000_000.0,
+    "rel_volume_min": 1.3,
+    "ret_5d_min": 4.0,
+    "ret_5d_max": 25.0,
+    "close_position_min": 0.60,
+    "fresh_news_hours": 72.0,
+    "market_turnover_rank_max": 60,
+    "largecap_min": 2_000_000_000_000.0,
+    "largecap_quota": 2,
+    "kr_exclude_fundlike": True,
 }
+
+
+def _is_kr_fundlike_name(name: str) -> bool:
+    text = (name or "").strip()
+    if not text:
+        return False
+    upper = text.upper()
+    keywords = (
+        "ETF",
+        "ETN",
+        "\ub808\ubc84\ub9ac\uc9c0",  # 레버리지
+        "\uc778\ubc84\uc2a4",        # 인버스
+        "\uc120\ubb3c",              # 선물
+        "2X",
+    )
+    if any(k in upper for k in keywords):
+        return True
+    brands = (
+        "KODEX",
+        "TIGER",
+        "KOSEF",
+        "KBSTAR",
+        "ARIRANG",
+        "HANARO",
+        "ACE",
+        "RISE",
+        "PLUS",
+        "SOL",
+        "TIMEFOLIO",
+        "TREX",
+    )
+    return any(upper.startswith(prefix) for prefix in brands)
+
+
+def _input_search_key(text: str) -> str:
+    return re.sub(r"[^0-9A-Z\uAC00-\uD7A3]+", "", (text or "").upper())
+
+
+def _split_input_tokens(raw: str) -> List[str]:
+    return [x.strip() for x in re.split(r"[,;\n/]+", raw or "") if x.strip()]
+
+
+async def _resolve_kr_input_text(raw: str) -> str:
+    tokens = _split_input_tokens(raw)
+    if not tokens:
+        return ""
+
+    universe = await fetch_kr_market_universe(pages_per_market=20)
+    rows = [dict(r) for r in (universe or []) if r.get("symbol")]
+    code_map: Dict[str, Dict[str, Any]] = {}
+    exact_name_map: Dict[str, Dict[str, Any]] = {}
+    keyed_rows: List[Tuple[str, Dict[str, Any]]] = []
+
+    for row in rows:
+        sym = str(row.get("symbol") or "").upper().strip()
+        name = str(row.get("name") or "").strip()
+        code = _kr_code_from_symbol(sym)
+        if code:
+            code_map[code] = row
+        if name:
+            exact_name_map[_input_search_key(name)] = row
+            keyed_rows.append((_input_search_key(name), row))
+
+    resolved: List[str] = []
+    seen: set[str] = set()
+
+    for token in tokens:
+        t = token.strip()
+        if not t:
+            continue
+
+        upper = t.upper()
+        resolved_symbol: Optional[str] = None
+
+        if _is_korea_symbol(upper):
+            resolved_symbol = upper
+        else:
+            code = _kr_code_from_symbol(upper)
+            if code:
+                resolved_symbol = str((code_map.get(code) or {}).get("symbol") or f"{code}.KS")
+            else:
+                key = _input_search_key(t)
+                row = exact_name_map.get(key)
+                if row is None and key:
+                    contains = [r for name_key, r in keyed_rows if key in name_key]
+                    contains.sort(
+                        key=lambda r: (
+                            float(r.get("day_turnover") or 0.0),
+                            float(r.get("market_cap") or 0.0),
+                        ),
+                        reverse=True,
+                    )
+                    row = contains[0] if contains else None
+                if row is not None:
+                    resolved_symbol = str(row.get("symbol") or "").upper().strip()
+
+        final_symbol = resolved_symbol or upper
+        if final_symbol and final_symbol not in seen:
+            seen.add(final_symbol)
+            resolved.append(final_symbol)
+
+    return ",".join(resolved)
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -801,7 +909,7 @@ def _parse_naver_company_name(html: str) -> Optional[str]:
     title_m = re.search(r"<title>\s*(.*?)\s*</title>", html, re.IGNORECASE | re.DOTALL)
     if title_m:
         title = unescape(re.sub(r"\s+", " ", title_m.group(1))).strip()
-        for suffix in (" : 네이버페이 증권", " : 네이버 증권"):
+        for suffix in (" : ?ㅼ씠踰꾪럹??利앷텒", " : ?ㅼ씠踰?利앷텒"):
             if title.endswith(suffix):
                 name = title[: -len(suffix)].strip()
                 if name:
@@ -864,7 +972,7 @@ def _parse_num_str(s: Any) -> Optional[float]:
     if s is None:
         return None
     text = str(s).strip().replace(",", "")
-    text = text.replace("%", "").replace("배", "")
+    text = text.replace("%", "").replace("\u20a9", "").replace("\uc6d0", "")
     if text in ("", "N/A", "nan", "None", "-"):
         return None
     try:
@@ -1122,19 +1230,19 @@ async def fetch_kr_snapshot(symbol: str) -> Dict[str, Any]:
             pv = _parse_num_str(_clean_html_text(blinds[1]))
             day_chg_pct = (pv * diff_sign) if pv is not None else None
 
-    prev_close = _parse_num_str(_extract_blind_value(block, "전일"))
-    open_ = _parse_num_str(_extract_blind_value(block, "시가"))
-    high = _parse_num_str(_extract_blind_value(block, "고가"))
-    low = _parse_num_str(_extract_blind_value(block, "저가"))
-    volume = _parse_int_str(_extract_blind_value(block, "거래량"))
-    turnover_million = _parse_num_str(_extract_blind_value(block, "거래대금"))
+    prev_close = _parse_num_str(_extract_blind_value(block, "\uc804\uc77c"))
+    open_ = _parse_num_str(_extract_blind_value(block, "\uc2dc\uac00"))
+    high = _parse_num_str(_extract_blind_value(block, "\uace0\uac00"))
+    low = _parse_num_str(_extract_blind_value(block, "\uc800\uac00"))
+    volume = _parse_int_str(_extract_blind_value(block, "\uac70\ub798\ub7c9"))
+    turnover_million = _parse_num_str(_extract_blind_value(block, "\uac70\ub798\ub300\uae08"))
     turnover = (turnover_million * 1_000_000.0) if turnover_million is not None else None
 
     if prev_close is None and current is not None and diff_val is not None:
         prev_close = current - diff_val
 
     listed_shares_m = re.search(
-        r"<th scope=\"row\">상장주식수</th>\s*<td><em>([^<]+)</em></td>",
+        r"<th scope=\"row\">?곸옣二쇱떇??/th>\s*<td><em>([^<]+)</em></td>",
         html,
         re.IGNORECASE | re.DOTALL,
     )
@@ -1181,7 +1289,7 @@ def _sum_recent(items: List[Optional[int]], n: int) -> Optional[int]:
 
 def _parse_kr_flow_rows(html: str) -> List[Dict[str, Any]]:
     table_m = re.search(
-        r'<table[^>]+summary="외국인 기관 순매매 거래량에 관한표이며 날짜별로 정보를 제공합니다\."[^>]*>(.*?)</table>',
+        r'<table[^>]+summary="?멸뎅??湲곌? ?쒕ℓ留?嫄곕옒?됱뿉 愿?쒗몴?대ŉ ?좎쭨蹂꾨줈 ?뺣낫瑜??쒓났?⑸땲??."[^>]*>(.*?)</table>',
         html,
         re.IGNORECASE | re.DOTALL,
     )
@@ -1260,7 +1368,7 @@ async def fetch_kr_investor_flows(symbol: str) -> Dict[str, Any]:
         },
         "latest": latest,
         "rows": rows[:20],
-        "note": "외국인/기관 순매매는 확인되지만 개인 순매수는 현재 확인 불가입니다.",
+        "note": "?멸뎅??湲곌? ?쒕ℓ留ㅻ뒗 ?뺤씤?섏?留?媛쒖씤 ?쒕ℓ?섎뒗 ?꾩옱 ?뺤씤 遺덇??낅땲??",
     }
     _cache_kr_flow[sym] = result
     return result
@@ -1379,7 +1487,7 @@ async def fetch_kr_short_data(symbol: str, *, name_hint: Optional[str] = None) -
             },
         },
         "rows": rows[:20],
-        "note": "순보유잔고는 KRX 보고 기준 T+2 지연이 반영될 수 있습니다.",
+        "note": "?쒕낫?좎옍怨좊뒗 KRX 蹂닿퀬 湲곗? T+2 吏?곗씠 諛섏쁺?????덉뒿?덈떎.",
     }
     _cache_kr_short[sym] = result
     return result
@@ -1495,11 +1603,16 @@ async def candidates(
     ret_5d_max: float = Query(default=500.0, ge=-100.0, le=500.0),
     close_position_min: float = Query(default=0.0, ge=0.0, le=1.0),
     fresh_news_hours: float = Query(default=0.0, ge=0.0, le=240.0),
+    market_turnover_rank_max: int = Query(default=0, ge=0, le=500),
+    largecap_min: float = Query(default=0.0, ge=0.0),
+    largecap_quota: int = Query(default=0, ge=0, le=10),
+    kr_exclude_fundlike: bool = Query(default=True),
     direct_mode: bool = Query(default=False, description="When true with symbols, bypass hard filters and include symbols directly."),
     us_market_cap_min: float = Query(default=2_000_000_000.0, ge=0.0),
     us_day_turnover_min: float = Query(default=25_000_000.0, ge=0.0),
     us_rel_volume_min: float = Query(default=1.2, ge=0.0),
     us_exclude_etf: bool = Query(default=True),
+    held_symbols: str = Query(default="", description="Optional held symbols for HOLD/TRIM/EXIT review"),
     top_n: int = Query(default=10, ge=1, le=25),
 ) -> Dict[str, Any]:
     """Returns momentum candidates for short swing (5 trading days default). No keys."""
@@ -1507,6 +1620,11 @@ async def candidates(
     market_u = market.upper().strip()
     if market_u not in ("US", "KR"):
         raise HTTPException(status_code=400, detail="market must be US or KR")
+    if market_u == "KR":
+        if (symbols or "").strip():
+            symbols = await _resolve_kr_input_text(symbols)
+        if (held_symbols or "").strip():
+            held_symbols = await _resolve_kr_input_text(held_symbols)
 
     # keep horizons sane; UI offers 5 and 20, but backend tolerates a bit more.
     if horizon_days not in (5, 20):
@@ -1521,6 +1639,7 @@ async def candidates(
     universe: List[str] = []
     universe_source = ""
     kr_seed_map: Dict[str, Dict[str, Any]] = {}
+    kr_turnover_rank_map: Dict[str, int] = {}
     scan_defaults: Dict[str, Any] = {}
     us_defaults: Dict[str, Any] = {
         "market_cap_min": float(us_market_cap_min),
@@ -1540,6 +1659,10 @@ async def candidates(
             "ret_5d_max": ret_5d_max if ret_5d_max < 500.0 else KR_SWING_DEFAULTS["ret_5d_max"],
             "close_position_min": close_position_min or KR_SWING_DEFAULTS["close_position_min"],
             "fresh_news_hours": fresh_news_hours or KR_SWING_DEFAULTS["fresh_news_hours"],
+            "market_turnover_rank_max": market_turnover_rank_max or KR_SWING_DEFAULTS["market_turnover_rank_max"],
+            "largecap_min": largecap_min or KR_SWING_DEFAULTS["largecap_min"],
+            "largecap_quota": largecap_quota or KR_SWING_DEFAULTS["largecap_quota"],
+            "kr_exclude_fundlike": bool(kr_exclude_fundlike),
         }
         min_avg_turnover = float(scan_defaults["avg20_turnover_min"])
 
@@ -1572,43 +1695,70 @@ async def candidates(
             universe_source = f"screeners:{','.join(scr_list)}"
         else:
             kr_rows = await fetch_kr_market_universe(pages_per_market=20)
-            if not kr_rows:
-                universe = list(_KR_FALLBACK_SYMBOLS)
-                universe_source = "kr_fallback"
-            else:
-                turnover_bucket = sorted(
-                    kr_rows,
-                    key=lambda r: float(r.get("day_turnover") or 0.0),
-                    reverse=True,
-                )[:180]
-                mover_bucket = sorted(
-                    [
-                        r for r in kr_rows
-                        if float(r.get("day_turnover") or 0.0) >= scan_defaults["today_turnover_min"]
-                    ],
-                    key=lambda r: float(r.get("day_chg_pct") or 0.0),
-                    reverse=True,
-                )[:120]
-                base_bucket = sorted(
-                    [
-                        r for r in kr_rows
-                        if float(r.get("day_turnover") or 0.0) >= (scan_defaults["avg20_turnover_min"] * 0.6)
-                    ],
-                    key=lambda r: (float(r.get("day_turnover") or 0.0), float(r.get("day_chg_pct") or 0.0)),
-                    reverse=True,
-                )[:160]
-                union_rows: List[Dict[str, Any]] = []
-                seen_syms: set[str] = set()
-                for bucket in (turnover_bucket, mover_bucket, base_bucket, kr_rows[:120]):
-                    for row in bucket:
-                        sym = str(row.get("symbol") or "")
-                        if not sym or sym in seen_syms:
-                            continue
-                        seen_syms.add(sym)
-                        union_rows.append(row)
-                universe = [str(r["symbol"]) for r in union_rows]
-                kr_seed_map = {str(r["symbol"]): r for r in union_rows}
-                universe_source = "naver_market_sum_union"
+            base_rows = list(kr_rows or [])
+            fallback_rows = [{"symbol": sym, "bucket_tags": ["fallback_union"]} for sym in _KR_FALLBACK_SYMBOLS]
+            row_map: Dict[str, Dict[str, Any]] = {}
+            for row in base_rows:
+                sym = str(row.get("symbol") or "")
+                if not sym:
+                    continue
+                row_map[sym] = dict(row)
+            for row in fallback_rows:
+                sym = str(row.get("symbol") or "")
+                if not sym:
+                    continue
+                if sym not in row_map:
+                    row_map[sym] = dict(row)
+                else:
+                    row_map[sym]["bucket_tags"] = list(dict.fromkeys((row_map[sym].get("bucket_tags") or []) + ["fallback_union"]))
+
+            ranked_turnover = sorted(
+                [r for r in base_rows if r.get("symbol")],
+                key=lambda r: float(r.get("day_turnover") or 0.0),
+                reverse=True,
+            )
+            kr_turnover_rank_map = {str(r.get("symbol")): idx + 1 for idx, r in enumerate(ranked_turnover)}
+
+            turnover_bucket = ranked_turnover[:200]
+            mover_bucket = sorted(
+                [r for r in base_rows if float(r.get("day_turnover") or 0.0) >= scan_defaults["today_turnover_min"]],
+                key=lambda r: float(r.get("day_chg_pct") or 0.0),
+                reverse=True,
+            )[:140]
+            base_bucket = sorted(
+                [r for r in base_rows if float(r.get("day_turnover") or 0.0) >= (scan_defaults["avg20_turnover_min"] * 0.6)],
+                key=lambda r: (float(r.get("day_turnover") or 0.0), float(r.get("day_chg_pct") or 0.0)),
+                reverse=True,
+            )[:180]
+
+            union_rows: List[Dict[str, Any]] = []
+            seen_syms: set[str] = set()
+            for tag, bucket in (
+                ("turnover_top", turnover_bucket),
+                ("movers", mover_bucket),
+                ("base", base_bucket),
+                ("fallback_union", fallback_rows),
+            ):
+                for raw in bucket:
+                    sym = str(raw.get("symbol") or "")
+                    if not sym or sym in seen_syms:
+                        continue
+                    seen_syms.add(sym)
+                    row = dict(row_map.get(sym) or raw)
+                    tags = list(row.get("bucket_tags") or [])
+                    tags.append(tag)
+                    row["bucket_tags"] = list(dict.fromkeys(tags))
+                    rank = kr_turnover_rank_map.get(sym)
+                    if rank is not None:
+                        row["market_turnover_rank"] = rank
+                    union_rows.append(row)
+
+            if not union_rows:
+                union_rows = fallback_rows
+
+            universe = [str(r["symbol"]) for r in union_rows if r.get("symbol")]
+            kr_seed_map = {str(r["symbol"]): r for r in union_rows if r.get("symbol")}
+            universe_source = "kr_market_union_with_fallback"
 
     # polite cap
     universe = universe[:120] if market_u == "KR" else universe[:80]
@@ -1632,6 +1782,12 @@ async def candidates(
             day_turnover = q.get("day_turnover")
             market_cap = q.get("market_cap")
             quote_type = "EQUITY"
+            market_turnover_rank = q.get("market_turnover_rank")
+            if market_turnover_rank is None:
+                market_turnover_rank = kr_turnover_rank_map.get(sym)
+            bucket_tags = list(q.get("bucket_tags") or [])
+            if bool(scan_defaults.get("kr_exclude_fundlike", True)) and (not direct_override) and _is_kr_fundlike_name(name):
+                return None
         else:
             q = quote_map.get(sym) or {}
             name = q.get("shortName") or q.get("longName") or ""
@@ -1648,6 +1804,8 @@ async def candidates(
             day_turnover = (float(last) * float(day_volume)) if last is not None and day_volume is not None else None
             market_cap = q.get("marketCap")
             quote_type = str(q.get("quoteType") or "").upper().strip()
+            market_turnover_rank = None
+            bucket_tags = []
 
         # price filter (local currency)
         try:
@@ -1736,32 +1894,63 @@ async def candidates(
                 "breakout_60d": bool(last is not None and prev_60_high is not None and float(last) > float(prev_60_high)),
                 "close_near_high": bool(close_position is not None and close_position >= 0.70),
                 "turnover_ratio_20d": turnover_ratio_20d,
+                "market_turnover_rank": int(market_turnover_rank) if market_turnover_rank is not None else None,
+                "market_turnover_percentile": (
+                    round((float(market_turnover_rank) / float(max(len(kr_turnover_rank_map), 1))) * 100.0, 2)
+                    if market_turnover_rank is not None
+                    else None
+                ),
+                "bucket_tags": list(bucket_tags),
             }
 
+            if market_cap is not None and float(market_cap) >= float(scan_defaults["largecap_min"]):
+                extras["bucket_tags"] = list(dict.fromkeys((extras.get("bucket_tags") or []) + ["largecap_core"]))
+            if market_turnover_rank is not None and int(market_turnover_rank) <= int(scan_defaults["market_turnover_rank_max"]):
+                extras["bucket_tags"] = list(dict.fromkeys((extras.get("bucket_tags") or []) + ["turnover_top"]))
+
+            meets_market_attention = False
+            if market_turnover_rank is not None and int(market_turnover_rank) <= int(scan_defaults["market_turnover_rank_max"]):
+                meets_market_attention = True
+            if day_turnover is not None and float(day_turnover) >= 70_000_000_000.0:
+                meets_market_attention = True
+            if (
+                market_cap is not None
+                and float(market_cap) >= float(scan_defaults["largecap_min"])
+                and day_turnover is not None
+                and float(day_turnover) >= 50_000_000_000.0
+            ):
+                meets_market_attention = True
+
             if market_cap is None or float(market_cap) < scan_defaults["market_cap_min"]:
-                rejection_flags.append("시총 하한 미달")
+                rejection_flags.append("market_cap_low")
             if day_turnover is None or float(day_turnover) < scan_defaults["today_turnover_min"]:
-                rejection_flags.append("당일 거래대금 부족")
+                rejection_flags.append("day_turnover_low")
             if rel_vol_20d is None or float(rel_vol_20d) < scan_defaults["rel_volume_min"]:
-                rejection_flags.append("상대거래량 부족")
+                rejection_flags.append("rel_volume_low")
             if ret_5d_pct is None or float(ret_5d_pct) < scan_defaults["ret_5d_min"]:
-                rejection_flags.append("5일 수익률 약함")
+                rejection_flags.append("ret_5d_low")
             elif float(ret_5d_pct) > scan_defaults["ret_5d_max"]:
-                rejection_flags.append("과열 구간")
+                rejection_flags.append("ret_5d_overheat")
             if close_position is None or float(close_position) < scan_defaults["close_position_min"]:
-                rejection_flags.append("종가 위치 약함")
+                rejection_flags.append("close_position_weak")
             if gap_pct is not None and gap_pct >= 12.0:
-                rejection_flags.append("갭 과열")
+                rejection_flags.append("gap_overheat")
+            if (not meets_market_attention) and (not direct_override):
+                rejection_flags.append("market_attention_low")
 
             if day_turnover is not None and day_turnover >= scan_defaults["today_turnover_min"]:
-                scan_reason.append("당일 거래대금 기준 통과")
+                scan_reason.append("today turnover filter passed")
             if rel_vol_20d is not None and rel_vol_20d >= scan_defaults["rel_volume_min"]:
-                scan_reason.append("상대거래량 기준 통과")
+                scan_reason.append("relative volume filter passed")
             if extras["breakout_20d"]:
-                scan_reason.append("20일 고점 돌파")
+                scan_reason.append("20D breakout")
             if extras["close_near_high"]:
-                scan_reason.append("종가 고가권 안착")
-
+                scan_reason.append("close near day high")
+            if market_turnover_rank is not None:
+                scan_reason.append("turnover rank #" + str(int(market_turnover_rank)))
+            if meets_market_attention:
+                scan_reason.append("market attention qualified")
+            rejection_flags = list(dict.fromkeys(rejection_flags))
             return Candidate(
                 symbol=sym,
                 name=name,
@@ -1849,17 +2038,53 @@ async def candidates(
         cands.append(r)
 
     if market_u == "KR":
-        discovered = (cands if explicit else [c for c in cands if not c.rejection_flags])[:48]
-        if not discovered:
-            discovered = sorted(
-                cands,
-                key=lambda c: (
-                    _to_float(c.extras.get("turnover_ratio_20d"), 0.0),
-                    _to_float(c.day_turnover, 0.0),
-                    _to_float(c.ret_5d_pct, 0.0),
-                ),
-                reverse=True,
-            )[:24]
+        base_pool = cands if explicit else [c for c in cands if not c.rejection_flags]
+        if not base_pool:
+            base_pool = list(cands)
+
+        general_bucket = sorted(
+            base_pool,
+            key=lambda c: (
+                _to_float(c.day_turnover, 0.0),
+                _to_float(c.ret_5d_pct, 0.0),
+                _to_float(c.extras.get("turnover_ratio_20d"), 0.0),
+            ),
+            reverse=True,
+        )
+        largecap_bucket = sorted(
+            [
+                c
+                for c in base_pool
+                if c.market_cap is not None and float(c.market_cap) >= float(scan_defaults["largecap_min"])
+            ],
+            key=lambda c: (
+                _to_float(c.day_turnover, 0.0),
+                _to_float(c.ret_5d_pct, 0.0),
+            ),
+            reverse=True,
+        )
+        turnover_bucket = sorted(
+            [
+                c
+                for c in base_pool
+                if c.extras.get("market_turnover_rank") is not None
+                and int(c.extras.get("market_turnover_rank")) <= int(scan_defaults["market_turnover_rank_max"])
+            ],
+            key=lambda c: int(c.extras.get("market_turnover_rank")),
+        )
+        priority_largecaps = [
+            c for c in largecap_bucket if c.day_turnover is not None and float(c.day_turnover) >= 50_000_000_000.0
+        ][:10]
+
+        discovered: List[Candidate] = []
+        seen_discovered: set[str] = set()
+        for bucket in (priority_largecaps, general_bucket, largecap_bucket, turnover_bucket):
+            for item in bucket:
+                if item.symbol in seen_discovered:
+                    continue
+                seen_discovered.add(item.symbol)
+                discovered.append(item)
+        discovered = discovered[:72]
 
         async def enrich_kr_candidate(base: Candidate) -> Candidate:
             news_items, flow = await asyncio.gather(
@@ -1924,13 +2149,13 @@ async def candidates(
             scan_reason = list(base.scan_reason)
             rejection_flags = list(base.rejection_flags)
             if signed_flow > 0:
-                scan_reason.append("외국인/기관 수급 부호 양호")
+                scan_reason.append("5D flow positive")
             elif signed_flow < 0:
-                rejection_flags.append("수급 엇갈림")
+                rejection_flags.append("flow_negative")
             if news_items and news_age_hours is not None and news_age_hours <= scan_defaults["fresh_news_hours"]:
-                scan_reason.append("48시간 내 뉴스 확인")
+                scan_reason.append("fresh news verified")
             else:
-                rejection_flags.append("촉매 약함")
+                rejection_flags.append("news_missing")
 
             extras = dict(base.extras)
             extras.update(
@@ -1945,6 +2170,7 @@ async def candidates(
                     "foreign_5d": flow_5d.get("foreign_net_volume"),
                     "institution_1d": flow_1d.get("institution_net_volume"),
                     "institution_5d": flow_5d.get("institution_net_volume"),
+                    "bucket_tags": list(dict.fromkeys(extras.get("bucket_tags") or [])),
                 }
             )
             return replace(
@@ -1965,38 +2191,122 @@ async def candidates(
     if market_u == "KR" and cands:
         kr_name_map = {c.symbol: c.name for c in cands}
 
-    # market context (best-effort)
-    context: Dict[str, Any] = {}
-    try:
-        if market_u == "US":
-            ctx = await fetch_yahoo_quote(["SPY", "QQQ"], region="US")
-            def ctx_pct(t: str) -> Optional[float]:
-                q = ctx.get(t) or {}
-                p = q.get("regularMarketPrice")
-                pc = q.get("regularMarketPreviousClose")
-                if p is None or pc is None:
-                    return None
-                try:
-                    return _safe_pct(float(p), float(pc))
-                except Exception:
-                    return None
-            context = {"SPY_day_chg_pct": ctx_pct("SPY"), "QQQ_day_chg_pct": ctx_pct("QQQ")}
+    macro_rows = await _fetch_macro_snapshot(market_u)
+    market_decision = _compute_market_decision(market_u, macro_rows)
+    context: Dict[str, Any] = dict(market_decision.get("macro_snapshot") or {})
+
+    def _classify_entry(c: Candidate) -> Candidate:
+        reasons = list(c.scan_reason or [])
+        entry_status = "APPROVED_NEW"
+        if not bool(market_decision.get("new_entries_allowed", True)):
+            entry_status = "WATCHLIST_ONLY"
+            reasons.append("market risk-off blocks new entries")
         else:
-            # indices (Yahoo): ^KS11(KOSPI), ^KQ11(KOSDAQ)
-            ctx = await fetch_yahoo_quote(["^KS11", "^KQ11"], region="KR")
-            def ctx_pct(t: str) -> Optional[float]:
-                q = ctx.get(t) or {}
-                p = q.get("regularMarketPrice")
-                pc = q.get("regularMarketPreviousClose")
-                if p is None or pc is None:
-                    return None
-                try:
-                    return _safe_pct(float(p), float(pc))
-                except Exception:
-                    return None
-            context = {"KOSPI_day_chg_pct": ctx_pct("^KS11"), "KOSDAQ_day_chg_pct": ctx_pct("^KQ11")}
-    except Exception:
-        context = {}
+            watch_reasons: List[str] = []
+            if market_u == "KR":
+                if not (c.extras.get("news_items") or []):
+                    watch_reasons.append("missing news")
+                if _to_float(c.extras.get("signed_flow_score"), 0.0) <= 0:
+                    watch_reasons.append("negative flow")
+                close_pos = c.extras.get("close_position")
+                if close_pos is None or float(close_pos) < float(scan_defaults["close_position_min"]):
+                    watch_reasons.append("weak close position")
+                trank = c.extras.get("market_turnover_rank")
+                if trank is None or int(trank) > int(scan_defaults["market_turnover_rank_max"]):
+                    watch_reasons.append("turnover rank too low")
+            else:
+                if c.extras.get("us_filter_flags"):
+                    watch_reasons.append("liquidity/filter caution")
+
+            if watch_reasons:
+                entry_status = "WATCHLIST_ONLY"
+                reasons.extend(watch_reasons)
+
+        if entry_status != "WATCHLIST_ONLY" and len(c.rejection_flags or []) >= 4:
+            entry_status = "AVOID"
+            reasons.append("multiple risk flags")
+
+        return replace(
+            c,
+            entry_status=entry_status,
+            entry_reason=list(dict.fromkeys(reasons)),
+        )
+
+    cands = [_classify_entry(c) for c in cands]
+
+    def _serialize_candidate(c: Candidate) -> Dict[str, Any]:
+        return {
+            "symbol": c.symbol,
+            "name": kr_name_map.get(c.symbol) or c.name,
+            "currency": c.currency,
+            "last": c.last,
+            "day_chg_pct": c.day_chg_pct,
+            "day_volume": c.day_volume,
+            "avg20_volume": c.avg20_volume,
+            "rel_vol_20d": c.rel_vol_20d,
+            "ret_3d_pct": c.ret_3d_pct,
+            "ret_5d_pct": c.ret_5d_pct,
+            "ret_20d_pct": c.ret_20d_pct,
+            "ret_horizon_pct": c.ret_5d_pct if horizon_days == 5 else c.ret_20d_pct,
+            "avg_turnover_20d": c.avg_turnover_20d,
+            "day_turnover": c.day_turnover,
+            "market_cap": c.market_cap,
+            "score": c.score,
+            "entry_status": c.entry_status,
+            "entry_reason": c.entry_reason,
+            "extras": c.extras,
+            "scan_reason": c.scan_reason,
+            "rejection_flags": c.rejection_flags,
+        }
+
+    serialized_candidates = [_serialize_candidate(c) for c in cands]
+    approved_serialized = [x for x in serialized_candidates if x.get("entry_status") == "APPROVED_NEW"]
+    watchlist_serialized = [x for x in serialized_candidates if x.get("entry_status") != "APPROVED_NEW"]
+
+    effective_new_entries_allowed = bool(market_decision.get("new_entries_allowed", False) and approved_serialized)
+    market_decision = dict(market_decision)
+    market_decision["new_entries_allowed"] = effective_new_entries_allowed
+    if not effective_new_entries_allowed:
+        if market_decision.get("regime") == "NO_TRADE":
+            market_decision["recommended_action"] = "CASH"
+        else:
+            market_decision["recommended_action"] = "WATCHLIST_ONLY"
+        reasons = list(market_decision.get("reason") or [])
+        if not approved_serialized:
+            reasons.append("no approved new entries")
+        market_decision["reason"] = list(dict.fromkeys(reasons))
+
+    auto_selected_symbols: List[str] = []
+    if effective_new_entries_allowed:
+        if market_u == "KR":
+            approved_sorted = sorted(approved_serialized, key=lambda x: float(x.get("score") or 0.0), reverse=True)
+            primary = approved_sorted[:2]
+            largecap = [
+                x
+                for x in approved_sorted
+                if x.get("market_cap") is not None and float(x.get("market_cap")) >= float(scan_defaults["largecap_min"])
+            ][: int(scan_defaults["largecap_quota"])]
+            picked: List[str] = []
+            for row in primary + largecap:
+                sym = str(row.get("symbol") or "")
+                if not sym or sym in picked:
+                    continue
+                picked.append(sym)
+                if len(picked) >= 4:
+                    break
+            auto_selected_symbols = picked
+        else:
+            approved_sorted = sorted(approved_serialized, key=lambda x: float(x.get("score") or 0.0), reverse=True)
+            auto_selected_symbols = [str(x.get("symbol")) for x in approved_sorted[:5] if x.get("symbol")]
+
+    positions_review: List[Dict[str, Any]] = []
+    if (held_symbols or "").strip():
+        positions_review = await _review_positions_impl(
+            held_symbols=held_symbols,
+            market=market_u,
+            market_decision=market_decision,
+            max_items=20,
+        )
 
     now_et = _now_et()
     out = {
@@ -2019,6 +2329,8 @@ async def candidates(
                 "day_turnover",
                 "market_cap",
                 "score",
+                "entry_status",
+                "entry_reason",
                 "scan_reason",
                 "rejection_flags",
             ],
@@ -2041,6 +2353,8 @@ async def candidates(
             "day_turnover",
             "market_cap",
             "score",
+            "entry_status",
+            "entry_reason",
             "scan_reason",
             "rejection_flags",
         ],
@@ -2061,6 +2375,10 @@ async def candidates(
             "ret_5d_max": scan_defaults.get("ret_5d_max", ret_5d_max),
             "close_position_min": scan_defaults.get("close_position_min", close_position_min),
             "fresh_news_hours": scan_defaults.get("fresh_news_hours", fresh_news_hours),
+            "market_turnover_rank_max": scan_defaults.get("market_turnover_rank_max"),
+            "largecap_min": scan_defaults.get("largecap_min"),
+            "largecap_quota": scan_defaults.get("largecap_quota"),
+            "kr_exclude_fundlike": scan_defaults.get("kr_exclude_fundlike"),
             "direct_mode": direct_override,
             "us_market_cap_min": us_defaults["market_cap_min"],
             "us_day_turnover_min": us_defaults["day_turnover_min"],
@@ -2069,33 +2387,43 @@ async def candidates(
         },
         "scan_defaults": scan_defaults or None,
         "context": context,
+        "market_decision": market_decision,
+        "new_entries_allowed": effective_new_entries_allowed,
+        "approved_candidates": approved_serialized,
+        "watchlist_candidates": watchlist_serialized,
+        "auto_selected_symbols": auto_selected_symbols,
+        "positions_review": positions_review,
         "note": "Educational prototype. Not financial advice. Data best-effort and may be delayed/incomplete.",
-        "candidates": [
-            {
-                "symbol": c.symbol,
-                "name": kr_name_map.get(c.symbol) or c.name,
-                "currency": c.currency,
-                "last": c.last,
-                "day_chg_pct": c.day_chg_pct,
-                "day_volume": c.day_volume,
-                "avg20_volume": c.avg20_volume,
-                "rel_vol_20d": c.rel_vol_20d,
-                "ret_3d_pct": c.ret_3d_pct,
-                "ret_5d_pct": c.ret_5d_pct,
-                "ret_20d_pct": c.ret_20d_pct,
-                "ret_horizon_pct": c.ret_5d_pct if horizon_days == 5 else c.ret_20d_pct,
-                "avg_turnover_20d": c.avg_turnover_20d,
-                "day_turnover": c.day_turnover,
-                "market_cap": c.market_cap,
-                "score": c.score,
-                "extras": c.extras,
-                "scan_reason": c.scan_reason,
-                "rejection_flags": c.rejection_flags,
-            }
-            for c in cands
-        ],
+        "candidates": serialized_candidates,
     }
     return out
+
+
+@app.get("/api/review_positions")
+async def review_positions(
+    held_symbols: str = Query(..., description="Comma-separated held symbols"),
+    market: str = Query(default="US", description="US or KR"),
+) -> Dict[str, Any]:
+    market_u = (market or "US").upper().strip()
+    if market_u not in ("US", "KR"):
+        raise HTTPException(status_code=400, detail="market must be US or KR")
+    if market_u == "KR":
+        held_symbols = await _resolve_kr_input_text(held_symbols)
+    macro_rows = await _fetch_macro_snapshot(market_u)
+    market_decision = _compute_market_decision(market_u, macro_rows)
+    rows = await _review_positions_impl(
+        held_symbols=held_symbols,
+        market=market_u,
+        market_decision=market_decision,
+        max_items=20,
+    )
+    return {
+        "asof_et": _fmt_dt(_now_et()),
+        "asof_kst": _fmt_dt(_now_kst()),
+        "market": market_u,
+        "market_decision": market_decision,
+        "positions_review": rows,
+    }
 
 
 @app.get("/api/ticker/{symbol}")
@@ -2320,17 +2648,17 @@ async def ticker_detail(
     rejection_flags: List[str] = []
     if market_u == "KR":
         if day_turnover is not None and day_turnover >= KR_SWING_DEFAULTS["today_turnover_min"]:
-            scan_reason.append("당일 거래대금 기준 통과")
+            scan_reason.append("?뱀씪 嫄곕옒?湲?湲곗? ?듦낵")
         if rel_vol_20d is not None and rel_vol_20d >= KR_SWING_DEFAULTS["rel_volume_min"]:
-            scan_reason.append("상대거래량 기준 통과")
+            scan_reason.append("?곷?嫄곕옒??湲곗? ?듦낵")
         if close_position is not None and close_position >= KR_SWING_DEFAULTS["close_position_min"]:
-            scan_reason.append("종가 고가권 안착")
+            scan_reason.append("醫낃? 怨좉?沅??덉갑")
         if resistance_20d is not None and last is not None and float(last) > float(resistance_20d):
-            scan_reason.append("20일 고점 돌파")
+            scan_reason.append("20??怨좎젏 ?뚰뙆")
         if q.get("market_cap") is not None and float(q.get("market_cap")) < KR_SWING_DEFAULTS["market_cap_min"]:
-            rejection_flags.append("시총 하한 미달")
+            rejection_flags.append("?쒖킑 ?섑븳 誘몃떖")
         if close_position is not None and close_position < KR_SWING_DEFAULTS["close_position_min"]:
-            rejection_flags.append("종가 위치 약함")
+            rejection_flags.append("醫낃? ?꾩튂 ?쏀븿")
 
     now_et = _now_et()
     return {
@@ -2407,30 +2735,30 @@ async def ticker_detail(
 
 def _fnum(x: Any, nd: int = 2) -> str:
     if x is None:
-        return "확인 불가"
+        return "?뺤씤 遺덇?"
     try:
         return f"{float(x):.{nd}f}"
     except Exception:
-        return "확인 불가"
+        return "?뺤씤 遺덇?"
 
 
 def _fint(x: Any) -> str:
     if x is None:
-        return "확인 불가"
+        return "?뺤씤 遺덇?"
     try:
         return f"{int(x):,}"
     except Exception:
-        return "확인 불가"
+        return "?뺤씤 遺덇?"
 
 
 def _fmt_pct(x: Any) -> str:
     if x is None:
-        return "확인 불가"
+        return "?뺤씤 遺덇?"
     try:
         v = float(x)
         return f"{v:+.2f}%"
     except Exception:
-        return "확인 불가"
+        return "?뺤씤 遺덇?"
 
 
 def _to_float(x: Any, default: float = 0.0) -> float:
@@ -2590,25 +2918,154 @@ def _risk_flags_detail(d: Dict[str, Any], score: Dict[str, float]) -> List[str]:
 
 
 def _macro_regime(macro_rows: List[Dict[str, Any]], market_code: str) -> str:
+    return str(_compute_market_decision(market_code, macro_rows).get("regime") or "MIXED")
+
+
+def _compute_market_decision(market_code: str, macro_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     m = {str(x.get("label")): x for x in (macro_rows or [])}
-    if market_code.upper() == "US":
+    market_u = (market_code or "US").upper().strip()
+    reasons: List[str] = []
+    regime = "MIXED"
+    recommended_action = "WATCHLIST_ONLY"
+    new_entries_allowed = False
+
+    if market_u == "KR":
+        kospi = _to_float((m.get("KOSPI") or {}).get("day_chg_pct"), 0.0)
+        kosdaq = _to_float((m.get("KOSDAQ") or {}).get("day_chg_pct"), 0.0)
+        usdkrw = _to_float((m.get("USD/KRW") or {}).get("day_chg_pct"), 0.0)
+        macro_snapshot = {
+            "KOSPI_day_chg_pct": kospi,
+            "KOSDAQ_day_chg_pct": kosdaq,
+            "USDKRW_day_chg_pct": usdkrw,
+        }
+
+        if kospi <= -2.0:
+            reasons.append("KOSPI crash")
+        if kosdaq <= -3.0:
+            reasons.append("KOSDAQ crash")
+        if usdkrw >= 1.0:
+            reasons.append("USD/KRW spike")
+        if kospi < 0 and kosdaq < 0 and usdkrw > 0:
+            reasons.append("broad risk-off")
+
+        if kospi <= -2.0 or kosdaq <= -3.0 or usdkrw >= 1.0:
+            regime = "NO_TRADE"
+            recommended_action = "CASH"
+            new_entries_allowed = False
+        elif kospi < 0 and kosdaq < 0 and usdkrw > 0:
+            regime = "RISK_OFF"
+            recommended_action = "WATCHLIST_ONLY"
+            new_entries_allowed = False
+        elif kospi > 0 and kosdaq > 0 and usdkrw <= 0:
+            regime = "RISK_ON"
+            recommended_action = "NEW_ENTRY"
+            new_entries_allowed = True
+        else:
+            regime = "MIXED"
+            recommended_action = "NEW_ENTRY"
+            new_entries_allowed = True
+    else:
         spy = _to_float((m.get("SPY") or {}).get("day_chg_pct"), 0.0)
         qqq = _to_float((m.get("QQQ") or {}).get("day_chg_pct"), 0.0)
         vix = _to_float((m.get("VIX") or {}).get("day_chg_pct"), 0.0)
-        if spy > 0 and qqq > 0 and vix <= 0:
-            return "RISK_ON"
-        if spy < 0 and qqq < 0 and vix > 0:
-            return "RISK_OFF"
-        return "MIXED"
+        macro_snapshot = {
+            "SPY_day_chg_pct": spy,
+            "QQQ_day_chg_pct": qqq,
+            "VIX_day_chg_pct": vix,
+        }
 
-    kospi = _to_float((m.get("KOSPI") or {}).get("day_chg_pct"), 0.0)
-    kosdaq = _to_float((m.get("KOSDAQ") or {}).get("day_chg_pct"), 0.0)
-    usdkrw = _to_float((m.get("USD/KRW") or {}).get("day_chg_pct"), 0.0)
-    if kospi > 0 and kosdaq > 0 and usdkrw <= 0:
-        return "RISK_ON"
-    if kospi < 0 and kosdaq < 0 and usdkrw > 0:
-        return "RISK_OFF"
-    return "MIXED"
+        if spy < -1.5:
+            reasons.append("SPY crash")
+        if qqq < -2.0:
+            reasons.append("QQQ crash")
+        if vix > 0:
+            reasons.append("VIX rising")
+        if spy < 0 and qqq < 0 and vix > 0:
+            reasons.append("broad risk-off")
+
+        if spy < -1.5 and qqq < -2.0 and vix > 0:
+            regime = "NO_TRADE"
+            recommended_action = "CASH"
+            new_entries_allowed = False
+        elif spy < 0 and qqq < 0 and vix > 0:
+            regime = "RISK_OFF"
+            recommended_action = "WATCHLIST_ONLY"
+            new_entries_allowed = False
+        elif spy > 0 and qqq > 0 and vix <= 0:
+            regime = "RISK_ON"
+            recommended_action = "NEW_ENTRY"
+            new_entries_allowed = True
+        else:
+            regime = "MIXED"
+            recommended_action = "NEW_ENTRY"
+            new_entries_allowed = True
+
+    if not reasons:
+        reasons = ["macro mixed"]
+
+    return {
+        "regime": regime,
+        "recommended_action": recommended_action,
+        "new_entries_allowed": bool(new_entries_allowed),
+        "reason": reasons,
+        "macro_snapshot": macro_snapshot,
+    }
+
+
+def _compute_carry_score(
+    *,
+    close: Optional[float],
+    ma20: Optional[float],
+    ma20_slope: Optional[float],
+    ret_3d_pct: Optional[float],
+    ret_20d_pct: Optional[float],
+    close_position: Optional[float],
+    flow_5d: Optional[float],
+    market_decision: Optional[Dict[str, Any]] = None,
+) -> Tuple[float, List[str], bool]:
+    score = 0.0
+    reasons: List[str] = []
+
+    if close is not None and ma20 is not None and float(close) > float(ma20):
+        score += 12.0
+        reasons.append("above_ma20")
+    elif close is not None and ma20 is not None and float(close) <= float(ma20):
+        score -= 16.0
+        reasons.append("below_ma20")
+
+    if ma20_slope is not None and float(ma20_slope) > 0:
+        score += 8.0
+        reasons.append("ma20_slope_up")
+
+    if flow_5d is not None and float(flow_5d) > 0:
+        score += 6.0
+        reasons.append("flow_5d_positive")
+    elif flow_5d is not None and float(flow_5d) < 0:
+        score -= 6.0
+        reasons.append("flow_5d_negative")
+
+    if ret_20d_pct is not None and float(ret_20d_pct) > 0:
+        score += 6.0
+        reasons.append("ret_20d_positive")
+    elif ret_20d_pct is not None and float(ret_20d_pct) <= 0:
+        reasons.append("ret_20d_weak")
+
+    if close_position is not None and float(close_position) < 0.45:
+        score -= 6.0
+        reasons.append("close_position_weak")
+
+    if ret_3d_pct is not None and float(ret_3d_pct) < -6.0:
+        score -= 8.0
+        reasons.append("ret_3d_drop")
+
+    if market_decision and not bool(market_decision.get("new_entries_allowed", True)):
+        reasons.append("risk_off_market")
+
+    invalidated = bool(
+        (close is not None and ma20 is not None and float(close) < float(ma20))
+        and (ret_3d_pct is not None and float(ret_3d_pct) < -6.0)
+    )
+    return round(score, 2), list(dict.fromkeys(reasons)), invalidated
 
 
 async def _fetch_macro_snapshot(market: str) -> List[Dict[str, Any]]:
@@ -2693,8 +3150,119 @@ async def _collect_symbol_details(
         if d is not None:
             ok_details.append(d)
         else:
-            errors.append(f"{s}: {err or '확인 불가'}")
+            errors.append(f"{s}: {err or '?뺤씤 遺덇?'}")
     return ok_details, errors
+
+
+async def _review_positions_impl(
+    *,
+    held_symbols: str,
+    market: str,
+    market_decision: Optional[Dict[str, Any]] = None,
+    max_items: int = 20,
+) -> List[Dict[str, Any]]:
+    market_u = (market or "US").upper().strip()
+    syms = [s.strip().upper() for s in (held_symbols or "").split(",") if s.strip()]
+    if not syms:
+        return []
+    syms = syms[:max_items]
+
+    if market_decision is None:
+        macro_rows = await _fetch_macro_snapshot(market_u)
+        market_decision = _compute_market_decision(market_u, macro_rows)
+
+    sem = asyncio.Semaphore(4)
+
+    async def _one(sym: str) -> Dict[str, Any]:
+        async with sem:
+            try:
+                d = await ticker_detail(sym, market=market_u, horizon_days=20)
+            except Exception:
+                return {
+                    "symbol": sym,
+                    "status": "EXIT",
+                    "carry_score": -99.0,
+                    "reason": ["data_fetch_failed"],
+                    "invalidated": True,
+                }
+
+            stats = d.get("stats") or {}
+            quote = d.get("quote") or {}
+            extras = d.get("extras") or {}
+            close = quote.get("last")
+            close_position = stats.get("close_position")
+            ret_3d_pct = stats.get("ret_3d_pct")
+            ret_20d_pct = stats.get("ret_20d_pct")
+
+            ma20 = None
+            ma20_prev = None
+            flow_5d = None
+            try:
+                if market_u == "KR":
+                    rows = await fetch_kr_daily_history(sym, count=40)
+                    closes = [float(x["close"]) for x in rows if x.get("close") is not None]
+                else:
+                    daily = await fetch_yahoo_chart(sym, range_="3mo", interval="1d", include_prepost=False)
+                    _ts, _o, _h, _l, _c, _v = _extract_ohlcv(daily)
+                    closes = _drop_none_float(_c)
+                if len(closes) >= 20:
+                    ma20 = statistics.fmean(closes[-20:])
+                if len(closes) >= 21:
+                    ma20_prev = statistics.fmean(closes[-21:-1])
+            except Exception:
+                ma20 = None
+                ma20_prev = None
+
+            if market_u == "KR":
+                flow_5d_data = ((extras.get("kr_flow") or {}).get("lookbacks") or {}).get("5d") or {}
+                flow_5d = _to_float(flow_5d_data.get("foreign_net_volume"), 0.0) + _to_float(flow_5d_data.get("institution_net_volume"), 0.0)
+
+            ma20_slope = None
+            if ma20 is not None and ma20_prev is not None:
+                ma20_slope = float(ma20) - float(ma20_prev)
+
+            carry_score, reasons, invalidated = _compute_carry_score(
+                close=close,
+                ma20=ma20,
+                ma20_slope=ma20_slope,
+                ret_3d_pct=ret_3d_pct,
+                ret_20d_pct=ret_20d_pct,
+                close_position=close_position,
+                flow_5d=flow_5d,
+                market_decision=market_decision,
+            )
+
+            if carry_score >= 25:
+                status = "HOLD"
+            elif carry_score >= 5:
+                status = "TRIM"
+            else:
+                status = "EXIT"
+
+            return {
+                "symbol": sym,
+                "status": status,
+                "carry_score": carry_score,
+                "reason": reasons,
+                "invalidated": bool(invalidated),
+            }
+
+    rows = await asyncio.gather(*[_one(sym) for sym in syms], return_exceptions=True)
+    out: List[Dict[str, Any]] = []
+    for idx, row in enumerate(rows):
+        if isinstance(row, Exception):
+            out.append(
+                {
+                    "symbol": syms[idx],
+                    "status": "EXIT",
+                    "carry_score": -99.0,
+                    "reason": ["data_process_failed"],
+                    "invalidated": True,
+                }
+            )
+            continue
+        out.append(row)
+    return out
 
 
 def _build_data_package(
@@ -2706,6 +3274,10 @@ def _build_data_package(
     errors: Optional[List[str]] = None,
     scan_context: Optional[Dict[str, Any]] = None,
     selected_meta: Optional[Dict[str, Dict[str, Any]]] = None,
+    market_decision: Optional[Dict[str, Any]] = None,
+    approved_candidates: Optional[List[Dict[str, Any]]] = None,
+    watchlist_candidates: Optional[List[Dict[str, Any]]] = None,
+    positions_review: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     selected_meta = selected_meta or {}
     ranked_rows: List[Tuple[Any, ...]] = []
@@ -2842,6 +3414,7 @@ def _build_data_package(
             }
         )
 
+    decision = market_decision or _compute_market_decision(market, macro)
     return {
         "schema_version": "data_package.v2",
         "fields_guaranteed": [
@@ -2864,17 +3437,22 @@ def _build_data_package(
         "market": market.upper().strip(),
         "horizon_days": horizon_days,
         "market_regime": _macro_regime(macro, market),
+        "market_decision": decision,
+        "new_entries_allowed": bool(decision.get("new_entries_allowed", False)),
         "macro": macro,
         "macro_asof_kst": _fmt_dt(_now_kst()),
         "scan_setup": scan_context or {},
         "selected_symbols": selected_symbols,
+        "approved_candidates": approved_candidates or [],
+        "watchlist_candidates": watchlist_candidates or [],
+        "positions_review": positions_review or [],
         "errors": errors or [],
         "notes": [
-            "데이터 중심 패키지입니다.",
-            "미국 가격/차트는 Yahoo public endpoint best-effort 기준입니다.",
-            "한국 가격/차트/뉴스/종목명은 Naver Finance best-effort 기준입니다.",
-            "한국 수급은 외국인/기관 순매매와 공매도 데이터를 포함합니다.",
-            "개인 순매수는 현재 확인 불가로 남깁니다.",
+            "?곗씠??以묒떖 ?⑦궎吏?낅땲??",
+            "誘멸뎅 媛寃?李⑦듃??Yahoo public endpoint best-effort 湲곗??낅땲??",
+            "?쒓뎅 媛寃?李⑦듃/?댁뒪/醫낅ぉ紐낆? Naver Finance best-effort 湲곗??낅땲??",
+            "?쒓뎅 ?섍툒? ?멸뎅??湲곌? ?쒕ℓ留ㅼ? 怨듬ℓ???곗씠?곕? ?ы븿?⑸땲??",
+            "媛쒖씤 ?쒕ℓ?섎뒗 ?꾩옱 ?뺤씤 遺덇?濡??④퉩?덈떎.",
         ],
         "candidates": candidates,
     }
@@ -2883,123 +3461,43 @@ def _build_data_package(
 def _build_ai_prompt_from_package(pkg: Dict[str, Any]) -> str:
     market = str(pkg.get("market") or "US").upper().strip()
     horizon_days = int(pkg.get("horizon_days") or 5)
-    candidates = pkg.get("candidates") or []
+    decision = pkg.get("market_decision") or {}
     scan_setup = pkg.get("scan_setup") or {}
-    interest = ", ".join(
-        [f"{c.get('name') or '이름 확인 불가'}({c.get('symbol')})" for c in candidates]
-    ) or "없음"
     payload = json.dumps(pkg, ensure_ascii=False, indent=2)
 
-    if market == "KR":
-        lines = [
-            "너는 한국 주식 단기 모멘텀 분석기다.",
-            "",
-            "목표:",
-            "- KRX 전체에서 다음 거래일에 강한 추세 지속 또는 급등 확률이 가장 높은 종목을 찾는다.",
-            "- 단, 저유동성 잡주나 단순 펌프성 종목은 피한다.",
-            "- 공격적이되, 거래대금과 촉매와 수급이 확인되는 종목을 우선한다.",
-            "",
-            "중요 원칙:",
-            "1. 아래 데이터 패키지는 출발점이지 검색 범위의 한계가 아니다.",
-            "2. 브라우징/웹검색 기능이 있으면 반드시 최신 시세, 뉴스, 공시, 거래소/증권사 정보를 다시 확인하라.",
-            "3. 데이터 패키지에 없는 종목이 더 좋으면 그 종목을 추천하라.",
-            "4. 브라우징 기능이 없으면 그 제한을 먼저 밝히고, 패키지 내부 데이터만으로 판단하라.",
-            "5. 모든 시간은 KST 기준으로 처리하라.",
-            "6. 확인되지 않은 정보는 추정하지 말고 '확인 불가'라고 적어라.",
-            "7. 수급은 반드시 부호를 반영하라. 순매도는 가산점이 아니다.",
-            "8. 거래량보다 거래대금을 더 중요하게 보라.",
-            "9. 가격 자체보다 시가총액, 거래대금, 촉매 신선도, 종가 위치를 더 중요하게 보라.",
-            "",
-            "우선순위:",
-            "- 오늘 거래대금이 크고 최근 평균보다 확실히 증가한 종목",
-            "- 최근 48시간 내 뉴스/공시/이벤트 등 신선한 촉매가 있는 종목",
-            "- 외국인/기관 순매수 부호가 긍정적인 종목",
-            "- 20일/60일 고점 돌파 또는 전고 돌파 후 종가가 고가권에서 끝난 종목",
-            "- KOSPI/KOSDAQ 전체에서 테마/섹터 강도가 동반되는 종목",
-            "- 중대형주 또는 최소한 유동성이 충분한 종목",
-            "",
-            "감점/제외:",
-            "- 거래대금이 부족한 종목",
-            "- 전일 급등 후 당일 종가가 약하거나 윗꼬리가 과한 종목",
-            "- 촉매가 불명확한 종목",
-            "- 저유동성, 과도한 변동성, 관리/경고성 리스크가 있는 종목",
-            "- 단순히 이미 많이 올랐다는 이유만으로 유지되는 종목",
-            "",
-            "분석 절차:",
-            "1. 현재 KST 시각을 먼저 적어라.",
-            "2. 데이터 패키지의 각 timestamp/as-of를 먼저 확인하라.",
-            "3. 패키지 내 후보를 검토하라.",
-            "4. 가능하면 패키지 밖에서도 더 나은 종목이 있는지 KRX 전체 기준으로 재탐색하라.",
-            "5. 최종적으로 상위 3개를 뽑고, 그중 1개를 최종 선택하라.",
-            "6. 패키지 후보를 탈락시킨 경우 이유를 적어라.",
-            "",
-            f"사용자 조건: 공격적 단기 스윙 / 최대 보유 {horizon_days}거래일 / 관심 후보 {interest}",
-            f"탐색 조건: {(scan_setup.get('scan_label') or scan_setup.get('scan_profile') or '기본')} / {(scan_setup.get('scan_note') or '설명 없음')}",
-            "",
-            "출력 형식:",
-            "[1] 현재 시각 및 데이터 신선도",
-            "- 현재 KST:",
-            "- quote as-of:",
-            "- news as-of:",
-            "- flow as-of:",
-            "- short as-of:",
-            "- 검증 한계:",
-            "",
-            "[2] 시장 상태 요약",
-            "- KOSPI/KOSDAQ/환율/금리/섹터 흐름을 3~5줄로 요약",
-            "- 오늘의 리스크 온/오프 판단",
-            "",
-            "[3] 상위 3개 후보",
-            "- 종목명(코드):",
-            "- 출처: package / external",
-            "- 핵심 촉매:",
-            "- 오늘 거래대금:",
-            "- 최근 평균 거래대금 대비:",
-            "- 외국인/기관 수급:",
-            "- 차트 상태: 전고/신고가/종가 위치/갭",
-            "- 내일 강세 지속 논리:",
-            "- 리스크:",
-            "- 확신도: 0~100",
-            "",
-            "[4] 최종 1개",
-            "- 종목명(코드):",
-            "- 왜 이 종목이 1순위인지:",
-            "- 내일 봐야 할 핵심 포인트 3개:",
-            "- 무효화 조건 2개:",
-            "",
-            "[5] 패키지 후보 탈락 사유",
-            "- 종목명:",
-            "- 탈락 이유:",
-            "",
-            "[6] 불확실성",
-            "- 확인 불가하거나 지연 가능성이 있는 데이터만 따로 적어라.",
-            "",
-            "[DATA_PACKAGE_JSON_BEGIN]",
-            payload,
-            "[DATA_PACKAGE_JSON_END]",
-        ]
-        return "\n".join(lines)
-
     lines = [
-        f"You are a US equities short-term momentum swing trading analyst for a 1-{horizon_days} trading day holding period.",
-        "Use only latest verified data. If a field cannot be verified, write '확인 불가'.",
+        f"You are a {market} momentum scanner assistant.",
+        f"Max holding period is {horizon_days} trading days.",
         "",
-        "0) Start with current ET and KST times, then label whether each price/news datapoint is RTH, PM, or AH.",
-        "1) The JSON below is a pre-collected data package. Use it as a starting point, then verify and refresh with web search.",
-        f"2) Pick only 1-3 short-term momentum candidates. Priority watchlist: {interest}",
-        "3) For each candidate, give fact-based momentum reasons: volume/dollar volume anomaly, catalyst, options/short structure if available, chart levels, and index/sector context.",
-        f"4) Build a trade plan with entry, invalidation, target, and time stop within a max {horizon_days} trading day hold.",
-        "5) End with the single highest-probability candidate using the most recent timestamped data only.",
+        "This is critical:",
+        "- Do NOT force a new stock recommendation when market or candidate quality is weak.",
+        "- The final answer may validly be NEW_ENTRY, WATCHLIST_ONLY, CASH, or HOLD/TRIM/EXIT for held positions.",
         "",
-        "User constraints:",
-        "- Style: aggressive short-term swing",
-        f"- Max hold: {horizon_days} trading days",
-        "- Max loss per trade: [-X%] (default 6% if X missing)",
-        f"- Priority tickers: {interest}",
-        f"- Scan setup: {(scan_setup.get('scan_label') or scan_setup.get('scan_profile') or 'default')} / {(scan_setup.get('scan_note') or 'no note')}",
+        "Output format (must follow):",
+        "[1] 시장 판단",
+        "- CASH / WATCHLIST_ONLY / NEW_ENTRY",
         "",
-        "JSON data package:",
+        "[2] 신규 진입 승인 후보 (최대 3개)",
+        "- 없으면 '없음'",
+        "",
+        "[3] 관찰용 생존자",
+        "- 후보만 제시",
+        "",
+        "[4] 보유 종목 판단",
+        "- HOLD / TRIM / EXIT",
+        "",
+        "Use these package fields first:",
+        "- market_decision",
+        "- approved_candidates",
+        "- watchlist_candidates",
+        "- positions_review",
+        f"- scan_setup: {(scan_setup.get('scan_label') or scan_setup.get('scan_profile') or 'default')} / {(scan_setup.get('scan_note') or 'no note')}",
+        "",
+        f"Package market decision hint: {json.dumps(decision, ensure_ascii=False)}",
+        "",
+        "[DATA_PACKAGE_JSON_BEGIN]",
         payload,
+        "[DATA_PACKAGE_JSON_END]",
     ]
     return "\n".join(lines)
 
@@ -3024,59 +3522,57 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
     market = d.get("market") or "US"
 
     lines: List[str] = []
-    lines.append(f"현재 시간 ET: {_fmt_dt(now_et)}")
-    lines.append(f"현재 시간 KST: {_fmt_dt(now_kst)}")
+    lines.append(f"현재 시각 ET: {_fmt_dt(now_et)}")
+    lines.append(f"현재 시각 KST: {_fmt_dt(now_kst)}")
     source_hint = "Naver Finance best-effort" if market == "KR" else "Yahoo/SEC best-effort"
-    lines.append(f"마켓: {market} / 데이터 세션: {d.get('session','Unknown')} ({source_hint})")
-    lines.append(f"기준: {horizon} 거래일 모멘텀(보유기한 최대 {horizon} 거래일)")
+    lines.append(f"시장: {market} / 세션: {d.get('session', 'Unknown')} ({source_hint})")
+    lines.append(f"기준 보유 기간: 최대 {horizon} 거래일")
     lines.append("")
-    lines.append("AI 판단 요청(복붙용):")
-    lines.append("아래 데이터 기반으로 다음 4가지를 판단해줘.")
-    lines.append("1) 각 종목 진입 여부 (진입/관망)")
-    lines.append("2) 각 종목 목표가/손절가 (숫자 필수)")
-    lines.append("3) 최종 1순위 종목 1개")
-    lines.append("4) 판단 근거 요약 (거시 + 종목)")
+    lines.append("단일 종목 참고 리포트:")
+    lines.append("- 왜 후보인지 / 왜 아닌지 먼저 확인")
+    lines.append("- 규칙 기반 수치와 리스크를 함께 확인")
+    lines.append("- 최종 매매 판단은 별도로 검증")
 
     if macro:
         lines.append("")
-        lines.append("매크로 체크(당일):")
+        lines.append("시장 스냅샷:")
         for x in macro:
             lines.append(f"  - {x.get('label')}: {_fnum(x.get('last'))} ({_fmt_pct(x.get('day_chg_pct'))})")
     lines.append("")
 
-    lines.append(f"- 종목: {d.get('symbol')} / {d.get('name')} ({d.get('currency') or 'currency ?'})")
+    lines.append(f"- 종목: {d.get('symbol')} / {d.get('name')} ({d.get('currency') or 'N/A'})")
     lines.append(
-        f"- 현재가(마지막): {_fnum(q.get('last'))} / 당일 등락률: {_fmt_pct(q.get('day_chg_pct'))} / 거래량: {_fint(q.get('day_volume'))}"
+        f"- 현재가: {_fnum(q.get('last'))} / 당일 등락률 {_fmt_pct(q.get('day_chg_pct'))} / 거래량 {_fint(q.get('day_volume'))}"
     )
 
     lines.append(
-        f"- 수익률: 3D {_fmt_pct(stats.get('ret_3d_pct'))} / 5D {_fmt_pct(stats.get('ret_5d_pct'))} / 20D {_fmt_pct(stats.get('ret_20d_pct'))} / (선택 {horizon}D {_fmt_pct(stats.get('ret_horizon_pct'))})"
+        f"- 수익률: 3D {_fmt_pct(stats.get('ret_3d_pct'))} / 5D {_fmt_pct(stats.get('ret_5d_pct'))} / 20D {_fmt_pct(stats.get('ret_20d_pct'))} / 선택 {horizon}D {_fmt_pct(stats.get('ret_horizon_pct'))}"
     )
     lines.append(
-        f"- 거래량: 20D 평균 {_fint(stats.get('avg20_volume'))} / 상대거래량(20D): {_fnum(stats.get('rel_vol_20d'))}x"
+        f"- 거래량: 20D 평균 {_fint(stats.get('avg20_volume'))} / 상대거래량 {_fnum(stats.get('rel_vol_20d'))}x"
     )
-    lines.append(f"- 변동성: ATR(14): {_fnum(stats.get('atr14'))}")
+    lines.append(f"- 변동성: ATR(14) {_fnum(stats.get('atr14'))}")
 
     if market == "KR" and (kr_flow or kr_short):
         lines.append("")
-        lines.append("KR 수급/공매도(가능한 범위):")
+        lines.append("KR 수급 / 공매도:")
         if kr_flow:
             flow_1d = (kr_flow.get("lookbacks") or {}).get("1d") or {}
             flow_5d = (kr_flow.get("lookbacks") or {}).get("5d") or {}
             flow_20d = (kr_flow.get("lookbacks") or {}).get("20d") or {}
             lines.append(
-                "  - 외국인 순매수(주): "
+                "  - 외국인 순매수 수량: "
                 f"1D {_fint(flow_1d.get('foreign_net_volume'))} / "
                 f"5D {_fint(flow_5d.get('foreign_net_volume'))} / "
                 f"20D {_fint(flow_20d.get('foreign_net_volume'))}"
             )
             lines.append(
-                "  - 기관 순매수(주): "
+                "  - 기관 순매수 수량: "
                 f"1D {_fint(flow_1d.get('institution_net_volume'))} / "
                 f"5D {_fint(flow_5d.get('institution_net_volume'))} / "
                 f"20D {_fint(flow_20d.get('institution_net_volume'))}"
             )
-            lines.append("  - 개인 순매수(주): 확인 불가")
+            lines.append("  - 개인 수급은 별도 추적 필요")
         if kr_short:
             short_1d = (kr_short.get("lookbacks") or {}).get("1d") or {}
             short_5d = (kr_short.get("lookbacks") or {}).get("5d") or {}
@@ -3084,7 +3580,7 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
             latest_short = kr_short.get("latest") or {}
             latest_balance = kr_short.get("latest_balance") or {}
             lines.append(
-                "  - 공매도 거래량(주): "
+                "  - 공매도 거래량: "
                 f"1D {_fint(short_1d.get('short_volume'))} / "
                 f"5D {_fint(short_5d.get('short_volume'))} / "
                 f"20D {_fint(short_20d.get('short_volume'))}"
@@ -3095,37 +3591,36 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
                 f"거래대금 {_fnum(latest_short.get('short_value_ratio_pct'), 4)}%"
             )
             lines.append(
-                "  - 공매도 순보유잔고(최신): "
+                "  - 공매도 잔고(최신): "
                 f"수량 {_fint(latest_balance.get('net_short_balance_qty'))} / "
                 f"금액 {_fint(latest_balance.get('net_short_balance_value'))} "
-                f"(기준 {latest_balance.get('date') or '확인 불가'})"
+                f"(기준 {latest_balance.get('date') or 'N/A'})"
             )
 
-    # short/options/earnings
     if qs or opt:
         lines.append("")
-        lines.append("추가(가능한 범위):")
+        lines.append("추가 참고 데이터:")
         if qs:
             spf = qs.get("short_percent_of_float")
             sr = qs.get("short_ratio")
             mc = qs.get("market_cap")
             eds = qs.get("earnings_dates")
             if mc is not None:
-                lines.append(f"  - 시총(야후): {_fint(mc)}")
+                lines.append(f"  - 시가총액(참고): {_fint(mc)}")
             if spf is not None or sr is not None:
                 lines.append(f"  - Short % of float: {_fnum(spf,4)} / Short ratio: {_fnum(sr,2)}")
             if eds:
-                lines.append(f"  - Earnings(ET): {', '.join(eds[:2])}")
+                lines.append(f"  - Earnings (ET): {', '.join(eds[:2])}")
         if opt:
             cv = opt.get("call_volume")
             pv = opt.get("put_volume")
             cpr = opt.get("call_put_vol_ratio")
             exp = opt.get("expiration")
             if cv or pv:
-                lines.append(f"  - Options(near exp {exp or 'N/A'}): CallVol {_fint(cv)} / PutVol {_fint(pv)} / Call:Put {_fnum(cpr,2)}")
+                lines.append(f"  - Options (near exp {exp or 'N/A'}): CallVol {_fint(cv)} / PutVol {_fint(pv)} / Call:Put {_fnum(cpr,2)}")
 
     lines.append("")
-    news_label = "촉매(최근 Naver Finance 뉴스):" if market == "KR" else "촉매(최근 Yahoo RSS):"
+    news_label = "최근 뉴스 (Naver Finance):" if market == "KR" else "최근 뉴스 (Yahoo RSS):"
     lines.append(news_label)
     if not news:
         lines.append("  - 확인 불가")
@@ -3135,30 +3630,30 @@ def _build_single_report(d: Dict[str, Any], macro: Optional[List[Dict[str, Any]]
 
     lines.append("")
     if _is_korea_symbol(str(d.get("symbol") or "")):
-        lines.append("SEC(최근 7일): N/A (비미국 종목)")
+        lines.append("SEC (최근 7일): N/A (비미국 종목)")
     else:
-        lines.append("SEC(최근 7일):")
+        lines.append("SEC (최근 7일):")
         if not sec:
-            lines.append("  - 없음/확인 불가")
+            lines.append("  - 없음 / 확인 불가")
         else:
             for s in sec[:6]:
                 lines.append(f"  - {s.get('form')} / filingDate={s.get('filingDate')} / reportDate={s.get('reportDate') or 'N/A'}")
 
     lines.append("")
-    lines.append("차트 레벨(숫자):")
-    lines.append(f"  - 저항(20D 고점): {_fnum(lv.get('resistance_20d'))}")
-    lines.append(f"  - 지지(20D 저점): {_fnum(lv.get('support_20d'))}")
-    lines.append(f"  - 당일 고가/저가: {_fnum(lv.get('day_high'))} / {_fnum(lv.get('day_low'))}")
+    lines.append("차트 레벨:")
+    lines.append(f"  - 20D 저항: {_fnum(lv.get('resistance_20d'))}")
+    lines.append(f"  - 20D 지지: {_fnum(lv.get('support_20d'))}")
+    lines.append(f"  - 당일 고가 / 저가: {_fnum(lv.get('day_high'))} / {_fnum(lv.get('day_low'))}")
 
     lines.append("")
-    lines.append("트레이드 플랜(규칙 기반 참고값, 최종 판단은 AI/사용자):")
-    lines.append(f"  - 진입 트리거: {_fnum(plan.get('entry_trigger'))} 이상 체결 시")
-    lines.append(f"  - 손절(무효화): {_fnum(plan.get('stop'))}")
-    lines.append(f"  - 목표(전량 1회 매도): {_fnum(plan.get('target'))}")
-    lines.append(f"  - 보유기한: 최대 {plan.get('hold_days_max', horizon)} 거래일 / 시간손절: {plan.get('time_stop')}")
+    lines.append("규칙 기반 플랜(보조):")
+    lines.append(f"  - 진입 트리거: {_fnum(plan.get('entry_trigger'))}")
+    lines.append(f"  - 손절 기준: {_fnum(plan.get('stop'))}")
+    lines.append(f"  - 목표가: {_fnum(plan.get('target'))}")
+    lines.append(f"  - 보유 한도: 최대 {plan.get('hold_days_max', horizon)} 거래일 / 시간 손절: {plan.get('time_stop')}")
 
     lines.append("")
-    lines.append("주의: 교육용 프로토타입 출력. 데이터 지연/누락 가능. 매매 판단은 본인 책임.")
+    lines.append("주의: 참고용 출력입니다. 데이터 지연/누락 가능성이 있으며 최종 판단 책임은 사용자에게 있습니다.")
 
     return "\n".join(lines)
 
@@ -3181,7 +3676,13 @@ async def report_multi_data(
     scan_note: str = Query(default=""),
     scan_thresholds: str = Query(default=""),
     selected_meta: str = Query(default=""),
+    held_symbols: str = Query(default=""),
 ) -> Dict[str, Any]:
+    market_u = (market or "US").upper().strip()
+    if market_u == "KR":
+        symbols = await _resolve_kr_input_text(symbols)
+        if (held_symbols or "").strip():
+            held_symbols = await _resolve_kr_input_text(held_symbols)
     details, errors = await _collect_symbol_details(
         symbols,
         market=market,
@@ -3190,10 +3691,69 @@ async def report_multi_data(
     )
     if horizon_days not in (5, 20):
         horizon_days = 5 if horizon_days < 12 else 20
-    macro = await _fetch_macro_snapshot(market)
+    macro = await _fetch_macro_snapshot(market_u)
+    market_decision = _compute_market_decision(market_u, macro)
+
+    approved_candidates: List[Dict[str, Any]] = []
+    watchlist_candidates: List[Dict[str, Any]] = []
+    for d in details:
+        sym = str(d.get("symbol") or "")
+        if not sym:
+            continue
+        score = _score_breakdown_detail(d).get("total", 0.0)
+        reasons = list(d.get("scan_reason") or [])
+        status = "APPROVED_NEW"
+        if not bool(market_decision.get("new_entries_allowed", True)):
+            status = "WATCHLIST_ONLY"
+            reasons.append("market risk-off blocks new entries")
+        else:
+            soft_block = False
+            if market_u == "KR":
+                if not (d.get("news") or []):
+                    soft_block = True
+                    reasons.append("missing news")
+                flow_5d = (((d.get("extras") or {}).get("kr_flow") or {}).get("lookbacks") or {}).get("5d") or {}
+                signed_5d = _to_float(flow_5d.get("foreign_net_volume"), 0.0) + _to_float(flow_5d.get("institution_net_volume"), 0.0)
+                if signed_5d <= 0:
+                    soft_block = True
+                    reasons.append("negative flow")
+                close_pos = ((d.get("stats") or {}).get("close_position"))
+                if close_pos is None or float(close_pos) < KR_SWING_DEFAULTS["close_position_min"]:
+                    soft_block = True
+                    reasons.append("weak close position")
+            if soft_block:
+                status = "WATCHLIST_ONLY"
+
+        row = {
+            "symbol": sym,
+            "name": d.get("name"),
+            "score": round(float(score), 2),
+            "entry_status": status,
+            "entry_reason": list(dict.fromkeys(reasons)),
+        }
+        if status == "APPROVED_NEW":
+            approved_candidates.append(row)
+        else:
+            watchlist_candidates.append(row)
+
+    effective_new_entries = bool(market_decision.get("new_entries_allowed", False) and approved_candidates)
+    market_decision = dict(market_decision)
+    market_decision["new_entries_allowed"] = effective_new_entries
+    if not effective_new_entries:
+        market_decision["recommended_action"] = "CASH" if market_decision.get("regime") == "NO_TRADE" else "WATCHLIST_ONLY"
+
+    positions_review = []
+    if (held_symbols or "").strip():
+        positions_review = await _review_positions_impl(
+            held_symbols=held_symbols,
+            market=market_u,
+            market_decision=market_decision,
+            max_items=20,
+        )
+
     return _build_data_package(
         details,
-        market=market,
+        market=market_u,
         horizon_days=horizon_days,
         macro=macro,
         errors=errors,
@@ -3204,6 +3764,10 @@ async def report_multi_data(
             "thresholds": _parse_scan_thresholds(scan_thresholds),
         },
         selected_meta=_parse_selected_meta(selected_meta),
+        market_decision=market_decision,
+        approved_candidates=approved_candidates,
+        watchlist_candidates=watchlist_candidates,
+        positions_review=positions_review,
     )
 
 
@@ -3248,6 +3812,7 @@ async def prompt_multi(
     scan_note: str = Query(default=""),
     scan_thresholds: str = Query(default=""),
     selected_meta: str = Query(default=""),
+    held_symbols: str = Query(default=""),
 ) -> str:
     pkg = await report_multi_data(
         symbols=symbols,
@@ -3259,6 +3824,7 @@ async def prompt_multi(
         scan_note=scan_note,
         scan_thresholds=scan_thresholds,
         selected_meta=selected_meta,
+        held_symbols=held_symbols,
     )
     return _build_ai_prompt_from_package(pkg)
 
@@ -3303,29 +3869,29 @@ async def report_multi(
         if d is not None:
             ok_details.append(d)
         else:
-            errors.append(f"- {s}: {err or '확인 불가'}")
+            errors.append(f"- {s}: {err or '?뺤씤 遺덇?'}")
 
     # header
     lines: List[str] = []
-    lines.append(f"현재 시간 ET: {_fmt_dt(now_et)}")
-    lines.append(f"현재 시간 KST: {_fmt_dt(now_kst)}")
-    lines.append(f"리포트 모드: 다종목 일괄 / 기준 {horizon_days} 거래일 (보유기한 최대 {horizon_days} 거래일)")
-    lines.append(f"심볼: {', '.join([d.get('symbol') for d in ok_details])}")
+    lines.append(f"?꾩옱 ?쒓컙 ET: {_fmt_dt(now_et)}")
+    lines.append(f"?꾩옱 ?쒓컙 KST: {_fmt_dt(now_kst)}")
+    lines.append(f"由ы룷??紐⑤뱶: ?ㅼ쥌紐??쇨큵 / 湲곗? {horizon_days} 嫄곕옒??(蹂댁쑀湲고븳 理쒕? {horizon_days} 嫄곕옒??")
+    lines.append(f"?щ낵: {', '.join([d.get('symbol') for d in ok_details])}")
     lines.append("")
-    lines.append("AI 판단 요청(복붙용):")
-    lines.append("아래 데이터로 진입/관망, 목표가, 손절가, 우선순위 TOP3를 제시해줘.")
-    lines.append("핵심: 점수(total/세부) + 매크로 + 이벤트 리스크를 함께 반영.")
+    lines.append("AI ?먮떒 ?붿껌(蹂듬텤??:")
+    lines.append("?꾨옒 ?곗씠?곕줈 吏꾩엯/愿留? 紐⑺몴媛, ?먯젅媛, ?곗꽑?쒖쐞 TOP3瑜??쒖떆?댁쨾.")
+    lines.append("?듭떖: ?먯닔(total/?몃?) + 留ㅽ겕濡?+ ?대깽??由ъ뒪?щ? ?④퍡 諛섏쁺.")
 
     macro = await _fetch_macro_snapshot(market)
     if macro:
         lines.append("")
-        lines.append("매크로 체크(당일):")
+        lines.append("留ㅽ겕濡?泥댄겕(?뱀씪):")
         for x in macro:
             lines.append(f"- {x.get('label')}: {_fnum(x.get('last'))} ({_fmt_pct(x.get('day_chg_pct'))})")
 
     if errors:
         lines.append("")
-        lines.append("불러오기 실패:")
+        lines.append("遺덈윭?ㅺ린 ?ㅽ뙣:")
         lines.extend(errors)
 
     def _to_float(x: Any, default: float = 0.0) -> float:
@@ -3429,14 +3995,14 @@ async def report_multi(
         spread = _spread_pct(q)
         eds = qs.get("earnings_dates") or []
         if eds:
-            flags.append("실적일정")
+            flags.append("?ㅼ쟻?쇱젙")
         if spread is not None and spread > 0.35:
-            flags.append("스프레드넓음")
+            flags.append("?ㅽ봽?덈뱶?볦쓬")
         if score.get("atr_pct", 0.0) > 6.0:
-            flags.append("변동성높음")
+            flags.append("蹂?숈꽦?믪쓬")
         if sec:
             flags.append(f"SEC{len(sec)}건")
-        return ",".join(flags) if flags else "낮음"
+        return ",".join(flags) if flags else "??쓬"
 
     def _macro_regime(macro_rows: List[Dict[str, Any]], market_code: str) -> str:
         m = {str(x.get("label")): x for x in (macro_rows or [])}
@@ -3458,9 +4024,9 @@ async def report_multi(
             return "RISK_OFF"
         return "MIXED"
 
-    # 비교 테이블(리포트 탭 전용): AI가 바로 랭킹할 수 있는 구조화 데이터
+    # 鍮꾧탳 ?뚯씠釉?由ы룷?????꾩슜): AI媛 諛붾줈 ??궧?????덈뒗 援ъ“???곗씠??
     lines.append("")
-    lines.append("비교 요약(배치 리포트):")
+    lines.append("鍮꾧탳 ?붿빟(諛곗튂 由ы룷??:")
     lines.append("SYMBOL | TOTAL | MOM | LIQ | FLOW | RISK- | HRET | DAY | RELVOL | ATR% | SPREAD% | TURNOVER | EVENT")
     ranked: List[Tuple[float, Dict[str, Any], Dict[str, float]]] = []
     for d in ok_details:
@@ -3473,7 +4039,7 @@ async def report_multi(
         lines.append(
             f"{d.get('symbol')} | {sc['total']} | {sc['momentum']} | {sc['liquidity']} | {sc['flow_proxy']} | {sc['risk_penalty']} | "
             f"{_fmt_pct(st.get('ret_horizon_pct'))} | {_fmt_pct(q.get('day_chg_pct'))} | {_fnum(st.get('rel_vol_20d'))}x | "
-            f"{_fnum(sc.get('atr_pct'))}% | {_fnum(spread,3) if spread is not None else '확인 불가'} | {_fint(sc['turnover'])} | {event}"
+            f"{_fnum(sc.get('atr_pct'))}% | {_fnum(spread,3) if spread is not None else '?뺤씤 遺덇?'} | {_fint(sc['turnover'])} | {event}"
         )
 
     ranked.sort(key=lambda x: x[0], reverse=True)
@@ -3481,16 +4047,16 @@ async def report_multi(
         best = ranked[0][1]
         top3 = [x[1].get("symbol") for x in ranked[:3]]
         lines.append("")
-        lines.append(f"우선순위 TOP3: {', '.join([str(x) for x in top3])}")
-        lines.append(f"1순위 후보: {best.get('symbol')} (총점 {ranked[0][0]})")
+        lines.append(f"?곗꽑?쒖쐞 TOP3: {', '.join([str(x) for x in top3])}")
+        lines.append(f"1?쒖쐞 ?꾨낫: {best.get('symbol')} (珥앹젏 {ranked[0][0]})")
         if market.upper() == "KR":
-            lines.append("주의: KR은 외국인/기관 원데이터와 공매도 데이터를 포함합니다. 개인 순매수는 확인 불가입니다.")
+            lines.append("二쇱쓽: KR? ?멸뎅??湲곌? ?먮뜲?댄꽣? 怨듬ℓ???곗씠?곕? ?ы븿?⑸땲?? 媛쒖씤 ?쒕ℓ?섎뒗 ?뺤씤 遺덇??낅땲??")
         else:
-            lines.append("주의: FLOW는 기관/외국인 순매수 원데이터가 아닌 프록시(거래강도/옵션/숏지표)입니다.")
+            lines.append("二쇱쓽: FLOW??湲곌?/?멸뎅???쒕ℓ???먮뜲?댄꽣媛 ?꾨땶 ?꾨줉??嫄곕옒媛뺣룄/?듭뀡/?륁????낅땲??")
 
-    # 종목별 AI 해석 블록
+    # 醫낅ぉ蹂?AI ?댁꽍 釉붾줉
     lines.append("")
-    lines.append("종목별 해석 입력(요약):")
+    lines.append("醫낅ぉ蹂??댁꽍 ?낅젰(?붿빟):")
     for total, d, sc in ranked:
         q = d.get("quote", {}) or {}
         st = d.get("stats", {}) or {}
@@ -3527,7 +4093,7 @@ async def report_multi(
                 f"inst_1d={_fint(flow_1d.get('institution_net_volume'))}, "
                 f"foreign_5d={_fint(flow_5d.get('foreign_net_volume'))}, "
                 f"inst_5d={_fint(flow_5d.get('institution_net_volume'))}, "
-                "individual=확인 불가"
+                "individual=?뺤씤 遺덇?"
             )
             lines.append(
                 "kr_short_details: "
@@ -3544,12 +4110,12 @@ async def report_multi(
         if sec:
             lines.append(f"event: sec_forms={', '.join([(x.get('form') or 'N/A') for x in sec[:3]])}")
         if news:
-            lines.append(f"news_headline_1: {(news[0].get('title') or '확인 불가')}")
+            lines.append(f"news_headline_1: {(news[0].get('title') or '?뺤씤 遺덇?')}")
 
     lines.append("")
-    lines.append(f"매크로 레짐 추정: {_macro_regime(macro, market)}")
-    lines.append("AI 출력 요청 형식(엄수):")
-    lines.append("[종목] 진입/관망 | 진입가 | 손절가 | 목표가 | 포지션우선순위(1~3) | 확신도 | 근거(거시/수급프록시/레벨)")
+    lines.append(f"留ㅽ겕濡??덉쭚 異붿젙: {_macro_regime(macro, market)}")
+    lines.append("AI 異쒕젰 ?붿껌 ?뺤떇(?꾩닔):")
+    lines.append("[醫낅ぉ] 吏꾩엯/愿留?| 吏꾩엯媛 | ?먯젅媛 | 紐⑺몴媛 | ?ъ??섏슦?좎닚??1~3) | ?뺤떊??| 洹쇨굅(嫄곗떆/?섍툒?꾨줉???덈꺼)")
 
     return "\n".join(lines)
 
@@ -3568,3 +4134,4 @@ async def _shutdown() -> None:
     if _client is not None:
         await _client.aclose()
         _client = None
+

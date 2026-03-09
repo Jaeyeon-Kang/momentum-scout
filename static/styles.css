@@ -308,6 +308,11 @@ body {
   margin-bottom: 14px;
 }
 
+.guide-box.compact {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
 .guide-title {
   font-size: 12px;
   font-weight: 700;
@@ -338,6 +343,34 @@ body {
   font-weight: 700;
   letter-spacing: 0.2px;
   text-transform: uppercase;
+}
+
+.field-help {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.advanced-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.advanced-topbar {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.advanced-grid .field {
+  width: 100%;
 }
 
 input[type="text"],
@@ -550,6 +583,12 @@ textarea.reportBox {
   letter-spacing: 0.2px;
 }
 
+.meta-inline {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .name {
   margin-top: 3px;
   max-width: 320px;
@@ -696,6 +735,17 @@ textarea.reportBox {
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+details.sheetFooter {
+  display: block;
+}
+
+details.sheetFooter > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: none;
 }
 
 .sec-hdr {
@@ -972,6 +1022,10 @@ code {
   .row-btns {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .advanced-grid {
+    grid-template-columns: 1fr;
   }
 
   .item {
