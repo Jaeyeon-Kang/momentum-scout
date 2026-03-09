@@ -748,6 +748,18 @@ details.sheetFooter > summary {
   user-select: none;
 }
 
+details.guide-box > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  user-select: none;
+}
+
+details.guide-box[open] > summary {
+  margin-bottom: 10px;
+}
+
 .sec-hdr {
   margin: 14px 0 8px;
   color: var(--muted);

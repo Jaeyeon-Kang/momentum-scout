@@ -15,6 +15,29 @@ const KR_DEFAULT_PRESET = {
   krExcludeFundlike: true,
 };
 
+const US_DEFAULT_PRESET = {
+  maxPrice: 2000,
+  minTurnover: 20000000,
+};
+
+const US_LIQUIDITY_PRESETS = {
+  tight: {
+    minTurnover: 50000000,
+    label: "보수적",
+    desc: "하루 평균 거래대금 5천만 달러 이상 위주로 봅니다. 이상한 소형주는 덜 보이지만, 작은 강세주는 놓칠 수 있습니다.",
+  },
+  balanced: {
+    minTurnover: 20000000,
+    label: "균형",
+    desc: "하루 평균 거래대금 2천만 달러 이상 기준입니다. 너무 마른 종목은 줄이면서도 중형주 기회는 꽤 남겨둡니다.",
+  },
+  aggressive: {
+    minTurnover: 10000000,
+    label: "공격적",
+    desc: "하루 평균 거래대금 1천만 달러 이상까지 넓혀 봅니다. 괜찮은 소형주를 더 볼 수 있지만 노이즈도 늘어납니다.",
+  },
+};
+
 const PROFILE_HELP = {
   surge: {
     title: "단기 급등 추적",
@@ -134,6 +157,20 @@ function applyKrPresetToInputs() {
   if ($("activePresetBadge")) $("activePresetBadge").textContent = "Preset: KR 대형주 포함 공격형";
 }
 
+function applyUsPresetToInputs() {
+  if ($("maxPrice")) $("maxPrice").value = String(US_DEFAULT_PRESET.maxPrice);
+  syncUsLiquidityPreset(false);
+}
+
+function syncUsLiquidityPreset(notify = false) {
+  if (getMarket() !== "US") return;
+  const liquidity = $("liquidityLevel")?.value || "balanced";
+  const preset = US_LIQUIDITY_PRESETS[liquidity] || US_LIQUIDITY_PRESETS.balanced;
+  if ($("minTurnover")) $("minTurnover").value = String(preset.minTurnover);
+  if ($("minTurnoverHelp")) $("minTurnoverHelp").textContent = `현재 ${preset.label} 기준: ${fmtInt(preset.minTurnover)} 달러. ${preset.desc}`;
+  if (notify) showToast(`US ${preset.label} 기준으로 최소 평균 거래대금을 맞췄습니다.`, "info");
+}
+
 function renderProfileGuide() {
   const profile = PROFILE_HELP[$("scanProfile")?.value || "surge"] || PROFILE_HELP.surge;
   $("profileGuide").innerHTML = `
@@ -162,11 +199,14 @@ function updatePlanSummary() {
   }
 
   const profile = PROFILE_HELP[$("scanProfile")?.value || "surge"] || PROFILE_HELP.surge;
+  const liquidity = $("liquidityLevel")?.value || "balanced";
+  const liqPreset = US_LIQUIDITY_PRESETS[liquidity] || US_LIQUIDITY_PRESETS.balanced;
   $("planSummary").innerHTML = `
     <div class="plan-summary-title">추천 시작값: US ${esc(profile.title)}</div>
-    <div class="plan-summary-body">${esc(profile.desc)}</div>
+    <div class="plan-summary-body">${esc(profile.desc)} 기본값은 고가주를 놓치지 않도록 최대 가격 2,000달러로 두고, 평균 거래대금은 유동성 기준에 따라 자동 조정합니다.</div>
     <div class="plan-summary-meta">
       <span class="plan-pill">최대 가격 ${fmt($("maxPrice")?.value || 0, 0)}</span>
+      <span class="plan-pill">평균 거래대금 ${fmtInt(liqPreset.minTurnover)}</span>
       <span class="plan-pill">보유 기간 ${getHorizon()}일</span>
       <span class="plan-pill">유동성 ${esc($("liquidityLevel")?.selectedOptions?.[0]?.textContent || "균형")}</span>
     </div>
@@ -189,23 +229,30 @@ function updateMarketUI(notify = false) {
   $("turnoverField")?.classList.toggle("market-hidden", market === "KR");
   $("filterFieldsRow")?.classList.toggle("market-hidden", market === "KR");
   $("krFixedMode")?.classList.toggle("hidden", market !== "KR");
+  $("usSourceDetails")?.classList.toggle("hidden", market === "KR");
   $("scrRow")?.classList.toggle("market-hidden", market === "KR");
   $("scrCustomRow")?.classList.toggle("market-hidden", market === "KR" || ($("scrPreset")?.value || "") !== "custom");
 
   if (market === "KR") {
     $("horizon").value = "5";
     applyKrPresetToInputs();
+    $("toggleAdvancedBtn")?.classList.remove("market-hidden");
     $("inputResolveHint").innerHTML = `
       <div class="guide-title">입력 팁</div>
       <div class="guide-text">KR은 <code>삼성전자</code>, <code>한화오션</code>처럼 종목명으로 적어도 자동 해석을 시도합니다.</div>
       <div class="guide-text">보유 종목도 종목명/코드 혼합 입력이 가능합니다.</div>
     `;
   } else {
+    applyUsPresetToInputs();
+    advancedOpen = false;
+    $("advancedFiltersRow")?.classList.add("hidden");
+    $("toggleAdvancedBtn")?.classList.add("market-hidden");
     $("inputResolveHint").innerHTML = `
       <div class="guide-title">입력 팁</div>
       <div class="guide-text">US는 <code>TSLA</code>, <code>NVDA</code>처럼 티커 입력이 가장 정확합니다.</div>
-      <div class="guide-text">직접 입력이 없으면 기본 스크리너가 자동으로 후보를 모읍니다.</div>
+      <div class="guide-text">직접 입력이 없으면 아래의 US 후보 소스 고급 설정 기본값으로 후보를 자동 수집합니다.</div>
     `;
+    syncUsLiquidityPreset(false);
   }
 
   renderProfileGuide();
@@ -713,6 +760,7 @@ async function reportSelected() {
 }
 
 function toggleAdvanced() {
+  if (getMarket() !== "KR") return;
   advancedOpen = !advancedOpen;
   $("advancedFiltersRow")?.classList.toggle("hidden", !advancedOpen);
   $("toggleAdvancedBtn").textContent = advancedOpen ? "고급 설정 닫기" : "고급 설정 열기";
@@ -754,6 +802,10 @@ window.addEventListener("load", () => {
   $("market").addEventListener("change", () => updateMarketUI(true));
   $("scanProfile")?.addEventListener("change", () => {
     renderProfileGuide();
+    updatePlanSummary();
+  });
+  $("liquidityLevel")?.addEventListener("change", () => {
+    syncUsLiquidityPreset(true);
     updatePlanSummary();
   });
   $("scrPreset")?.addEventListener("change", updateScreenerUi);

@@ -1594,7 +1594,7 @@ async def candidates(
     scr_ids: str = Query(default="day_gainers,most_actives", description="(US) comma-separated Yahoo predefined screener IDs"),
     symbols: str = Query(default="", description="Optional: override universe with explicit comma-separated symbols"),
     size_per_screener: int = Query(default=25, ge=5, le=50),
-    max_price: float = Query(default=80.0, ge=0.0, le=1_000_000.0),
+    max_price: float = Query(default=2_000.0, ge=0.0, le=1_000_000.0),
     min_avg_turnover: float = Query(default=20_000_000.0, ge=0.0, description="20d average turnover filter (price*volume, local currency)"),
     market_cap_min: float = Query(default=0.0, ge=0.0),
     today_turnover_min: float = Query(default=0.0, ge=0.0),
