@@ -20,7 +20,7 @@
   <header class="header">
     <div class="title">
       <div class="h1">Momentum Scout</div>
-      <div class="sub" id="asof">오늘 시장 상태 + 신규 진입 가능 여부 + 보유 지속 여부를 같이 보는 스캐너</div>
+      <div class="sub" id="asof">시장 판단, 신규 진입 승인, 관찰 후보, 보유 종목 리뷰를 한 화면에서 봅니다.</div>
     </div>
     <div class="hdr-actions">
       <button class="hdr-btn" id="langBtn" aria-label="Switch language">EN</button>
@@ -29,7 +29,12 @@
     </div>
   </header>
 
-  <nav class="top-menu" aria-label="Main menu">
+  <nav class="top-menu mode-menu" aria-label="Main menu">
+    <button class="menu-btn active" id="modeScoutBtn" data-mode="scout">Momentum Scout</button>
+    <button class="menu-btn" id="modeIntradayBtn" data-mode="intraday">Intraday Desk</button>
+  </nav>
+
+  <nav class="top-menu scout-menu" aria-label="Momentum Scout menu" id="scoutMenu">
     <button class="menu-btn active" id="menuScan" data-panel="panelScan">1. 스캔 설정</button>
     <button class="menu-btn" id="menuList" data-panel="panelList">2. 결과 보기</button>
   </nav>
@@ -38,14 +43,14 @@
     <section class="panel active" id="panelScan">
       <section class="card">
         <div class="section-head">
-          <div class="h2">처음이면 기본값으로 바로 시작해도 됩니다</div>
-          <div class="muted small">헷갈리는 옵션은 설명을 읽고 그대로 두세요. 기본값은 KR에서 가장 실전적인 쪽으로 맞춰져 있습니다.</div>
+          <div class="h2">처음이면 기본값으로 바로 시작해도 됩니다.</div>
+          <div class="muted small">평소에는 추천 기본값만 보고 시작해도 됩니다. 바꾸는 값마다 왜 필요한지 아래에 같이 적어뒀습니다.</div>
         </div>
 
         <div class="guide-box" id="quickStartBox">
-          <div class="guide-title">추천 시작법</div>
-          <div class="guide-text">KR은 `대형주 포함 공격형`을 기본 추천합니다. 특별한 이유가 없으면 그대로 스캔하세요.</div>
-          <div class="guide-text">US는 `단기 급등 추적`부터 시작한 뒤, 너무 과열이면 `거래량 동반 추세 지속`으로 바꾸면 됩니다.</div>
+          <div class="guide-title">빠른 시작</div>
+          <div class="guide-text">KR은 <code>대형주 포함 공격형</code>이 기본 추천입니다. ETF/ETN은 기본 제외하고, 거래대금 상위권과 대형주를 우선 봅니다.</div>
+          <div class="guide-text">US는 <code>스캔 프로필</code>과 <code>유동성 기준</code>만 먼저 고르면 됩니다. 나머지는 기본값으로 시작해도 충분합니다.</div>
         </div>
 
         <section class="scan-block">
@@ -53,7 +58,7 @@
             <div class="scan-step">1</div>
             <div>
               <div class="scan-block-title">스캔 프로필</div>
-              <div class="muted small">무엇을 찾고 싶은지 고르면 아래 설명이 같이 바뀝니다.</div>
+              <div class="muted small">무엇을 찾고 싶은지 먼저 고르면, 아래 설명과 추천 기본값이 같이 바뀝니다.</div>
             </div>
           </div>
 
@@ -69,7 +74,7 @@
             </label>
           </div>
 
-          <div class="inline-note hidden" id="krFixedMode">KR은 기본 모드가 `대형주 포함 공격형`으로 고정됩니다.</div>
+          <div class="inline-note hidden" id="krFixedMode">KR은 기본 모드가 <code>대형주 포함 공격형</code>으로 고정됩니다.</div>
           <div class="guide-box compact" id="profileGuide"></div>
           <div class="plan-summary" id="planSummary"></div>
         </section>
@@ -79,7 +84,7 @@
             <div class="scan-step">2</div>
             <div>
               <div class="scan-block-title">시장과 보유 기간</div>
-              <div class="muted small">어느 시장을 볼지와 모멘텀 유지 기간을 정합니다.</div>
+              <div class="muted small">어느 시장을 볼지, 모멘텀을 며칠 기준으로 볼지 정합니다.</div>
             </div>
           </div>
 
@@ -106,7 +111,7 @@
             <div class="scan-step">3</div>
             <div>
               <div class="scan-block-title">기본 필터</div>
-              <div class="muted small">평소에는 아래 한 줄만 보고 시작하면 됩니다. 고급 설정은 정말 바꾸고 싶을 때만 여세요.</div>
+              <div class="muted small">평소에는 아래 몇 가지만 보고 시작하면 됩니다. 고급 설정은 정말 바꾸고 싶을 때만 여세요.</div>
             </div>
           </div>
 
@@ -116,7 +121,7 @@
               <select id="liquidityLevel">
                 <option value="tight">보수적 - 실패 줄이기</option>
                 <option value="balanced">균형 - 기본 추천</option>
-                <option value="aggressive">공격적 - 후보 많이 보기</option>
+                <option value="aggressive">공격적 - 소형주 더 보기</option>
               </select>
             </label>
             <label class="field" id="priceField">
@@ -135,7 +140,7 @@
           </div>
 
           <div class="advanced-panel hidden" id="advancedFiltersRow">
-            <div class="inline-note">기본값은 `ETF/ETN 제외 + 거래대금 상위권 우선 + 대형주 누락 최소화`를 기준으로 저장됩니다.</div>
+            <div class="inline-note">KR 기본값은 <code>ETF/ETN 제외 + 거래대금 상위권 우선 + 대형주 누락 최소화</code> 기준으로 저장됩니다.</div>
 
             <div class="row advanced-topbar">
               <div class="muted small" id="activePresetBadge">Preset: KR 대형주 포함 공격형</div>
@@ -146,7 +151,7 @@
               <label class="field">
                 <div class="label">KR 시총 하한</div>
                 <input id="marketCapMin" type="number" inputmode="numeric" value="1000000000000" min="0" step="1000000000" />
-                <div class="field-help">너무 작은 종목을 기본 후보에서 밀어냅니다.</div>
+                <div class="field-help">너무 작은 종목은 기본 후보에서 밀어냅니다.</div>
               </label>
               <label class="field">
                 <div class="label">KR 당일 거래대금 하한</div>
@@ -161,7 +166,7 @@
               <label class="field">
                 <div class="label">종가 위치 하한</div>
                 <input id="closePosMin" type="number" inputmode="decimal" value="0.6" min="0" max="1" step="0.01" />
-                <div class="field-help">장 막판 힘이 약한 종목은 관찰만으로 내리기 쉽습니다.</div>
+                <div class="field-help">종가가 약하면 신규 진입보다 관찰만으로 내리기 쉽습니다.</div>
               </label>
               <label class="field">
                 <div class="label">5일 수익률 최소</div>
@@ -171,10 +176,10 @@
               <label class="field">
                 <div class="label">5일 수익률 최대</div>
                 <input id="ret5dMax" type="number" inputmode="decimal" value="25" min="-100" max="500" step="0.5" />
-                <div class="field-help">너무 과열된 종목은 무리해서 쫓아가지 않게 합니다.</div>
+                <div class="field-help">너무 과열된 종목은 뒤늦게 쫓아가지 않게 합니다.</div>
               </label>
               <label class="field">
-                <div class="label">뉴스 신선도(시간)</div>
+                <div class="label">뉴스 신선도 (시간)</div>
                 <input id="freshNewsHours" type="number" inputmode="numeric" value="72" min="1" max="240" step="1" />
                 <div class="field-help">너무 오래된 재료만 남은 종목을 약하게 봅니다.</div>
               </label>
@@ -191,7 +196,7 @@
               <label class="field">
                 <div class="label">대형주 자동 포함 개수</div>
                 <input id="largecapQuota" type="number" inputmode="numeric" value="2" min="0" max="4" step="1" />
-                <div class="field-help">승인 후보에 대형주가 있으면 자동선택에 몇 개까지 섞을지 정합니다.</div>
+                <div class="field-help">승인 후보 중 대형주가 있으면 자동선택에 몇 개까지 섞을지 정합니다.</div>
               </label>
               <label class="field grow">
                 <div class="label">ETF / ETN 제외</div>
@@ -210,7 +215,7 @@
             <div class="scan-step">4</div>
             <div>
               <div class="scan-block-title">직접 확인할 종목</div>
-              <div class="muted small">여기서는 종목명이나 코드 둘 다 넣어도 되게 최대한 편하게 처리합니다.</div>
+              <div class="muted small">종목명이나 코드를 그대로 넣으면 최대한 자연스럽게 해석합니다.</div>
             </div>
           </div>
 
@@ -228,20 +233,20 @@
           </div>
           <div class="guide-box compact" id="inputResolveHint">
             <div class="guide-title">입력 팁</div>
-            <div class="guide-text">KR은 `삼성전자`, `한화오션`처럼 종목명으로 넣어도 자동 해석을 시도합니다.</div>
-            <div class="guide-text">US는 `TSLA`, `NVDA`처럼 티커 입력이 가장 정확합니다.</div>
+            <div class="guide-text">KR은 <code>삼성전자</code>, <code>한화오션</code>처럼 종목명으로 적어도 자동 해석을 시도합니다.</div>
+            <div class="guide-text">US는 <code>TSLA</code>, <code>NVDA</code>처럼 티커 입력이 가장 정확합니다.</div>
           </div>
 
           <details class="guide-box compact hidden" id="usSourceDetails">
             <summary>US 후보 소스 고급 설정</summary>
-            <div class="guide-text">보통은 건드릴 필요 없습니다. `US 스캔 프로필`이 종목 성향을 정하고, 여기서는 후보를 어디서 먼저 가져올지만 정합니다.</div>
+            <div class="guide-text">보통은 건드릴 필요 없습니다. <code>US 스캔 프로필</code>은 종목 성향을 정하고, 여기서는 후보를 어디서 먼저 가져올지만 정합니다.</div>
             <div class="row" id="scrRow">
               <label class="field grow">
                 <div class="label">US 후보 소스</div>
                 <select id="scrPreset">
                   <option value="momentum">기본 소스 - 모멘텀</option>
                   <option value="gainers">강한 종목 많이 보기</option>
-                  <option value="liquidity">거래량 큰 종목 위주</option>
+                  <option value="liquidity">거래대금 중심</option>
                   <option value="custom">직접 입력</option>
                 </select>
               </label>
@@ -253,7 +258,7 @@
                 <input id="scrIds" type="text" value="day_gainers,most_actives" />
               </label>
             </div>
-            <div class="muted small" id="scrHint">직접 입력 종목이 있으면 그 종목이 우선이고, 없을 때만 이 후보 소스를 씁니다.</div>
+            <div class="muted small" id="scrHint">직접 입력 종목이 있으면 그 종목을 먼저 보고, 없을 때만 위 후보 소스를 씁니다.</div>
           </details>
         </section>
 
@@ -262,7 +267,7 @@
           <div class="status-text" id="status"></div>
         </div>
 
-        <div class="muted small">공개 데이터 기반 참고 도구입니다. 실제 주문 전에는 반드시 직접 검증하세요.</div>
+        <div class="muted small">공개 데이터 기반 참고 도구입니다. 실제 주문 전에는 반드시 직접 한 번 더 확인하세요.</div>
       </section>
     </section>
 
@@ -271,7 +276,7 @@
         <div class="section-head section-head-inline">
           <div>
             <div class="h2">스캔 결과</div>
-            <div class="muted small">시장 판단을 먼저 보고, 신규 진입 가능 / 관찰만 / 비추천을 분리해서 확인합니다.</div>
+            <div class="muted small">시장 판단을 먼저 보고, 신규 진입 가능 / 관찰만 / 비추천을 나눠서 확인합니다.</div>
           </div>
           <div class="list-header" id="listHeader" style="display:none;">
             <button class="btn sm" id="checkAllBtn" type="button">전체 체크</button>
@@ -289,8 +294,8 @@
       <section class="card" style="margin-top:12px;" id="aiReportAnchor">
         <div class="section-head section-head-inline">
           <div>
-            <div class="h2">AI용 프롬프트 / 원본 데이터</div>
-            <div class="sub" id="reportMeta">무엇을 복사할지 먼저 고르고 쓰임새를 확인하세요.</div>
+            <div class="h2">AI 프롬프트 / 원본 데이터</div>
+            <div class="sub" id="reportMeta">무엇을 복사할지 먼저 고르고, 어떤 용도인지 확인하세요.</div>
           </div>
           <div class="row-btns">
             <button class="btn sm" id="clearBtn" type="button">비우기</button>
@@ -299,8 +304,8 @@
 
         <div class="guide-box">
           <div class="guide-title">버튼 차이</div>
-          <div class="guide-text">`AI 판단용 프롬프트`는 ChatGPT 같은 모델에 바로 붙여넣기 좋은 요약 지시문입니다.</div>
-          <div class="guide-text">`원본 데이터(JSON)`는 숫자와 구조를 그대로 확인하거나 개발/검증할 때 쓰는 자료입니다.</div>
+          <div class="guide-text"><code>AI 판단용 프롬프트</code>는 ChatGPT 같은 모델에 바로 붙여넣기 좋은 텍스트입니다.</div>
+          <div class="guide-text"><code>원본 데이터(JSON)</code>는 숫자와 구조를 그대로 확인하거나 검증할 때 보는 자료입니다.</div>
         </div>
 
         <div id="aiPadBody">
@@ -318,10 +323,233 @@
             </button>
           </div>
           <div class="muted small" id="reportSelectionSummary">현재 선택: 없음</div>
-          <div class="muted small" id="promptActionHelp">신규 진입이 막힌 날에는 관찰 후보나 보유 종목 판단용 프롬프트로 바뀝니다.</div>
+          <div class="muted small" id="promptActionHelp">신규 진입 승인 후보인지, 관찰 후보인지, 보유 종목 리뷰를 같이 넣는지에 따라 프롬프트가 달라집니다.</div>
           <textarea id="reportBox" class="reportBox" readonly spellcheck="false" placeholder="생성된 프롬프트 또는 JSON 데이터가 여기에 표시됩니다."></textarea>
           <div class="muted small" id="reportHint">원하는 종목을 먼저 체크한 뒤 버튼을 누르세요.</div>
         </div>
+      </section>
+    </section>
+
+    <section class="panel" id="panelIntraday">
+      <section class="card desk-shell">
+        <div class="section-head section-head-inline">
+          <div>
+            <div class="eyebrow">Intraday Desk</div>
+            <div class="h2">실시간 데이트레이딩 보조 데스크</div>
+            <div class="muted small">카드형 추천보다 상태 전이와 타이밍을 먼저 보여주는 인트라데이 작업공간입니다.</div>
+          </div>
+          <div class="desk-badges">
+            <span class="badge" id="deskSessionBadge">세션 대기</span>
+            <span class="badge" id="deskMarketBadge">시장 대기</span>
+            <span class="badge" id="deskApiBadge">API 상태 확인 중</span>
+          </div>
+        </div>
+
+        <div class="desk-hero">
+          <div>
+            <div class="desk-hero-title">준비 → 확인 → 트리거 흐름으로 보는 데이트레이딩</div>
+            <div class="desk-hero-sub">아직 한국투자 웹소켓 실시간 체결/호가 어댑터는 자리만 있습니다. 지금은 공개 데이터 기반 프록시 점수와 세션 규칙으로 레이더를 구성합니다.</div>
+          </div>
+          <div class="hero-note">
+            <div class="hero-note-title">핵심 상태</div>
+            <div class="hero-note-text"><code>PREPARE → CONFIRM → TRIGGERED → EXPIRED</code></div>
+          </div>
+        </div>
+
+        <div class="desk-section-menu" id="deskSectionMenu">
+          <a class="btn sm ghost" href="#deskLiveSection">Live Radar</a>
+          <a class="btn sm ghost" href="#deskSnapshotSection">Snapshot</a>
+          <a class="btn sm ghost" href="#deskTradesSection">Active Trades</a>
+          <a class="btn sm ghost" href="#deskJournalSection">Journal</a>
+          <a class="btn sm ghost" href="#deskStatsSection">Stats</a>
+          <a class="btn sm ghost" href="#deskAdapterSection">Broker Setup</a>
+        </div>
+
+        <div class="desk-top-grid">
+          <div class="guide-box" id="intradayApiStatus">
+            <div class="guide-title">데이터 소스 상태</div>
+            <div class="guide-text">브로커 API 상태를 확인하는 중입니다.</div>
+          </div>
+          <div class="guide-box" id="intradaySessionRuleBox">
+            <div class="guide-title">세션 규칙 요약</div>
+            <div class="guide-text">현재 세션 기준을 불러오는 중입니다.</div>
+          </div>
+        </div>
+
+        <div class="desk-config-grid">
+          <label class="field">
+            <div class="label">데스크 시장</div>
+            <select id="intradayMarket">
+              <option value="KR">KR</option>
+              <option value="US">US</option>
+            </select>
+          </label>
+          <label class="field">
+            <div class="label">계좌 현금</div>
+            <input id="intradayCash" type="number" inputmode="decimal" value="10000000" min="0" step="10000" />
+          </label>
+          <label class="field">
+            <div class="label">계좌 평가금액</div>
+            <input id="intradayEquity" type="number" inputmode="decimal" value="10000000" min="0" step="10000" />
+          </label>
+          <label class="field">
+            <div class="label">계좌 손실 예산 (%)</div>
+            <input id="intradayRiskBudget" type="number" inputmode="decimal" value="0.8" min="0.1" max="3" step="0.1" />
+          </label>
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="intradayRefreshBtn" type="button">라이브 레이더 새로고침</button>
+          <div class="status-text" id="intradayStatus"></div>
+        </div>
+
+        <div class="guide-box" id="intradayBanner">
+          <div class="guide-title">라이브 레이더</div>
+          <div class="guide-text">시장 상태, 세션, 신규 진입 허용 여부가 여기에 표시됩니다.</div>
+        </div>
+
+        <section class="card intraday-section" id="deskLiveSection">
+          <div class="section-head">
+            <div class="h2">Live Radar</div>
+            <div class="muted small">지금 볼 만한 후보와 상태 전이를 함께 봅니다. 핵심은 “지금 사라”보다 “언제 사야 하는지”입니다.</div>
+          </div>
+          <div id="intradayRadar"></div>
+        </section>
+
+        <section class="card intraday-section" id="deskSnapshotSection">
+          <div class="section-head">
+            <div class="h2">Snapshot</div>
+            <div class="muted small">추천이 생성된 순간의 상태와 트리거 플랜을 따로 저장해 나중에 결과와 비교합니다.</div>
+          </div>
+          <div id="intradaySnapshots"></div>
+        </section>
+
+        <section class="card intraday-section" id="deskTradesSection">
+          <div class="section-head">
+            <div class="h2">Active Trades</div>
+            <div class="muted small">이미 진입했거나 곧 진입 가능한 후보를 따로 모아, 손절/익절/남은 리스크를 빠르게 봅니다.</div>
+          </div>
+          <div id="intradayTrades"></div>
+        </section>
+
+        <section class="card intraday-section" id="deskJournalSection">
+          <div class="section-head">
+            <div class="h2">Journal</div>
+            <div class="muted small">추천 순간 스냅샷과 별도로, 실제 진입/청산 결과를 기록해 성과를 누적합니다.</div>
+          </div>
+          <div class="guide-box compact" id="intradayJournalSummary">
+            <div class="guide-title">추천 결과 기록</div>
+            <div class="guide-text">아직 불러오기 전입니다.</div>
+          </div>
+          <div class="advanced-grid journal-grid">
+            <label class="field">
+              <div class="label">추천 ID</div>
+              <select id="intradayJournalRec">
+                <option value="">저널이 비어 있습니다.</option>
+              </select>
+            </label>
+            <label class="field">
+              <div class="label">액션</div>
+              <select id="intradayJournalAction">
+                <option value="mark_entered">진입 기록</option>
+                <option value="mark_exited">청산 기록</option>
+                <option value="mark_missed">미체결 종료</option>
+                <option value="note">메모만 저장</option>
+              </select>
+            </label>
+            <label class="field">
+              <div class="label">체결가</div>
+              <input id="intradayJournalFill" type="number" inputmode="decimal" min="0" step="0.01" placeholder="예: 12300" />
+            </label>
+            <label class="field">
+              <div class="label">청산가</div>
+              <input id="intradayJournalExit" type="number" inputmode="decimal" min="0" step="0.01" placeholder="예: 12650" />
+            </label>
+            <label class="field">
+              <div class="label">결과 상태</div>
+              <select id="intradayJournalResult">
+                <option value="">자동 계산</option>
+                <option value="WIN">WIN</option>
+                <option value="LOSS">LOSS</option>
+                <option value="SCRATCH">SCRATCH</option>
+                <option value="MISSED">MISSED</option>
+              </select>
+            </label>
+            <label class="field grow">
+              <div class="label">메모</div>
+              <input id="intradayJournalNote" type="text" placeholder="예: 눌림 확인 후 진입, 목표가 선청산" />
+            </label>
+          </div>
+          <div class="row">
+            <button class="btn sm" id="intradayJournalSaveBtn" type="button">저널 업데이트 저장</button>
+            <div class="status-text" id="intradayJournalSaveStatus"></div>
+          </div>
+          <div id="intradayJournal"></div>
+        </section>
+
+        <section class="card intraday-section" id="deskStatsSection">
+          <div class="section-head">
+            <div class="h2">Stats</div>
+            <div class="muted small">세션별, 셋업별, 결과별 누적 기록으로 어떤 상황에서 잘 맞는지 보기 위한 통계 영역입니다.</div>
+          </div>
+          <div id="intradayStats"></div>
+        </section>
+
+        <section class="card intraday-section" id="deskAdapterSection">
+          <div class="section-head">
+            <div class="h2">Broker Setup</div>
+            <div class="muted small">한국투자 API 웹소켓 어댑터가 붙을 자리를 먼저 만들었습니다. 지금은 설정 흐름과 피드 계획을 연결해둔 상태입니다.</div>
+          </div>
+          <div class="guide-box compact" id="intradayAdapterSummary">
+            <div class="guide-title">브로커 연결 설정</div>
+            <div class="guide-text">아직 불러오기 전입니다.</div>
+          </div>
+          <div class="advanced-grid broker-grid">
+            <label class="field">
+              <div class="label">자격증명 모드</div>
+              <select id="intradayCredentialMode">
+                <option value="env">환경변수 (권장)</option>
+                <option value="runtime">로컬 런타임 파일</option>
+              </select>
+            </label>
+            <label class="field">
+              <div class="label">프록시 모드 유지</div>
+              <select id="intradayUseMock">
+                <option value="true">ON - 브로커 미연결 시 공개 프록시 유지</option>
+                <option value="false">OFF - 브로커 설정만 사용</option>
+              </select>
+            </label>
+          </div>
+          <div class="guide-box compact" id="intradayCredentialHint">
+            권장 방식입니다. KIS_APP_KEY / KIS_APP_SECRET / KIS_ACCOUNT_NO 환경변수를 읽습니다.
+          </div>
+          <div class="advanced-grid broker-grid hidden" id="intradayCredentialFields">
+            <label class="field">
+              <div class="label">KIS App Key</div>
+              <input id="kisAppKey" type="text" autocomplete="off" />
+            </label>
+            <label class="field">
+              <div class="label">KIS App Secret</div>
+              <input id="kisAppSecret" type="password" autocomplete="off" />
+            </label>
+            <label class="field">
+              <div class="label">KIS 계좌번호</div>
+              <input id="kisAccountNo" type="text" autocomplete="off" />
+            </label>
+            <label class="field grow">
+              <div class="label">메모</div>
+              <input id="intradayAdapterNotes" type="text" placeholder="예: 모의투자 계정, 국내주식 먼저 연결" />
+            </label>
+          </div>
+          <div class="row">
+            <button class="btn sm" id="intradayAdapterSaveBtn" type="button">브로커 설정 저장</button>
+            <div class="status-text" id="intradayAdapterSaveStatus"></div>
+          </div>
+          <div class="guide-box compact" id="intradayFeedPlan">
+            <div class="guide-title">세션 피드 플랜</div>
+            <div class="guide-text">현재 세션용 피드 계획을 불러오는 중입니다.</div>
+          </div>
+        </section>
       </section>
     </section>
   </main>

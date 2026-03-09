@@ -213,6 +213,69 @@ class MomentumRegressionTests(unittest.TestCase):
         )
         self.assertTrue(has_largecap)
 
+    def test_intraday_radar_returns_stateful_rows(self):
+        macro = [
+            {"label": "KOSPI", "day_chg_pct": 0.8},
+            {"label": "KOSDAQ", "day_chg_pct": 1.1},
+            {"label": "USD/KRW", "day_chg_pct": -0.3},
+        ]
+        with self._patch_common_kr(macro), patch.object(momentum, "_load_intraday_journal", return_value=[]), patch.object(momentum, "_save_intraday_journal", return_value=None):
+            r = self.client.get("/api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000")
+        self.assertEqual(r.status_code, 200)
+        j = r.json()
+        self.assertIn("radar", j)
+        self.assertTrue(j["radar"])
+        self.assertIn("snapshot_preview", j)
+        self.assertTrue(j["snapshot_preview"])
+        first = j["radar"][0]
+        self.assertIn(first["state"], {"PREPARE", "CONFIRM", "TRIGGERED", "EXPIRED", "BLOCKED"})
+        self.assertIn("flow_scores", first)
+        self.assertIn("trigger_price", first)
+
+    def test_intraday_meta_includes_adapter_and_feed_plan(self):
+        r = self.client.get("/api/intraday/meta?market=KR")
+        self.assertEqual(r.status_code, 200)
+        j = r.json()
+        self.assertIn("adapter_settings", j)
+        self.assertIn("api_connection", j)
+        self.assertIn("feed_plan", j["api_connection"])
+        self.assertIn("session_rules_preview", j)
+
+    def test_intraday_journal_update_accumulates_results(self):
+        macro = [
+            {"label": "KOSPI", "day_chg_pct": 0.8},
+            {"label": "KOSDAQ", "day_chg_pct": 1.1},
+            {"label": "USD/KRW", "day_chg_pct": -0.3},
+        ]
+        store = []
+
+        def fake_load():
+            return [dict(x) for x in store]
+
+        def fake_save(rows):
+            store.clear()
+            store.extend(dict(x) for x in rows)
+
+        with self._patch_common_kr(macro), patch.object(momentum, "_load_intraday_journal", side_effect=fake_load), patch.object(momentum, "_save_intraday_journal", side_effect=fake_save):
+            radar = self.client.get("/api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000")
+            self.assertEqual(radar.status_code, 200)
+            rec_id = radar.json()["radar"][0]["recommendation_id"]
+
+            entered = self.client.post(
+                "/api/intraday/journal/update",
+                json={"recommendation_id": rec_id, "action": "mark_entered", "fill_price": 21000},
+            )
+            self.assertEqual(entered.status_code, 200)
+            self.assertEqual(entered.json()["row"]["result_status"], "OPEN")
+
+            exited = self.client.post(
+                "/api/intraday/journal/update",
+                json={"recommendation_id": rec_id, "action": "mark_exited", "exit_price": 21420},
+            )
+            self.assertEqual(exited.status_code, 200)
+            self.assertIn(exited.json()["row"]["result_status"], {"WIN", "LOSS", "SCRATCH"})
+            self.assertIsNotNone(exited.json()["row"]["realized_pnl_pct"])
+
 
 if __name__ == "__main__":
     unittest.main()

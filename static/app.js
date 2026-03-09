@@ -70,8 +70,11 @@ let lastCandidates = [];
 let selected = new Set();
 let allChecked = false;
 let activePanel = "panelScan";
+let activeMode = "scout";
 let lastDetailPayload = null;
 let advancedOpen = false;
+let lastIntradayPayload = null;
+let lastIntradayMeta = null;
 
 function esc(s) {
   return String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -226,7 +229,6 @@ function updateMarketUI(notify = false) {
   $("horizonField")?.classList.toggle("market-hidden", market === "KR");
   $("liquidityField")?.classList.toggle("market-hidden", market === "KR");
   $("priceField")?.classList.toggle("market-hidden", market === "KR");
-  $("turnoverField")?.classList.toggle("market-hidden", market === "KR");
   $("filterFieldsRow")?.classList.toggle("market-hidden", market === "KR");
   $("krFixedMode")?.classList.toggle("hidden", market !== "KR");
   $("usSourceDetails")?.classList.toggle("hidden", market === "KR");
@@ -237,6 +239,7 @@ function updateMarketUI(notify = false) {
     $("horizon").value = "5";
     applyKrPresetToInputs();
     $("toggleAdvancedBtn")?.classList.remove("market-hidden");
+    if ($("minTurnoverHelp")) $("minTurnoverHelp").textContent = "KR 기본값은 20일 평균 거래대금 300억 원입니다. 너무 외딴 종목이 끼지 않게 하는 기준입니다.";
     $("inputResolveHint").innerHTML = `
       <div class="guide-title">입력 팁</div>
       <div class="guide-text">KR은 <code>삼성전자</code>, <code>한화오션</code>처럼 종목명으로 적어도 자동 해석을 시도합니다.</div>
@@ -266,8 +269,18 @@ function updateMarketUI(notify = false) {
 
 function switchPanel(id) {
   activePanel = id;
-  document.querySelectorAll(".panel").forEach((node) => node.classList.toggle("active", node.id === id));
-  document.querySelectorAll(".menu-btn").forEach((node) => node.classList.toggle("active", node.dataset.panel === id));
+  ["panelScan", "panelList"].forEach((panelId) => $(panelId)?.classList.toggle("active", panelId === id));
+  document.querySelectorAll("#scoutMenu .menu-btn").forEach((node) => node.classList.toggle("active", node.dataset.panel === id));
+}
+
+function switchMode(mode) {
+  activeMode = mode;
+  $("modeScoutBtn")?.classList.toggle("active", mode === "scout");
+  $("modeIntradayBtn")?.classList.toggle("active", mode === "intraday");
+  $("scoutMenu")?.classList.toggle("hidden", mode !== "scout");
+  $("panelScan")?.classList.toggle("active", mode === "scout" && activePanel === "panelScan");
+  $("panelList")?.classList.toggle("active", mode === "scout" && activePanel === "panelList");
+  $("panelIntraday")?.classList.toggle("active", mode === "intraday");
 }
 
 function selectedRows() {
@@ -759,6 +772,488 @@ async function reportSelected() {
   }
 }
 
+function statePill(state) {
+  const key = String(state || "").toLowerCase();
+  return `<span class="state-pill ${key}">${esc(state || "--")}</span>`;
+}
+
+function resultPill(result) {
+  const key = String(result || "PENDING").toLowerCase();
+  return `<span class="state-pill result ${key}">${esc(result || "PENDING")}</span>`;
+}
+
+function intradayFriendlyError(err) {
+  const raw = String(err?.message || err || "알 수 없는 오류");
+  if (/404|Not Found/i.test(raw)) {
+    return "현재 실행 중인 서버에 Intraday Desk API가 없습니다. 개발서버를 재시작해 최신 브랜치 코드를 다시 로드하세요.";
+  }
+  return raw;
+}
+
+function intradayStateGuide(state) {
+  if (state === "TRIGGERED") return "지금 유효한 진입 타이밍";
+  if (state === "CONFIRM") return "거의 준비됐지만 마지막 확인 필요";
+  if (state === "EXPIRED") return "이미 너무 움직여 추격 금지";
+  if (state === "BLOCKED") return "시장 리스크로 신규 진입 금지";
+  return "감시 단계";
+}
+
+function deskTable(columns, rows, rowRenderer) {
+  if (!rows.length) return '<div class="empty-state">표시할 데이터가 없습니다.</div>';
+  return `
+    <div class="table-wrap">
+      <table class="desk-table">
+        <thead>
+          <tr>${columns.map((x) => `<th>${esc(x)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          ${rows.map(rowRenderer).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderIntradayBanner() {
+  const box = $("intradayBanner");
+  const data = lastIntradayPayload;
+  if (!data) {
+    box.innerHTML = '<div class="guide-title">라이브 레이더</div><div class="guide-text">불러오기 전입니다.</div>';
+    return;
+  }
+  const md = data.market_decision || {};
+  const rr = data.risk_rules || {};
+  const rules = data.session_rules || {};
+  box.innerHTML = `
+    <div class="guide-title">${esc(data.session?.label || "Intraday Desk")} / ${esc(data.market_state || "--")}</div>
+    <div class="guide-text">${md.new_entries_allowed ? "오늘 신규 진입을 검토할 수 있습니다." : "오늘은 신규 진입이 차단되거나 주의 구간입니다."}</div>
+    <div class="item-meta">
+      <span class="meta-chip">세션 ${esc(data.session?.code || "--")}</span>
+      <span class="meta-chip">Regime ${esc(md.regime || "--")}</span>
+      <span class="meta-chip">추천 행동 ${esc(md.recommended_action || "--")}</span>
+      <span class="meta-chip">포지션 상한 ${fmt(rr.capital_cap_pct || 20, 0)}%</span>
+      <span class="meta-chip">리스크 예산 ${fmt((Number(rr.risk_budget_pct || 0) * 100), 2)}%</span>
+      <span class="meta-chip">허용 추격 ${fmt((Number(rules.max_chase_over_trigger_pct || 0) * 100), 1)}%</span>
+    </div>
+    <div class="guide-text">${esc(data.note || "")}</div>
+  `;
+}
+
+function renderIntradayApiStatus(data) {
+  const api = data?.api_connection || {};
+  const missing = (api.missing_fields || []).length ? (api.missing_fields || []).join(", ") : "없음";
+  $("deskSessionBadge").textContent = data?.session?.label || "세션 대기";
+  $("deskMarketBadge").textContent = data?.market_state || data?.market || "시장 대기";
+  $("deskApiBadge").textContent = api.mode || "API 상태 확인 중";
+  $("intradayApiStatus").innerHTML = `
+    <div class="guide-title">데이터 소스 상태</div>
+    <div class="guide-text">브로커: ${esc(api.broker || "--")}</div>
+    <div class="guide-text">모드: ${esc(api.mode || "--")} / 실시간 연결: ${api.realtime_connected ? "연결됨" : "아직 아님"}</div>
+    <div class="guide-text">인증 소스: ${esc(api.credential_source || "--")} / 누락값: ${esc(missing)}</div>
+    <div class="guide-text">${esc(api.message || "상태 정보 없음")}</div>
+    <div class="item-meta">
+      <span class="meta-chip">자격증명 모드 ${esc(api.credential_mode || "--")}</span>
+      <span class="meta-chip">${api.use_mock ? "공개 프록시 유지" : "브로커 연결만 사용"}</span>
+      <span class="meta-chip">${api.account_bound ? "계좌번호 감지됨" : "계좌번호 없음"}</span>
+    </div>
+  `;
+}
+
+function renderIntradaySessionRules(source) {
+  const rules = source?.session_rules || source?.session_rules_preview || {};
+  const plan = source?.api_connection?.feed_plan || {};
+  if ($("intradaySessionRuleBox")) {
+    $("intradaySessionRuleBox").innerHTML = `
+      <div class="guide-title">세션 규칙 요약</div>
+      <div class="guide-text">${esc(plan.summary || "현재 세션 규칙을 불러오는 중입니다.")}</div>
+      <div class="item-meta">
+        <span class="meta-chip">CONFIRM ${fmt(rules.confirm_entry_readiness, 0)}</span>
+        <span class="meta-chip">TRIGGER ${fmt(rules.trigger_entry_readiness, 0)}</span>
+        <span class="meta-chip">최대 추격 ${fmt((Number(rules.max_chase_over_trigger_pct || 0) * 100), 1)}%</span>
+        <span class="meta-chip">스프레드 품질 ${fmt(rules.min_spread_quality, 0)}+</span>
+      </div>
+      <div class="guide-text">트리거 방식: ${esc(plan.trigger || "세션별 규칙을 따릅니다.")}</div>
+    `;
+  }
+
+  if ($("intradayFeedPlan")) {
+    const feeds = (plan.feeds || []).map((feed) => `
+      <div class="feed-row">
+        <div class="feed-name">${esc(feed.name || "--")}</div>
+        <div class="feed-purpose">${esc(feed.purpose || "")}</div>
+      </div>
+    `).join("");
+    $("intradayFeedPlan").innerHTML = `
+      <div class="guide-title">세션 피드 플랜</div>
+      <div class="guide-text">${esc(plan.headline || "현재 세션용 피드 계획")}</div>
+      <div class="feed-list">${feeds || '<div class="guide-text">아직 정의된 피드가 없습니다.</div>'}</div>
+    `;
+  }
+}
+
+function updateIntradayCredentialUi() {
+  const isRuntime = ($("intradayCredentialMode")?.value || "env") === "runtime";
+  $("intradayCredentialFields")?.classList.toggle("hidden", !isRuntime);
+  if ($("intradayCredentialHint")) {
+    $("intradayCredentialHint").textContent = isRuntime
+      ? "런타임 파일에만 저장합니다. 개인 로컬 환경에서만 쓰는 경우에만 권장합니다."
+      : "권장 방식입니다. KIS_APP_KEY / KIS_APP_SECRET / KIS_ACCOUNT_NO 환경변수를 읽습니다.";
+  }
+}
+
+function renderIntradayAdapterSettings(data) {
+  const adapter = data?.adapter_settings || {};
+  const masked = adapter.masked_runtime_credentials || {};
+  if ($("intradayCredentialMode")) $("intradayCredentialMode").value = adapter.credential_mode || "env";
+  if ($("intradayUseMock")) $("intradayUseMock").value = String(adapter.use_mock !== false);
+  if ($("intradayAdapterNotes")) $("intradayAdapterNotes").value = adapter.notes || "";
+  if ($("kisAppKey")) $("kisAppKey").placeholder = masked.app_key || "runtime 모드에서만 입력";
+  if ($("kisAppSecret")) $("kisAppSecret").placeholder = masked.app_secret || "runtime 모드에서만 입력";
+  if ($("kisAccountNo")) $("kisAccountNo").placeholder = masked.account_no || "예: 12345678-01";
+  if ($("intradayAdapterSummary")) {
+    const saved = adapter.runtime_credentials_saved || {};
+    $("intradayAdapterSummary").innerHTML = `
+      <div class="guide-title">브로커 연결 설정</div>
+      <div class="guide-text">권장 모드는 <strong>환경변수</strong>입니다. 아직 웹소켓 어댑터는 자리만 있으며, 현재는 피드 계획과 설정 흐름까지 연결돼 있습니다.</div>
+      <div class="item-meta">
+        <span class="meta-chip">Provider ${esc(adapter.provider || "KIS Open API")}</span>
+        <span class="meta-chip">모드 ${esc(adapter.credential_mode || "env")}</span>
+        <span class="meta-chip">로컬 저장된 App Key ${saved.app_key ? "있음" : "없음"}</span>
+        <span class="meta-chip">설정 파일 ${esc(adapter.local_config_path || "--")}</span>
+      </div>
+    `;
+  }
+  updateIntradayCredentialUi();
+}
+
+async function loadIntradayMeta() {
+  try {
+    const params = new URLSearchParams({ market: $("intradayMarket")?.value || "KR" });
+    const resp = await fetch(`/api/intraday/meta?${params}`);
+    if (!resp.ok) throw new Error(await parseErrText(resp));
+    const meta = await resp.json();
+    lastIntradayMeta = meta;
+    renderIntradayApiStatus(meta);
+    renderIntradaySessionRules(meta);
+    renderIntradayAdapterSettings(meta);
+    return meta;
+  } catch (err) {
+    const friendly = intradayFriendlyError(err);
+    $("deskApiBadge").textContent = "API 상태 로드 실패";
+    $("intradayApiStatus").innerHTML = `
+      <div class="guide-title">데이터 소스 상태</div>
+      <div class="guide-text">${esc(friendly)}</div>
+    `;
+    if ($("intradayBanner")) {
+      $("intradayBanner").innerHTML = `<div class="err-state">${esc(friendly)}</div>`;
+    }
+    return null;
+  }
+}
+
+async function hydrateIntradayHistory() {
+  try {
+    const [journalResp, statsResp] = await Promise.all([
+      fetch("/api/intraday/journal"),
+      fetch("/api/intraday/stats"),
+    ]);
+    if (journalResp.ok) {
+      const journalPayload = await journalResp.json();
+      lastIntradayPayload.journal_rows = journalPayload.journal || [];
+      if (!lastIntradayPayload.stats_preview && journalPayload.stats_preview) {
+        lastIntradayPayload.stats_preview = journalPayload.stats_preview;
+      }
+    }
+    if (statsResp.ok) {
+      const statsPayload = await statsResp.json();
+      lastIntradayPayload.stats_preview = statsPayload.stats || lastIntradayPayload.stats_preview || {};
+    }
+  } catch {
+    // Best-effort only.
+  }
+}
+
+function renderIntradayRadar() {
+  const rows = lastIntradayPayload?.radar || [];
+  $("intradayRadar").innerHTML = deskTable(
+    ["종목", "상태", "트리거 플랜", "후보/트리거 점수", "진입금액", "업데이트"],
+    rows,
+    (row) => `
+      <tr>
+        <td>
+          <strong>${esc(row.symbol)}</strong><br />
+          <span class="muted small">${esc(row.name || "")}</span>
+          <div class="muted small">${esc(row.setup_type || "")}</div>
+        </td>
+        <td>
+          ${statePill(row.state)}
+          <div class="muted small">${esc(intradayStateGuide(row.state))}</div>
+          <div class="muted small">${esc((row.state_reason || []).join(" / "))}</div>
+        </td>
+        <td>
+          <div>트리거 ${fmt(row.trigger_price, 2)}</div>
+          <div class="muted small">손절 ${fmt(row.stop_price, 2)} / 1차 ${fmt(row.target_price_1, 2)}</div>
+          <div class="muted small">허용 추격 ${fmt(row.allowed_chase_pct, 1)}%</div>
+        </td>
+        <td>
+          <div>ready ${fmt((row.flow_scores || {}).entry_readiness_score, 1)} / chase ${fmt((row.flow_scores || {}).chase_risk_score, 1)}</div>
+          <div class="muted small">auction ${fmt((row.flow_scores || {}).auction_pressure_score, 1)} / accel ${fmt((row.flow_scores || {}).trade_acceleration_score, 1)}</div>
+          <div class="muted small">spread ${fmt((row.flow_scores || {}).spread_quality_score, 1)} / catalyst ${fmt((row.flow_scores || {}).catalyst_score, 1)}</div>
+        </td>
+        <td>
+          <div>${fmtInt(row.position_notional)}</div>
+          <div class="muted small">20% cap / 리스크 예산 반영</div>
+        </td>
+        <td>${esc(row.last_updated_at || "--")}</td>
+      </tr>
+    `,
+  );
+}
+
+function renderIntradaySnapshots() {
+  const rows = lastIntradayPayload?.snapshot_preview || [];
+  $("intradaySnapshots").innerHTML = deskTable(
+    ["추천 ID", "종목", "상태", "트리거 플랜", "권장 진입금액", "스냅샷 시각"],
+    rows,
+    (row) => `
+      <tr>
+        <td>${esc(row.recommendation_id || "--")}</td>
+        <td>
+          <strong>${esc(row.symbol || "--")}</strong><br />
+          <span class="muted small">${esc(row.name || row.setup_type || "")}</span>
+        </td>
+        <td>
+          ${statePill(row.state)}
+          <div class="muted small">${esc((row.state_reason || []).join(" / "))}</div>
+        </td>
+        <td>
+          <div>트리거 ${fmt(row.trigger_price, 2)}</div>
+          <div class="muted small">손절 ${fmt(row.stop_price, 2)} / 1차 ${fmt(row.target_price_1, 2)}</div>
+        </td>
+        <td>${fmtInt(row.position_notional)}</td>
+        <td>${esc(row.last_updated_at || "--")}</td>
+      </tr>
+    `,
+  );
+}
+
+function renderIntradayTrades() {
+  const rows = lastIntradayPayload?.active_trades || [];
+  $("intradayTrades").innerHTML = deskTable(
+    ["종목", "상태", "현재가/보유", "남은 계획", "데이터 품질"],
+    rows,
+    (row) => `
+      <tr>
+        <td><strong>${esc(row.symbol || row.recommendation_id || "--")}</strong><br /><span class="muted small">${esc(row.setup_type || row.session || "")}</span></td>
+        <td>${statePill(row.state || row.status)} ${resultPill(row.result_status || (row.entered ? "OPEN" : "PENDING"))}</td>
+        <td>
+          <div>현재가 ${fmt(row.last || row.current_price, 2)}</div>
+          <div class="muted small">예상 보유 ${fmt(row.estimated_hold_minutes, 0)}분</div>
+        </td>
+        <td>
+          <div>손절 ${fmt(row.stop_price, 2)} / 1차 ${fmt(row.target_price_1, 2)}</div>
+          <div class="muted small">실현 ${fmt(row.realized_pnl_pct, 2)}% / MFE ${fmt(row.mfe_pct, 2)}%</div>
+        </td>
+        <td>${esc(row.data_quality || row.market_state || "--")}</td>
+      </tr>
+    `,
+  );
+}
+
+function populateIntradayJournalControls() {
+  const rows = lastIntradayPayload?.journal_rows || lastIntradayPayload?.journal_preview || [];
+  if ($("intradayJournalRec")) {
+    const current = $("intradayJournalRec").value;
+    $("intradayJournalRec").innerHTML = rows.length
+      ? rows.map((row) => `<option value="${esc(row.recommendation_id)}">${esc(row.symbol || row.recommendation_id)} · ${esc(row.result_status || row.status || "PENDING")}</option>`).join("")
+      : '<option value="">저널이 비어 있습니다.</option>';
+    if (current && rows.some((row) => row.recommendation_id === current)) $("intradayJournalRec").value = current;
+  }
+  if ($("intradayJournalSummary")) {
+    const stats = lastIntradayPayload?.stats_preview || {};
+    $("intradayJournalSummary").innerHTML = `
+      <div class="guide-title">추천 스냅샷 → 결과 축적</div>
+      <div class="guide-text">추천 순간 스냅샷을 먼저 저장하고, 아래에서 실제 진입/청산 결과를 덧붙입니다.</div>
+      <div class="item-meta">
+        <span class="meta-chip">누적 ${fmt(stats.journal_count || 0, 0)}건</span>
+        <span class="meta-chip">OPEN ${fmt(stats.open_count || 0, 0)}</span>
+        <span class="meta-chip">Resolved ${fmt(stats.resolved_count || 0, 0)}</span>
+        <span class="meta-chip">Win rate ${stats.win_rate_pct == null ? "--" : `${fmt(stats.win_rate_pct, 1)}%`}</span>
+      </div>
+    `;
+  }
+}
+
+function renderIntradayJournal() {
+  const rows = lastIntradayPayload?.journal_rows || lastIntradayPayload?.journal_preview || [];
+  populateIntradayJournalControls();
+  $("intradayJournal").innerHTML = deskTable(
+    ["추천 ID", "종목", "상태", "결과", "진입/청산", "실현/Excursion", "스냅샷"],
+    rows,
+    (row) => `
+      <tr>
+        <td>${esc(row.recommendation_id || "--")}</td>
+        <td>${esc(row.symbol || "--")}</td>
+        <td>${statePill(row.status || "--")}<div class="muted small">${esc(row.setup_type || "--")}</div></td>
+        <td>${resultPill(row.result_status || "PENDING")}<div class="muted small">${esc(row.exit_reason || row.resolution_notes || "--")}</div></td>
+        <td>
+          <div>fill ${fmt(row.fill_price, 2)} / exit ${fmt(row.exit_price, 2)}</div>
+          <div class="muted small">${esc(row.fill_at || "--")} → ${esc(row.exit_at || "--")}</div>
+        </td>
+        <td>
+          <div>실현 ${fmt(row.realized_pnl_pct, 2)}%</div>
+          <div class="muted small">MFE ${fmt(row.mfe_pct, 2)}% / MAE ${fmt(row.mae_pct, 2)}%</div>
+        </td>
+        <td>
+          <div>${esc(row.snapshot_at || "--")}</div>
+          <div class="muted small">${esc(row.session || "--")} / ${esc(row.market_state || "--")}</div>
+        </td>
+      </tr>
+    `,
+  );
+}
+
+function renderIntradayStats() {
+  const stats = lastIntradayPayload?.stats_preview || {};
+  const sessions = Object.entries(stats.by_session || {}).map(([k, v]) => `${k}: ${v}`).join(" / ") || "없음";
+  const setups = Object.entries(stats.by_setup || {}).map(([k, v]) => `${k}: ${v}`).join(" / ") || "없음";
+  const states = Object.entries(stats.by_status || {}).map(([k, v]) => `${k}: ${v}`).join(" / ") || "없음";
+  const results = Object.entries(stats.by_result_status || {}).map(([k, v]) => `${k}: ${v}`).join(" / ") || "없음";
+  $("intradayStats").innerHTML = `
+    <div class="stats-grid">
+      <div class="guide-box compact">
+        <div class="guide-title">누적 추천 수 ${fmt(stats.journal_count || 0, 0)}</div>
+        <div class="guide-text">OPEN ${fmt(stats.open_count || 0, 0)} / Resolved ${fmt(stats.resolved_count || 0, 0)}</div>
+        <div class="guide-text">평균 실현손익 ${stats.avg_realized_pnl_pct == null ? "--" : `${fmt(stats.avg_realized_pnl_pct, 2)}%`}</div>
+      </div>
+      <div class="guide-box compact">
+        <div class="guide-title">승률</div>
+        <div class="guide-text">${stats.win_rate_pct == null ? "아직 체결/청산 기록 없음" : `${fmt(stats.win_rate_pct, 1)}%`}</div>
+        <div class="guide-text">결과별: ${esc(results)}</div>
+      </div>
+    </div>
+    <div class="guide-box compact">
+      <div class="guide-text">세션별: ${esc(sessions)}</div>
+      <div class="guide-text">셋업별: ${esc(setups)}</div>
+      <div class="guide-text">상태별: ${esc(states)}</div>
+    </div>
+  `;
+}
+
+async function saveIntradayAdapterSettings() {
+  $("intradayAdapterSaveBtn").disabled = true;
+  $("intradayAdapterSaveStatus").textContent = "브로커 설정 저장 중...";
+  try {
+    const payload = {
+      market: $("intradayMarket")?.value || "KR",
+      credential_mode: $("intradayCredentialMode")?.value || "env",
+      use_mock: ($("intradayUseMock")?.value || "true") === "true",
+      app_key: $("kisAppKey")?.value?.trim() || "",
+      app_secret: $("kisAppSecret")?.value?.trim() || "",
+      account_no: $("kisAccountNo")?.value?.trim() || "",
+      notes: $("intradayAdapterNotes")?.value?.trim() || "",
+    };
+    const resp = await fetch("/api/intraday/adapter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) throw new Error(await parseErrText(resp));
+    const data = await resp.json();
+    lastIntradayMeta = data.meta || lastIntradayMeta;
+    renderIntradayApiStatus(lastIntradayMeta);
+    renderIntradaySessionRules(lastIntradayMeta);
+    renderIntradayAdapterSettings(lastIntradayMeta);
+    $("intradayAdapterSaveStatus").textContent = data.message || "저장했습니다.";
+    $("kisAppKey").value = "";
+    $("kisAppSecret").value = "";
+    $("kisAccountNo").value = "";
+    showToast("브로커 설정을 저장했습니다.", "ok");
+  } catch (err) {
+    const friendly = intradayFriendlyError(err);
+    $("intradayAdapterSaveStatus").textContent = friendly;
+    showToast(friendly, "error");
+  } finally {
+    $("intradayAdapterSaveBtn").disabled = false;
+  }
+}
+
+async function saveIntradayJournalAction() {
+  const recommendationId = $("intradayJournalRec")?.value || "";
+  if (!recommendationId) {
+    showToast("업데이트할 추천 ID를 먼저 고르세요.", "warn");
+    return;
+  }
+  $("intradayJournalSaveBtn").disabled = true;
+  $("intradayJournalSaveStatus").textContent = "저널 저장 중...";
+  try {
+    const payload = {
+      recommendation_id: recommendationId,
+      action: $("intradayJournalAction")?.value || "mark_entered",
+      fill_price: $("intradayJournalFill")?.value ? Number($("intradayJournalFill").value) : null,
+      exit_price: $("intradayJournalExit")?.value ? Number($("intradayJournalExit").value) : null,
+      result_status: $("intradayJournalResult")?.value || "",
+      note: $("intradayJournalNote")?.value?.trim() || "",
+    };
+    const resp = await fetch("/api/intraday/journal/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) throw new Error(await parseErrText(resp));
+    const data = await resp.json();
+    $("intradayJournalSaveStatus").textContent = data.message || "저장했습니다.";
+    $("intradayJournalFill").value = "";
+    $("intradayJournalExit").value = "";
+    $("intradayJournalNote").value = "";
+    await loadIntradayDesk();
+    showToast("저널을 업데이트했습니다.", "ok");
+  } catch (err) {
+    const friendly = intradayFriendlyError(err);
+    $("intradayJournalSaveStatus").textContent = friendly;
+    showToast(friendly, "error");
+  } finally {
+    $("intradayJournalSaveBtn").disabled = false;
+  }
+}
+
+async function loadIntradayDesk() {
+  $("intradayRefreshBtn").disabled = true;
+  $("intradayStatus").textContent = "Intraday Desk 불러오는 중...";
+  await loadIntradayMeta();
+  try {
+    const params = new URLSearchParams({
+      market: $("intradayMarket")?.value || "KR",
+      account_cash: String(Number($("intradayCash")?.value || 0)),
+      account_equity: String(Number($("intradayEquity")?.value || 0)),
+      risk_budget_pct: String(Number($("intradayRiskBudget")?.value || 0.8) / 100),
+      max_items: "10",
+    });
+    const resp = await fetch(`/api/intraday/radar?${params}`);
+    if (!resp.ok) throw new Error(await parseErrText(resp));
+    lastIntradayPayload = await resp.json();
+    await hydrateIntradayHistory();
+    renderIntradayApiStatus(lastIntradayPayload);
+    renderIntradaySessionRules(lastIntradayPayload);
+    renderIntradayAdapterSettings(lastIntradayMeta || lastIntradayPayload);
+    renderIntradayBanner();
+    renderIntradayRadar();
+    renderIntradaySnapshots();
+    renderIntradayTrades();
+    renderIntradayJournal();
+    renderIntradayStats();
+    $("intradayStatus").textContent = `${lastIntradayPayload.asof_kst || lastIntradayPayload.asof_et} · ${lastIntradayPayload.market} · ${lastIntradayPayload.session?.label || ""}`;
+  } catch (err) {
+    const friendly = intradayFriendlyError(err);
+    $("intradayStatus").textContent = "Intraday Desk 로딩 실패";
+    $("intradayBanner").innerHTML = `<div class="err-state">${esc(friendly)}</div>`;
+    $("intradayRadar").innerHTML = `<div class="err-state">${esc(friendly)}</div>`;
+    showToast(friendly, "error");
+  } finally {
+    $("intradayRefreshBtn").disabled = false;
+  }
+}
+
 function toggleAdvanced() {
   if (getMarket() !== "KR") return;
   advancedOpen = !advancedOpen;
@@ -800,6 +1295,10 @@ window.addEventListener("load", () => {
   });
 
   $("market").addEventListener("change", () => updateMarketUI(true));
+  $("intradayMarket")?.addEventListener("change", async () => {
+    await loadIntradayMeta();
+    if (activeMode === "intraday" && lastIntradayPayload) await loadIntradayDesk();
+  });
   $("scanProfile")?.addEventListener("change", () => {
     renderProfileGuide();
     updatePlanSummary();
@@ -833,6 +1332,15 @@ window.addEventListener("load", () => {
   $("toastClose").addEventListener("click", () => $("toast").classList.add("hidden"));
   $("menuScan").addEventListener("click", () => switchPanel("panelScan"));
   $("menuList").addEventListener("click", () => switchPanel("panelList"));
+  $("modeScoutBtn")?.addEventListener("click", () => switchMode("scout"));
+  $("modeIntradayBtn")?.addEventListener("click", async () => {
+    switchMode("intraday");
+    if (!lastIntradayPayload) await loadIntradayDesk();
+  });
+  $("intradayRefreshBtn")?.addEventListener("click", loadIntradayDesk);
+  $("intradayCredentialMode")?.addEventListener("change", updateIntradayCredentialUi);
+  $("intradayAdapterSaveBtn")?.addEventListener("click", saveIntradayAdapterSettings);
+  $("intradayJournalSaveBtn")?.addEventListener("click", saveIntradayJournalAction);
   $("resetKrPresetBtn")?.addEventListener("click", () => {
     localStorage.setItem("ms_kr_advanced", JSON.stringify(KR_DEFAULT_PRESET));
     applyKrPresetToInputs();
@@ -853,8 +1361,10 @@ window.addEventListener("load", () => {
   applyKrPresetToInputs();
   renderProfileGuide();
   updateMarketUI(false);
+  loadIntradayMeta();
   renderDecisionBanner();
   updateSelectionUi();
+  switchMode(activeMode);
   switchPanel(activePanel);
 });
 

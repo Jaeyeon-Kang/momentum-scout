@@ -130,6 +130,18 @@ body {
   background: linear-gradient(to bottom, var(--header-bg), rgba(0, 0, 0, 0));
 }
 
+.mode-menu {
+  padding-bottom: 6px;
+}
+
+.scout-menu {
+  padding-top: 6px;
+}
+
+#scoutMenu {
+  top: 128px;
+}
+
 .menu-btn {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -182,6 +194,93 @@ body {
   background: var(--card);
   padding: 18px;
   box-shadow: var(--shadow);
+}
+
+.desk-shell {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card2) 60%, var(--card)) 0%, var(--card) 24%);
+}
+
+.intraday-section {
+  margin-top: 12px;
+}
+
+.desk-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card2);
+}
+
+.hero-note {
+  min-width: 180px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 86%, transparent);
+}
+
+.hero-note-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.hero-note-text {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.desk-hero-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.desk-hero-sub {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.desk-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.desk-section-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.desk-top-grid,
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.desk-config-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.broker-grid,
+.journal-grid {
+  margin-bottom: 12px;
 }
 
 .section-head {
@@ -282,6 +381,15 @@ body {
   line-height: 1.2;
 }
 
+.eyebrow {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
 .row {
   display: flex;
   gap: 12px;
@@ -323,6 +431,31 @@ body {
   margin-top: 4px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.feed-row {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+}
+
+.feed-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feed-purpose {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .field {
@@ -880,6 +1013,95 @@ details.guide-box[open] > summary {
   font-family: ui-monospace, "SFMono-Regular", "Cascadia Code", monospace;
 }
 
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.desk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.desk-table th,
+.desk-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.desk-table th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.desk-table tr:last-child td {
+  border-bottom: none;
+}
+
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--card2);
+}
+
+.state-pill.prepare,
+.state-pill.confirm {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.state-pill.result.pending,
+.state-pill.result.open {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.state-pill.triggered {
+  color: var(--good);
+  border-color: var(--good);
+  background: var(--good-dim);
+}
+
+.state-pill.result.win {
+  color: var(--good);
+  border-color: var(--good);
+  background: var(--good-dim);
+}
+
+.state-pill.expired,
+.state-pill.blocked {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-dim);
+}
+
+.state-pill.result.loss,
+.state-pill.result.missed {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-dim);
+}
+
+.state-pill.result.scratch {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+
 .spinner {
   width: 28px;
   height: 28px;
@@ -1004,6 +1226,10 @@ code {
     gap: 6px;
   }
 
+  #scoutMenu {
+    top: 116px;
+  }
+
   .menu-btn {
     font-size: 11px;
     padding: 9px 4px;
@@ -1040,7 +1266,17 @@ code {
     grid-template-columns: 1fr;
   }
 
+  .desk-top-grid,
+  .stats-grid,
+  .desk-config-grid {
+    grid-template-columns: 1fr;
+  }
+
   .item {
+    flex-direction: column;
+  }
+
+  .desk-hero {
     flex-direction: column;
   }
 

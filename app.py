@@ -3,11 +3,13 @@
 import asyncio
 import json
 import math
+import os
 import re
 import statistics
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, time
 from html import unescape
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -16,7 +18,7 @@ import xml.etree.ElementTree as XET
 
 import httpx
 from cachetools import TTLCache
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -92,6 +94,10 @@ _client: Optional[httpx.AsyncClient] = None
 _yf_crumb: Optional[str] = None
 _yf_crumb_ts: float = 0.0
 _YF_CRUMB_TTL = 3600.0
+
+_RUNTIME_DIR = Path(__file__).resolve().parent / ".runtime"
+_INTRADAY_JOURNAL_PATH = _RUNTIME_DIR / "intraday_journal.json"
+_INTRADAY_ADAPTER_PATH = _RUNTIME_DIR / "intraday_adapter.json"
 
 
 def _now_et() -> datetime:
@@ -437,6 +443,644 @@ async def _resolve_kr_input_text(raw: str) -> str:
             resolved.append(final_symbol)
 
     return ",".join(resolved)
+
+
+def _load_intraday_journal() -> List[Dict[str, Any]]:
+    try:
+        if not _INTRADAY_JOURNAL_PATH.exists():
+            return []
+        return json.loads(_INTRADAY_JOURNAL_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _save_intraday_journal(rows: List[Dict[str, Any]]) -> None:
+    try:
+        _RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        _INTRADAY_JOURNAL_PATH.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _default_intraday_adapter_config() -> Dict[str, Any]:
+    return {
+        "provider": "KIS Open API",
+        "credential_mode": "env",
+        "use_mock": True,
+        "runtime_credentials": {
+            "app_key": "",
+            "app_secret": "",
+            "account_no": "",
+        },
+        "preferred_markets": {
+            "KR": True,
+            "US": True,
+        },
+        "notes": "",
+        "updated_at": None,
+    }
+
+
+def _load_intraday_adapter_config() -> Dict[str, Any]:
+    base = _default_intraday_adapter_config()
+    try:
+        if not _INTRADAY_ADAPTER_PATH.exists():
+            return base
+        raw = json.loads(_INTRADAY_ADAPTER_PATH.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return base
+        runtime = raw.get("runtime_credentials") if isinstance(raw.get("runtime_credentials"), dict) else {}
+        markets = raw.get("preferred_markets") if isinstance(raw.get("preferred_markets"), dict) else {}
+        base.update({k: v for k, v in raw.items() if k not in ("runtime_credentials", "preferred_markets")})
+        base["runtime_credentials"] = {
+            "app_key": str(runtime.get("app_key") or ""),
+            "app_secret": str(runtime.get("app_secret") or ""),
+            "account_no": str(runtime.get("account_no") or ""),
+        }
+        base["preferred_markets"] = {
+            "KR": bool(markets.get("KR", True)),
+            "US": bool(markets.get("US", True)),
+        }
+        return base
+    except Exception:
+        return base
+
+
+def _save_intraday_adapter_config(config: Dict[str, Any]) -> None:
+    try:
+        _RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        _INTRADAY_ADAPTER_PATH.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _mask_secret(value: str, *, keep: int = 4) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if len(text) <= keep:
+        return "*" * len(text)
+    return f"{text[:keep]}{'*' * max(len(text) - keep, 0)}"
+
+
+def _intraday_feed_plan(session_info: Dict[str, Any]) -> Dict[str, Any]:
+    code = str(session_info.get("code") or "")
+    plans: Dict[str, Dict[str, Any]] = {
+        "KR_OPEN_AUCTION": {
+            "headline": "개장 전 예상체결과 호가 불균형 위주",
+            "summary": "08:30~09:10에는 예상체결가/예상체결수량/호가 잔량 우위를 먼저 보고, 개장 직후 첫 눌림 확인까지 이어집니다.",
+            "feeds": [
+                {"name": "실시간 예상체결", "purpose": "예상 시가 상향 유지와 예상체결수량 급증 확인"},
+                {"name": "실시간 호가", "purpose": "매수 잔량 우위와 잔량 변화 속도 확인"},
+                {"name": "실시간 체결가", "purpose": "개장 직후 첫 1~3분 눌림 뒤 재유입 확인"},
+                {"name": "실시간 회원사", "purpose": "초반 유입 브로커/회원사 편중 체크"},
+                {"name": "실시간 프로그램매매", "purpose": "프로그램 수급 동조 여부 확인"},
+            ],
+            "trigger": "시가 위 안착 + 첫 눌림 후 재상승",
+        },
+        "KR_OPEN_DRIVE": {
+            "headline": "오픈 드라이브와 VWAP 재상향 확인",
+            "summary": "09:00~09:30에는 실제 거래대금 가속과 VWAP 위 유지, 눌림 후 재돌파를 중점으로 봅니다.",
+            "feeds": [
+                {"name": "실시간 체결가", "purpose": "1분/3분 거래대금 가속과 체결 강도 확인"},
+                {"name": "실시간 호가", "purpose": "눌림 구간에서 매수 잔량 복귀 확인"},
+                {"name": "실시간 프로그램매매", "purpose": "방향성 있는 프로그램 유입 확인"},
+                {"name": "실시간 회원사", "purpose": "섹터 선도주와 동조하는 매수 주체 확인"},
+            ],
+            "trigger": "VWAP 상향 재돌파 + 눌림 저점 유지",
+        },
+        "KR_INTRADAY_CONTINUATION": {
+            "headline": "거래대금 유지 여부를 보는 연장전",
+            "summary": "09:30~11:30에는 이미 강했던 종목이 거래대금을 유지하며 재차 확장하는지 봅니다.",
+            "feeds": [
+                {"name": "실시간 체결가", "purpose": "거래대금 유지와 재가속 확인"},
+                {"name": "실시간 호가", "purpose": "스프레드 악화 여부 확인"},
+                {"name": "실시간 프로그램매매", "purpose": "밀릴 때도 수급이 받쳐주는지 확인"},
+            ],
+            "trigger": "VWAP/당일 고점 재돌파 전 재정비",
+        },
+        "US_PREMARKET": {
+            "headline": "뉴스 촉매 + 프리마켓 스프레드 관리",
+            "summary": "프리마켓에서는 뉴스 강도와 달러 거래대금, 스프레드 품질이 동시에 좋아야 합니다.",
+            "feeds": [
+                {"name": "해외 실시간 호가", "purpose": "10호가 스프레드와 호가 공백 확인"},
+                {"name": "해외 실시간 체결가", "purpose": "프리마켓 달러 거래대금 가속 확인"},
+                {"name": "뉴스/공시", "purpose": "실적/가이던스/원자재 촉매 확인"},
+                {"name": "섹터 ETF/선물", "purpose": "종목 단독이 아닌 섹터 동조 여부 확인"},
+            ],
+            "trigger": "과도한 갭 없이 거래량 유지 + 스프레드 허용",
+        },
+        "US_OPEN_DRIVE": {
+            "headline": "미국 정규장 초반 오픈 드라이브",
+            "summary": "개장 초반에는 프리마켓 강세가 실제 체결로 이어지는지, 추격 리스크를 넘지 않는지 봅니다.",
+            "feeds": [
+                {"name": "해외 실시간 체결가", "purpose": "개장 후 거래대금 확장 확인"},
+                {"name": "해외 실시간 호가", "purpose": "스프레드 정상화 여부 확인"},
+                {"name": "섹터 ETF/지수선물", "purpose": "종목 단독이 아닌 동조 여부 확인"},
+            ],
+            "trigger": "첫 눌림 유지 + 개장가 재돌파",
+        },
+    }
+    fallback = {
+        "headline": "세션 대기",
+        "summary": "세션이 닫힌 상태에서는 다음 거래 세션을 위한 감시 상태만 유지합니다.",
+        "feeds": [
+            {"name": "뉴스/공시", "purpose": "다음 세션 촉매 확인"},
+            {"name": "전일 거래대금", "purpose": "다음 세션 우선 감시 종목 선별"},
+        ],
+        "trigger": "다음 세션 시작 후 재평가",
+    }
+    return plans.get(code, fallback)
+
+
+def _intraday_effective_credentials() -> Dict[str, Any]:
+    cfg = _load_intraday_adapter_config()
+    credential_mode = str(cfg.get("credential_mode") or "env").lower()
+    runtime_creds = cfg.get("runtime_credentials") if isinstance(cfg.get("runtime_credentials"), dict) else {}
+
+    if credential_mode == "runtime":
+        app_key = str(runtime_creds.get("app_key") or "").strip()
+        app_secret = str(runtime_creds.get("app_secret") or "").strip()
+        account_no = str(runtime_creds.get("account_no") or "").strip()
+        source = "runtime_file"
+    else:
+        app_key = str(os.getenv("KIS_APP_KEY") or "").strip()
+        app_secret = str(os.getenv("KIS_APP_SECRET") or "").strip()
+        account_no = str(os.getenv("KIS_ACCOUNT_NO") or "").strip()
+        source = "environment"
+
+    return {
+        "config": cfg,
+        "credential_mode": credential_mode,
+        "source": source,
+        "app_key": app_key,
+        "app_secret": app_secret,
+        "account_no": account_no,
+    }
+
+
+def _intraday_session_info(market_code: str) -> Dict[str, Any]:
+    market_u = (market_code or "KR").upper().strip()
+    now_kst = _now_kst()
+    now_et = _now_et()
+
+    if market_u == "KR":
+        t = now_kst.timetz().replace(tzinfo=None)
+        if time(8, 30) <= t < time(9, 10):
+            return {"code": "KR_OPEN_AUCTION", "label": "KR Open Auction", "market": "KR", "tz": "KST"}
+        if time(9, 0) <= t < time(9, 30):
+            return {"code": "KR_OPEN_DRIVE", "label": "KR Open Drive", "market": "KR", "tz": "KST"}
+        if time(9, 30) <= t < time(11, 30):
+            return {"code": "KR_INTRADAY_CONTINUATION", "label": "KR Intraday Continuation", "market": "KR", "tz": "KST"}
+        return {"code": "KR_OFF_SESSION", "label": "KR Off Session", "market": "KR", "tz": "KST"}
+
+    t = now_et.timetz().replace(tzinfo=None)
+    if time(4, 0) <= t < time(9, 30):
+        return {"code": "US_PREMARKET", "label": "US Premarket", "market": "US", "tz": "ET"}
+    if time(9, 30) <= t < time(10, 30):
+        return {"code": "US_OPEN_DRIVE", "label": "US Open Drive", "market": "US", "tz": "ET"}
+    return {"code": "US_OFF_SESSION", "label": "US Off Session", "market": "US", "tz": "ET"}
+
+
+def _intraday_market_banner(market_decision: Dict[str, Any]) -> str:
+    if not bool(market_decision.get("new_entries_allowed", False)):
+        return "NO_TRADE" if str(market_decision.get("regime") or "") == "NO_TRADE" else "CAUTION"
+    if str(market_decision.get("regime") or "") == "RISK_ON":
+        return "GO"
+    return "CAUTION"
+
+
+def _risk_position_notional(
+    *,
+    account_cash: float,
+    account_equity: float,
+    stop_distance_pct: float,
+    risk_budget_pct: float,
+) -> float:
+    safe_stop = max(float(stop_distance_pct), 0.005)
+    safe_cash = max(float(account_cash), 0.0)
+    safe_equity = max(float(account_equity), 0.0)
+    return round(min(safe_cash * 0.20, (safe_equity * float(risk_budget_pct)) / safe_stop), 2)
+
+
+def _intraday_proxy_scores(
+    *,
+    market: str,
+    last: Optional[float],
+    day_chg_pct: Optional[float],
+    rel_vol_20d: Optional[float],
+    day_turnover: Optional[float],
+    avg_turnover_20d: Optional[float],
+    close_position: Optional[float],
+    gap_pct: Optional[float],
+    news_items: List[Dict[str, Any]],
+    signed_flow_score: Optional[float],
+    market_decision: Dict[str, Any],
+) -> Dict[str, float]:
+    auction_pressure = 50.0
+    orderbook_imbalance = 50.0
+    trade_acceleration = 50.0
+    program_member = 50.0
+    catalyst = 35.0
+
+    if day_chg_pct is not None:
+        auction_pressure += _clamp(day_chg_pct, -4.0, 4.0) * 6.0
+    if gap_pct is not None:
+        auction_pressure += _clamp(gap_pct, -3.0, 3.0) * 5.0
+    if close_position is not None:
+        orderbook_imbalance += (float(close_position) - 0.5) * 60.0
+    if rel_vol_20d is not None:
+        trade_acceleration += _clamp(rel_vol_20d, 0.0, 4.0) * 10.0
+    if day_turnover is not None and avg_turnover_20d is not None and avg_turnover_20d > 0:
+        trade_acceleration += _clamp(float(day_turnover) / float(avg_turnover_20d), 0.0, 4.0) * 8.0
+    if signed_flow_score is not None:
+        program_member += _clamp(float(signed_flow_score), -10.0, 10.0) * 3.0
+    if news_items:
+        catalyst += min(len(news_items), 3) * 12.0
+    if not bool(market_decision.get("new_entries_allowed", False)):
+        auction_pressure -= 15.0
+        orderbook_imbalance -= 10.0
+
+    spread_quality = 40.0
+    if avg_turnover_20d is not None:
+        spread_quality += _clamp(math.log10(max(float(avg_turnover_20d), 1.0)) - 6.0, 0.0, 4.0) * 12.0
+
+    sector_confirmation = 55.0 if bool(market_decision.get("new_entries_allowed", False)) else 35.0
+    chase_risk = 40.0
+    if day_chg_pct is not None:
+        chase_risk += max(0.0, float(day_chg_pct)) * 6.0
+    if gap_pct is not None:
+        chase_risk += max(0.0, float(gap_pct)) * 5.0
+
+    entry_readiness = (
+        auction_pressure * 0.24
+        + orderbook_imbalance * 0.20
+        + trade_acceleration * 0.24
+        + program_member * 0.14
+        + catalyst * 0.18
+    )
+
+    return {
+        "auction_pressure_score": round(_clamp(auction_pressure, 0.0, 100.0), 1),
+        "orderbook_imbalance_score": round(_clamp(orderbook_imbalance, 0.0, 100.0), 1),
+        "trade_acceleration_score": round(_clamp(trade_acceleration, 0.0, 100.0), 1),
+        "program_member_score": round(_clamp(program_member, 0.0, 100.0), 1),
+        "catalyst_score": round(_clamp(catalyst, 0.0, 100.0), 1),
+        "entry_readiness_score": round(_clamp(entry_readiness, 0.0, 100.0), 1),
+        "spread_quality_score": round(_clamp(spread_quality, 0.0, 100.0), 1),
+        "chase_risk_score": round(_clamp(chase_risk, 0.0, 100.0), 1),
+        "sector_confirmation_score": round(_clamp(sector_confirmation, 0.0, 100.0), 1),
+    }
+
+
+def _intraday_session_rule_pack(session_code: str, market_decision: Dict[str, Any]) -> Dict[str, Any]:
+    pack: Dict[str, Any] = {
+        "confirm_entry_readiness": 60.0,
+        "trigger_entry_readiness": 78.0,
+        "max_trigger_chase_score": 55.0,
+        "hard_expire_chase_score": 78.0,
+        "max_chase_over_trigger_pct": 0.025,
+        "min_spread_quality": 48.0,
+        "min_catalyst_score": 35.0,
+        "min_trade_acceleration": 55.0,
+        "min_sector_confirmation": 45.0,
+        "min_auction_pressure": 55.0,
+        "min_orderbook_score": 52.0,
+        "prepare_reason": "아직 감시 단계입니다.",
+        "confirm_reason": "조건 대부분이 맞아가고 있습니다.",
+        "trigger_reason": "지금 진입 규칙에 거의 맞습니다.",
+    }
+
+    if session_code == "KR_OPEN_AUCTION":
+        pack.update(
+            {
+                "confirm_entry_readiness": 58.0,
+                "trigger_entry_readiness": 74.0,
+                "max_trigger_chase_score": 50.0,
+                "hard_expire_chase_score": 72.0,
+                "max_chase_over_trigger_pct": 0.012,
+                "min_spread_quality": 50.0,
+                "min_catalyst_score": 42.0,
+                "min_trade_acceleration": 56.0,
+                "min_sector_confirmation": 48.0,
+                "min_auction_pressure": 60.0,
+                "prepare_reason": "예상체결과 호가 불균형이 더 필요합니다.",
+                "confirm_reason": "예상체결 압력이 유지되는지 확인 중입니다.",
+                "trigger_reason": "예상체결/호가 우위가 충분합니다.",
+            }
+        )
+    elif session_code in ("KR_OPEN_DRIVE", "US_OPEN_DRIVE"):
+        pack.update(
+            {
+                "confirm_entry_readiness": 62.0,
+                "trigger_entry_readiness": 79.0,
+                "max_trigger_chase_score": 52.0,
+                "hard_expire_chase_score": 75.0,
+                "max_chase_over_trigger_pct": 0.018,
+                "min_spread_quality": 55.0,
+                "min_catalyst_score": 32.0,
+                "min_trade_acceleration": 62.0,
+                "min_sector_confirmation": 50.0,
+                "min_orderbook_score": 58.0,
+                "prepare_reason": "첫 눌림과 재유입이 아직 확인되지 않았습니다.",
+                "confirm_reason": "오픈 드라이브는 좋지만 눌림 확인이 더 필요합니다.",
+                "trigger_reason": "눌림 후 재상승 조건이 맞습니다.",
+            }
+        )
+    elif session_code == "US_PREMARKET":
+        pack.update(
+            {
+                "confirm_entry_readiness": 64.0,
+                "trigger_entry_readiness": 76.0,
+                "max_trigger_chase_score": 48.0,
+                "hard_expire_chase_score": 70.0,
+                "max_chase_over_trigger_pct": 0.015,
+                "min_spread_quality": 64.0,
+                "min_catalyst_score": 50.0,
+                "min_trade_acceleration": 58.0,
+                "min_sector_confirmation": 52.0,
+                "prepare_reason": "뉴스 강도와 스프레드 품질이 더 필요합니다.",
+                "confirm_reason": "프리마켓 거래대금은 붙지만 스프레드 확인이 더 필요합니다.",
+                "trigger_reason": "뉴스 촉매와 프리마켓 유동성이 모두 확인됩니다.",
+            }
+        )
+    elif session_code.endswith("OFF_SESSION"):
+        pack.update(
+            {
+                "confirm_entry_readiness": 999.0,
+                "trigger_entry_readiness": 999.0,
+                "prepare_reason": "장 시작 전/후라 감시만 유지합니다.",
+                "confirm_reason": "세션이 닫혀 있어 진입 확정은 보류합니다.",
+                "trigger_reason": "세션 시작 후 다시 계산합니다.",
+            }
+        )
+
+    if not bool(market_decision.get("new_entries_allowed", True)):
+        pack["trigger_entry_readiness"] = 999.0
+
+    return pack
+
+
+def _intraday_state_transition(
+    *,
+    market_decision: Dict[str, Any],
+    session_info: Dict[str, Any],
+    scores: Dict[str, float],
+    last: Optional[float],
+    trigger_price: Optional[float],
+) -> Tuple[str, List[str], Dict[str, Any]]:
+    pack = _intraday_session_rule_pack(str(session_info.get("code") or ""), market_decision)
+    entry_readiness = float(scores.get("entry_readiness_score") or 0.0)
+    chase_risk = float(scores.get("chase_risk_score") or 0.0)
+    reasons: List[str] = []
+
+    if str(session_info.get("code") or "").endswith("OFF_SESSION"):
+        reasons.append("현재는 거래 세션 밖이라 감시만 유지합니다.")
+        return "PREPARE", reasons, pack
+
+    if not bool(market_decision.get("new_entries_allowed", False)):
+        reasons.append("시장 리스크로 신규 진입이 차단됐습니다.")
+        return "BLOCKED", reasons, pack
+
+    if last is not None and trigger_price is not None and float(last) > float(trigger_price) * (1.0 + float(pack["max_chase_over_trigger_pct"])):
+        reasons.append(f"계획 진입가 대비 {round(float(pack['max_chase_over_trigger_pct']) * 100.0, 1)}% 이상 초과했습니다.")
+        return "EXPIRED", reasons, pack
+
+    if chase_risk >= float(pack["hard_expire_chase_score"]):
+        reasons.append("추격 리스크가 너무 높습니다.")
+        return "EXPIRED", reasons, pack
+
+    gate_reasons: List[str] = []
+    if float(scores.get("spread_quality_score") or 0.0) < float(pack["min_spread_quality"]):
+        gate_reasons.append("스프레드/유동성 품질 확인 필요")
+    if float(scores.get("catalyst_score") or 0.0) < float(pack["min_catalyst_score"]):
+        gate_reasons.append("뉴스/촉매 강도 확인 필요")
+    if float(scores.get("trade_acceleration_score") or 0.0) < float(pack["min_trade_acceleration"]):
+        gate_reasons.append("거래대금 가속 확인 필요")
+    if float(scores.get("sector_confirmation_score") or 0.0) < float(pack["min_sector_confirmation"]):
+        gate_reasons.append("섹터 동조 확인 필요")
+
+    session_code = str(session_info.get("code") or "")
+    if session_code == "KR_OPEN_AUCTION" and float(scores.get("auction_pressure_score") or 0.0) < float(pack["min_auction_pressure"]):
+        gate_reasons.append("예상체결 압력이 아직 약함")
+    if session_code in ("KR_OPEN_DRIVE", "US_OPEN_DRIVE") and float(scores.get("orderbook_imbalance_score") or 0.0) < float(pack["min_orderbook_score"]):
+        gate_reasons.append("눌림 뒤 호가 우위 재확인 필요")
+
+    if not gate_reasons and entry_readiness >= float(pack["trigger_entry_readiness"]) and chase_risk <= float(pack["max_trigger_chase_score"]):
+        reasons.append(str(pack["trigger_reason"]))
+        return "TRIGGERED", reasons, pack
+
+    if entry_readiness >= float(pack["confirm_entry_readiness"]):
+        reasons.extend(gate_reasons[:2] or [str(pack["confirm_reason"])])
+        return "CONFIRM", reasons, pack
+
+    reasons.extend(gate_reasons[:2] or [str(pack["prepare_reason"])])
+    return "PREPARE", reasons, pack
+
+
+def _estimated_hold_minutes(session_code: str) -> int:
+    return {
+        "KR_OPEN_AUCTION": 30,
+        "KR_OPEN_DRIVE": 45,
+        "KR_INTRADAY_CONTINUATION": 90,
+        "US_PREMARKET": 120,
+        "US_OPEN_DRIVE": 45,
+    }.get(session_code, 60)
+
+
+def _maybe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _intraday_result_status(row: Dict[str, Any]) -> str:
+    explicit = str(row.get("result_status") or "").upper()
+    if explicit in {"WIN", "LOSS", "SCRATCH", "MISSED"}:
+        return explicit
+
+    fill = _maybe_float(row.get("fill_price"))
+    exit_price = _maybe_float(row.get("exit_price"))
+    if fill is not None and exit_price is not None and fill > 0:
+        pnl = ((exit_price - fill) / fill) * 100.0
+        if abs(pnl) < 0.15:
+            return "SCRATCH"
+        return "WIN" if pnl > 0 else "LOSS"
+    if explicit in {"OPEN", "PENDING"}:
+        return explicit
+    if bool(row.get("entered")) or fill is not None:
+        return "OPEN"
+    return "PENDING"
+
+
+def _update_intraday_excursions(row: Dict[str, Any]) -> None:
+    ref = (
+        _maybe_float(row.get("fill_price"))
+        or _maybe_float(row.get("entry_price"))
+        or _maybe_float(row.get("trigger_price"))
+        or _maybe_float(row.get("snapshot_price"))
+    )
+    cur = _maybe_float(row.get("current_price"))
+    if ref is None or cur is None or ref <= 0:
+        return
+
+    move_pct = ((cur - ref) / ref) * 100.0
+    mfe = _maybe_float(row.get("mfe_pct"))
+    mae = _maybe_float(row.get("mae_pct"))
+    row["mfe_pct"] = round(max(move_pct if mfe is None else mfe, move_pct), 3)
+    row["mae_pct"] = round(min(move_pct if mae is None else mae, move_pct), 3)
+
+
+def _upsert_intraday_journal(
+    rows: List[Dict[str, Any]],
+    *,
+    session_info: Dict[str, Any],
+    market_state: str,
+) -> List[Dict[str, Any]]:
+    journal = _load_intraday_journal()
+    by_id = {str(x.get("recommendation_id")): dict(x) for x in journal if x.get("recommendation_id")}
+
+    for row in rows:
+        rec_id = str(row.get("recommendation_id") or "")
+        if not rec_id:
+            continue
+        base = by_id.get(rec_id) or {
+            "recommendation_id": rec_id,
+            "symbol": row.get("symbol"),
+            "setup_type": row.get("setup_type"),
+            "session": session_info.get("code"),
+            "snapshot_at": row.get("last_updated_at"),
+            "snapshot_price": row.get("last"),
+            "entry_price": row.get("trigger_price"),
+            "trigger_price": row.get("trigger_price"),
+            "stop_price": row.get("stop_price"),
+            "target_price_1": row.get("target_price_1"),
+            "status": row.get("state"),
+            "current_price": row.get("last"),
+            "entered": False,
+            "fill_price": None,
+            "fill_at": None,
+            "exit_price": None,
+            "exit_at": None,
+            "exit_reason": None,
+            "resolution_notes": None,
+            "result_status": "PENDING",
+            "market_state": market_state,
+            "state_reason": list(row.get("state_reason") or []),
+            "snapshot_count": 0,
+            "mfe_pct": None,
+            "mae_pct": None,
+            "realized_pnl_pct": None,
+        }
+        base["setup_type"] = row.get("setup_type")
+        base["session"] = session_info.get("code")
+        base["status"] = row.get("state")
+        base["current_price"] = row.get("last")
+        base["snapshot_price"] = row.get("last")
+        base["snapshot_at"] = row.get("last_updated_at")
+        base["trigger_price"] = row.get("trigger_price")
+        base["entry_price"] = row.get("trigger_price")
+        base["stop_price"] = row.get("stop_price")
+        base["target_price_1"] = row.get("target_price_1")
+        base["market_state"] = market_state
+        base["state_reason"] = list(row.get("state_reason") or [])
+        base["snapshot_count"] = int(base.get("snapshot_count") or 0) + 1
+        base["result_status"] = _intraday_result_status(base)
+        if _maybe_float(base.get("fill_price")) is not None and _maybe_float(base.get("exit_price")) is not None:
+            fill = _maybe_float(base.get("fill_price")) or 0.0
+            exit_price = _maybe_float(base.get("exit_price")) or 0.0
+            if fill > 0:
+                base["realized_pnl_pct"] = round(((exit_price - fill) / fill) * 100.0, 3)
+        _update_intraday_excursions(base)
+        by_id[rec_id] = base
+
+    out = list(by_id.values())
+    out.sort(key=lambda x: str(x.get("snapshot_at") or ""), reverse=True)
+    _save_intraday_journal(out[:300])
+    return out[:300]
+
+
+def _intraday_stats_from_journal(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    by_session: Dict[str, int] = {}
+    by_setup: Dict[str, int] = {}
+    by_status: Dict[str, int] = {}
+    by_result_status: Dict[str, int] = {}
+    resolved = 0
+    wins = 0
+    realized_vals: List[float] = []
+    for row in rows:
+        by_session[str(row.get("session") or "UNKNOWN")] = by_session.get(str(row.get("session") or "UNKNOWN"), 0) + 1
+        by_setup[str(row.get("setup_type") or "UNKNOWN")] = by_setup.get(str(row.get("setup_type") or "UNKNOWN"), 0) + 1
+        by_status[str(row.get("status") or "UNKNOWN")] = by_status.get(str(row.get("status") or "UNKNOWN"), 0) + 1
+        result_status = _intraday_result_status(row)
+        by_result_status[result_status] = by_result_status.get(result_status, 0) + 1
+        if result_status in {"WIN", "LOSS", "SCRATCH"}:
+            resolved += 1
+            if result_status == "WIN":
+                wins += 1
+        realized = _maybe_float(row.get("realized_pnl_pct"))
+        if realized is not None:
+            realized_vals.append(realized)
+    return {
+        "journal_count": len(rows),
+        "open_count": by_result_status.get("OPEN", 0),
+        "pending_count": by_result_status.get("PENDING", 0),
+        "resolved_count": resolved,
+        "win_rate_pct": round((wins / resolved) * 100.0, 2) if resolved else None,
+        "avg_realized_pnl_pct": round(statistics.fmean(realized_vals), 3) if realized_vals else None,
+        "by_session": by_session,
+        "by_setup": by_setup,
+        "by_status": by_status,
+        "by_result_status": by_result_status,
+    }
+
+
+def _intraday_api_connection_status(market: str, session_info: Dict[str, Any]) -> Dict[str, Any]:
+    creds = _intraday_effective_credentials()
+    app_key = bool(creds.get("app_key"))
+    app_secret = bool(creds.get("app_secret"))
+    account = bool(creds.get("account_no"))
+    configured = bool(app_key and app_secret)
+    cfg = creds.get("config") if isinstance(creds.get("config"), dict) else {}
+    feed_plan = _intraday_feed_plan(session_info)
+    missing: List[str] = []
+    if not app_key:
+        missing.append("KIS_APP_KEY")
+    if not app_secret:
+        missing.append("KIS_APP_SECRET")
+    if not account:
+        missing.append("KIS_ACCOUNT_NO")
+    return {
+        "broker": "KIS Open API",
+        "configured": configured,
+        "account_bound": bool(account),
+        "realtime_connected": False,
+        "mode": "BROKER_READY" if configured else ("PUBLIC_PROXY" if bool(cfg.get("use_mock", True)) else "BROKER_SETUP_NEEDED"),
+        "credential_source": creds.get("source"),
+        "credential_mode": creds.get("credential_mode"),
+        "use_mock": bool(cfg.get("use_mock", True)),
+        "missing_fields": missing,
+        "feed_plan": feed_plan,
+        "masked_runtime_credentials": {
+            "app_key": _mask_secret(str(((cfg.get("runtime_credentials") or {}).get("app_key") or ""))),
+            "app_secret": _mask_secret(str(((cfg.get("runtime_credentials") or {}).get("app_secret") or ""))),
+            "account_no": _mask_secret(str(((cfg.get("runtime_credentials") or {}).get("account_no") or ""))),
+        },
+        "message": (
+            "브로커 키는 감지됐지만 웹소켓 연결 엔진은 아직 자리만 있습니다."
+            if configured
+            else "브로커 키가 없어 공개 데이터 기반 프록시 모드로 동작합니다."
+        ),
+        "connection_guide": [
+            "권장: 환경변수(KIS_APP_KEY / KIS_APP_SECRET / KIS_ACCOUNT_NO)로 연결",
+            "대안: 이 앱의 로컬 런타임 설정 파일에만 저장",
+            "현재 단계: 피드 계획/설정 흐름까지 구현, 실시간 체결 연결은 다음 단계",
+        ],
+        "market": market,
+    }
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -2423,6 +3067,389 @@ async def review_positions(
         "market": market_u,
         "market_decision": market_decision,
         "positions_review": rows,
+    }
+
+
+async def _build_intraday_radar(
+    *,
+    market: str,
+    account_cash: float,
+    account_equity: float,
+    risk_budget_pct: float,
+    max_items: int,
+) -> Dict[str, Any]:
+    market_u = (market or "KR").upper().strip()
+    session_info = _intraday_session_info(market_u)
+    session_rules_preview = _intraday_session_rule_pack(session_info["code"], {"new_entries_allowed": True})
+
+    scout = await candidates(
+        market=market_u,
+        horizon_days=5,
+        scr_ids="day_gainers,most_actives",
+        symbols="",
+        size_per_screener=25,
+        max_price=2_000.0 if market_u == "US" else 0.0,
+        min_avg_turnover=20_000_000.0 if market_u == "US" else 30_000_000_000.0,
+        market_cap_min=0.0,
+        today_turnover_min=0.0,
+        rel_volume_min=0.0,
+        ret_5d_min=-100.0,
+        ret_5d_max=500.0,
+        close_position_min=0.0,
+        fresh_news_hours=0.0,
+        market_turnover_rank_max=0,
+        largecap_min=0.0,
+        largecap_quota=0,
+        kr_exclude_fundlike=True,
+        direct_mode=False,
+        us_market_cap_min=2_000_000_000.0,
+        us_day_turnover_min=25_000_000.0,
+        us_rel_volume_min=1.2,
+        us_exclude_etf=True,
+        held_symbols="",
+        top_n=max_items,
+    )
+    market_decision = dict(scout.get("market_decision") or {})
+    market_state = _intraday_market_banner(market_decision)
+    session_rules = _intraday_session_rule_pack(session_info["code"], market_decision)
+    candidate_rows = list(scout.get("candidates") or [])[:max_items]
+    symbols_csv = ",".join(str(x.get("symbol")) for x in candidate_rows if x.get("symbol"))
+    details, _errors = await _collect_symbol_details(symbols_csv, market=market_u, horizon_days=5, max_items=max_items)
+    detail_map = {str(d.get("symbol")): d for d in details if d.get("symbol")}
+    api_connection = _intraday_api_connection_status(market_u, session_info)
+
+    radar_rows: List[Dict[str, Any]] = []
+    now_text = _fmt_dt(_now_kst())
+    for row in candidate_rows:
+        sym = str(row.get("symbol") or "")
+        if not sym:
+            continue
+        detail = detail_map.get(sym) or {}
+        stats = detail.get("stats") or {}
+        trade_plan = detail.get("trade_plan_like") or {}
+        news_items = detail.get("news") or []
+        extras = row.get("extras") or {}
+        last = row.get("last")
+
+        trigger_price = trade_plan.get("entry_trigger")
+        if trigger_price is None and last is not None:
+            trigger_price = round(float(last) * 1.002, 4)
+        stop_price = trade_plan.get("stop")
+        if stop_price is None and trigger_price is not None:
+            stop_price = round(float(trigger_price) * 0.985, 4)
+        target_price_1 = trade_plan.get("target")
+        if target_price_1 is None and trigger_price is not None and stop_price is not None:
+            risk = max(float(trigger_price) - float(stop_price), float(trigger_price) * 0.01)
+            target_price_1 = round(float(trigger_price) + risk * 1.8, 4)
+
+        stop_distance_pct = 0.02
+        if trigger_price is not None and stop_price is not None and float(trigger_price) > 0:
+            stop_distance_pct = abs(float(trigger_price) - float(stop_price)) / float(trigger_price)
+
+        scores = _intraday_proxy_scores(
+            market=market_u,
+            last=last,
+            day_chg_pct=row.get("day_chg_pct"),
+            rel_vol_20d=row.get("rel_vol_20d"),
+            day_turnover=row.get("day_turnover"),
+            avg_turnover_20d=row.get("avg_turnover_20d"),
+            close_position=extras.get("close_position") if extras else stats.get("close_position"),
+            gap_pct=extras.get("gap_pct") if extras else None,
+            news_items=news_items,
+            signed_flow_score=extras.get("signed_flow_score"),
+            market_decision=market_decision,
+        )
+        state, state_reason, _rule_pack = _intraday_state_transition(
+            market_decision=market_decision,
+            session_info=session_info,
+            scores=scores,
+            last=last,
+            trigger_price=trigger_price,
+        )
+
+        if session_info["code"] == "KR_OPEN_AUCTION":
+            setup_type = "open_auction_hunt"
+        elif session_info["code"] in ("KR_OPEN_DRIVE", "US_OPEN_DRIVE"):
+            setup_type = "open_drive_pullback"
+        elif session_info["code"] == "US_PREMARKET":
+            setup_type = "premarket_catalyst"
+        else:
+            setup_type = "intraday_continuation"
+
+        recommendation_id = f"{market_u}-{session_info['code']}-{_now_kst().strftime('%Y%m%d')}-{sym}"
+        radar_rows.append(
+            {
+                "recommendation_id": recommendation_id,
+                "symbol": sym,
+                "name": row.get("name"),
+                "state": state,
+                "state_reason": list(dict.fromkeys(state_reason + list(row.get("entry_reason") or [])[:2])),
+                "setup_type": setup_type,
+                "flow_scores": scores,
+                "trigger_price": trigger_price,
+                "stop_price": stop_price,
+                "target_price_1": target_price_1,
+                "estimated_hold_minutes": _estimated_hold_minutes(session_info["code"]),
+                "position_notional": _risk_position_notional(
+                    account_cash=account_cash,
+                    account_equity=account_equity,
+                    stop_distance_pct=stop_distance_pct,
+                    risk_budget_pct=risk_budget_pct,
+                ),
+                "last": last,
+                "day_chg_pct": row.get("day_chg_pct"),
+                "day_turnover": row.get("day_turnover"),
+                "entry_status": row.get("entry_status"),
+                "session_code": session_info["code"],
+                "market_state": market_state,
+                "allowed_chase_pct": round(float(session_rules["max_chase_over_trigger_pct"]) * 100.0, 2),
+                "last_updated_at": now_text,
+                "data_quality": "public_proxy_until_broker_ws_connected",
+            }
+        )
+
+    radar_rows.sort(
+        key=lambda x: (
+            {"TRIGGERED": 0, "CONFIRM": 1, "PREPARE": 2, "EXPIRED": 3, "BLOCKED": 4}.get(str(x.get("state")), 9),
+            -float(((x.get("flow_scores") or {}).get("entry_readiness_score") or 0.0)),
+        )
+    )
+    journal_rows = _upsert_intraday_journal(radar_rows, session_info=session_info, market_state=market_state)
+    stats = _intraday_stats_from_journal(journal_rows)
+    open_rows = [x for x in journal_rows if _intraday_result_status(x) == "OPEN"]
+    active_trades = open_rows or [x for x in radar_rows if str(x.get("state")) in ("TRIGGERED", "CONFIRM")]
+
+    return {
+        "desk_name": "Intraday Desk",
+        "market": market_u,
+        "session": session_info,
+        "session_rules": session_rules,
+        "session_rules_preview": session_rules_preview,
+        "market_state": market_state,
+        "api_connection": api_connection,
+        "adapter_settings": {
+            "provider": str(((api_connection.get("broker")) or "KIS Open API")),
+            "credential_mode": str((api_connection.get("credential_mode") or "env")),
+            "use_mock": bool(api_connection.get("use_mock", True)),
+            "local_config_path": str(_INTRADAY_ADAPTER_PATH),
+        },
+        "market_decision": market_decision,
+        "new_entries_allowed": bool(market_decision.get("new_entries_allowed", False)),
+        "risk_rules": {
+            "capital_cap_pct": 20,
+            "risk_budget_pct": risk_budget_pct,
+            "max_simultaneous_positions": 2,
+            "average_down_allowed": False,
+            "max_entries_per_name": 2,
+        },
+        "radar": radar_rows,
+        "snapshot_preview": [
+            {
+                "recommendation_id": row.get("recommendation_id"),
+                "symbol": row.get("symbol"),
+                "name": row.get("name"),
+                "setup_type": row.get("setup_type"),
+                "state": row.get("state"),
+                "state_reason": row.get("state_reason"),
+                "trigger_price": row.get("trigger_price"),
+                "stop_price": row.get("stop_price"),
+                "target_price_1": row.get("target_price_1"),
+                "position_notional": row.get("position_notional"),
+                "last_updated_at": row.get("last_updated_at"),
+            }
+            for row in radar_rows[:12]
+        ],
+        "active_trades": active_trades,
+        "journal_preview": journal_rows[:12],
+        "stats_preview": stats,
+        "asof_et": _fmt_dt(_now_et()),
+        "asof_kst": _fmt_dt(_now_kst()),
+        "note": "Public best-effort proxy mode. Broker websocket integration is the next step for real orderbook/program/member feeds.",
+        "desk_sections": [
+            {"id": "deskLiveSection", "label": "Live Radar"},
+            {"id": "deskSnapshotSection", "label": "Snapshot"},
+            {"id": "deskTradesSection", "label": "Active Trades"},
+            {"id": "deskJournalSection", "label": "Journal"},
+            {"id": "deskStatsSection", "label": "Stats"},
+            {"id": "deskAdapterSection", "label": "Broker Setup"},
+        ],
+    }
+
+
+def _intraday_meta_payload(market_u: str) -> Dict[str, Any]:
+    session_info = _intraday_session_info(market_u)
+    api_connection = _intraday_api_connection_status(market_u, session_info)
+    cfg = _load_intraday_adapter_config()
+    return {
+        "desk_name": "Intraday Desk",
+        "market": market_u,
+        "session": session_info,
+        "api_connection": api_connection,
+        "adapter_settings": {
+            "provider": str(cfg.get("provider") or "KIS Open API"),
+            "credential_mode": str(cfg.get("credential_mode") or "env"),
+            "use_mock": bool(cfg.get("use_mock", True)),
+            "notes": str(cfg.get("notes") or ""),
+            "preferred_markets": dict(cfg.get("preferred_markets") or {"KR": True, "US": True}),
+            "runtime_credentials_saved": {
+                "app_key": bool(str(((cfg.get("runtime_credentials") or {}).get("app_key") or "")).strip()),
+                "app_secret": bool(str(((cfg.get("runtime_credentials") or {}).get("app_secret") or "")).strip()),
+                "account_no": bool(str(((cfg.get("runtime_credentials") or {}).get("account_no") or "")).strip()),
+            },
+            "masked_runtime_credentials": api_connection.get("masked_runtime_credentials"),
+            "local_config_path": str(_INTRADAY_ADAPTER_PATH),
+            "recommended_mode": "env",
+        },
+        "session_rules_preview": _intraday_session_rule_pack(session_info["code"], {"new_entries_allowed": True}),
+        "supported_states": ["PREPARE", "CONFIRM", "TRIGGERED", "EXPIRED", "BLOCKED"],
+        "supported_sections": ["Live Radar", "Snapshot", "Active Trades", "Journal", "Stats", "Broker Setup"],
+        "asof_kst": _fmt_dt(_now_kst()),
+    }
+
+
+@app.get("/api/intraday/radar")
+async def intraday_radar(
+    market: str = Query(default="KR", description="KR or US"),
+    account_cash: float = Query(default=10_000_000.0, ge=0.0),
+    account_equity: float = Query(default=10_000_000.0, ge=0.0),
+    risk_budget_pct: float = Query(default=0.008, ge=0.001, le=0.03),
+    max_items: int = Query(default=12, ge=3, le=20),
+) -> Dict[str, Any]:
+    return await _build_intraday_radar(
+        market=market,
+        account_cash=account_cash,
+        account_equity=account_equity,
+        risk_budget_pct=risk_budget_pct,
+        max_items=max_items,
+    )
+
+
+@app.get("/api/intraday/journal")
+async def intraday_journal() -> Dict[str, Any]:
+    rows = _load_intraday_journal()
+    return {
+        "desk_name": "Intraday Desk",
+        "journal": rows[:100],
+        "stats_preview": _intraday_stats_from_journal(rows),
+        "asof_kst": _fmt_dt(_now_kst()),
+    }
+
+
+@app.get("/api/intraday/stats")
+async def intraday_stats() -> Dict[str, Any]:
+    rows = _load_intraday_journal()
+    return {
+        "desk_name": "Intraday Desk",
+        "stats": _intraday_stats_from_journal(rows),
+        "asof_kst": _fmt_dt(_now_kst()),
+    }
+
+
+@app.get("/api/intraday/meta")
+async def intraday_meta(market: str = Query(default="KR")) -> Dict[str, Any]:
+    market_u = (market or "KR").upper().strip()
+    return _intraday_meta_payload(market_u)
+
+
+@app.post("/api/intraday/adapter")
+async def intraday_adapter_update(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    cfg = _load_intraday_adapter_config()
+    credential_mode = str(payload.get("credential_mode") or cfg.get("credential_mode") or "env").lower()
+    use_mock = bool(payload.get("use_mock", cfg.get("use_mock", True)))
+    notes = str(payload.get("notes") or cfg.get("notes") or "").strip()
+    preferred_markets = cfg.get("preferred_markets") if isinstance(cfg.get("preferred_markets"), dict) else {"KR": True, "US": True}
+    preferred_markets = {
+        "KR": bool(payload.get("preferred_market_kr", preferred_markets.get("KR", True))),
+        "US": bool(payload.get("preferred_market_us", preferred_markets.get("US", True))),
+    }
+
+    runtime_creds = cfg.get("runtime_credentials") if isinstance(cfg.get("runtime_credentials"), dict) else {}
+    if credential_mode == "runtime":
+        runtime_creds = {
+            "app_key": str(payload.get("app_key") or runtime_creds.get("app_key") or "").strip(),
+            "app_secret": str(payload.get("app_secret") or runtime_creds.get("app_secret") or "").strip(),
+            "account_no": str(payload.get("account_no") or runtime_creds.get("account_no") or "").strip(),
+        }
+
+    updated = {
+        "provider": "KIS Open API",
+        "credential_mode": credential_mode,
+        "use_mock": use_mock,
+        "runtime_credentials": runtime_creds,
+        "preferred_markets": preferred_markets,
+        "notes": notes,
+        "updated_at": _fmt_dt(_now_kst()),
+    }
+    _save_intraday_adapter_config(updated)
+    market_u = str(payload.get("market") or "KR").upper().strip()
+    return {
+        "saved": True,
+        "message": "브로커 연결 설정을 저장했습니다.",
+        "meta": _intraday_meta_payload(market_u),
+    }
+
+
+@app.post("/api/intraday/journal/update")
+async def intraday_journal_update(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    rec_id = str(payload.get("recommendation_id") or "").strip()
+    action = str(payload.get("action") or "").strip().lower()
+    if not rec_id:
+        raise HTTPException(status_code=400, detail="recommendation_id required")
+    if action not in {"mark_entered", "mark_exited", "mark_missed", "note"}:
+        raise HTTPException(status_code=400, detail="unsupported action")
+
+    rows = _load_intraday_journal()
+    target: Optional[Dict[str, Any]] = None
+    for row in rows:
+        if str(row.get("recommendation_id") or "") == rec_id:
+            target = row
+            break
+    if target is None:
+        raise HTTPException(status_code=404, detail="recommendation_id not found")
+
+    now_text = _fmt_dt(_now_kst())
+    note = str(payload.get("note") or "").strip()
+    fill_price = _maybe_float(payload.get("fill_price"))
+    exit_price = _maybe_float(payload.get("exit_price"))
+    explicit_result = str(payload.get("result_status") or "").upper().strip()
+
+    if action == "mark_entered":
+        target["entered"] = True
+        target["fill_at"] = now_text
+        target["fill_price"] = fill_price if fill_price is not None else (_maybe_float(target.get("current_price")) or _maybe_float(target.get("entry_price")))
+        target["result_status"] = "OPEN"
+    elif action == "mark_exited":
+        target["entered"] = True
+        if _maybe_float(target.get("fill_price")) is None:
+            target["fill_price"] = fill_price if fill_price is not None else (_maybe_float(target.get("entry_price")) or _maybe_float(target.get("current_price")))
+        target["exit_price"] = exit_price if exit_price is not None else _maybe_float(target.get("current_price"))
+        target["exit_at"] = now_text
+        target["exit_reason"] = note or str(payload.get("exit_reason") or "").strip() or None
+        fill = _maybe_float(target.get("fill_price"))
+        exit_val = _maybe_float(target.get("exit_price"))
+        if fill is not None and exit_val is not None and fill > 0:
+            target["realized_pnl_pct"] = round(((exit_val - fill) / fill) * 100.0, 3)
+        target["result_status"] = explicit_result if explicit_result in {"WIN", "LOSS", "SCRATCH"} else _intraday_result_status(target)
+    elif action == "mark_missed":
+        target["result_status"] = "MISSED"
+        target["exit_at"] = now_text
+        target["exit_reason"] = note or "미체결 종료"
+    elif action == "note":
+        target["resolution_notes"] = note
+
+    if note and action != "note":
+        target["resolution_notes"] = note
+
+    target["result_status"] = _intraday_result_status(target) if explicit_result not in {"WIN", "LOSS", "SCRATCH", "MISSED"} else explicit_result
+    _update_intraday_excursions(target)
+    _save_intraday_journal(rows)
+    return {
+        "saved": True,
+        "message": "저널을 업데이트했습니다.",
+        "row": target,
+        "stats_preview": _intraday_stats_from_journal(rows),
+        "journal": rows[:100],
+        "asof_kst": _fmt_dt(_now_kst()),
     }
 
 
