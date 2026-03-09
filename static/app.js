@@ -337,7 +337,7 @@ function autoSelectCandidates() {
 function decisionHeadline(md) {
   if (!md) return "스캔 후 시장 판단이 표시됩니다.";
   if (md.recommended_action === "CASH") return "오늘은 신규 진입보다 현금 대기가 우선입니다.";
-  if (md.recommended_action === "WATCHLIST_ONLY") return "오늘은 관찰 위주로 보고, 신규 진입은 보수적으로 보세요.";
+  if (md.recommended_action === "WATCHLIST_ONLY") return "신규 진입은 자제하고, 관심종목들의 지지/저항을 확인하며 타점을 대기하세요.";
   return "오늘은 신규 진입 승인 후보를 검토할 수 있는 날입니다.";
 }
 
@@ -366,7 +366,7 @@ function renderDecisionBanner() {
 function statusBadge(row) {
   if (row.entry_status === "APPROVED_NEW") return { text: "신규 진입 가능", cls: "good" };
   if (row.entry_status === "AVOID") return { text: "비추천", cls: "bad" };
-  return { text: "관찰만", cls: "bad" };
+  return { text: "관심종목", cls: "bad" };
 }
 
 function renderCard(row, idx, groupLabel) {
@@ -442,7 +442,7 @@ function renderList() {
   $("list").innerHTML = `
     <div class="sec-hdr">신규 진입 승인 후보</div>
     ${approved.length ? approved.map((row, idx) => renderCard(row, idx, "APPROVED")).join("") : '<div class="empty-state">오늘은 신규 진입 없음</div>'}
-    <div class="sec-hdr">관찰 / 비추천</div>
+    <div class="sec-hdr">관심종목 (타점 대기) / 비추천</div>
     ${watch.length ? watch.map((row, idx) => renderCard(row, idx, "WATCH")).join("") : '<div class="empty-state">관찰 대상 없음</div>'}
   `;
 
