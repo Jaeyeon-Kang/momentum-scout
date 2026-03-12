@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import { useState, useCallback, useMemo } from "react";
 import { AppContext, type AppState } from "@/lib/store";
 import type { ScanResult } from "@/lib/api";
@@ -104,34 +103,16 @@ export default function Home() {
       />
       <div className="min-h-screen flex flex-col">
         <Header />
-        <main className="flex-1 w-full px-5 sm:px-8 lg:px-12 xl:px-16 py-8 sm:py-10">
-          <div className="max-w-[1320px] mx-auto space-y-8 sm:space-y-10">
+        <main className="min-w-0 flex flex-1 justify-center px-5 sm:px-8 lg:px-10 xl:px-12 py-8 sm:py-10">
+          <div className="w-full max-w-[1120px] mx-auto space-y-8 sm:space-y-10">
             {mode === "scout" && scoutPanel === "scan" && <ScanSettings />}
             {mode === "scout" && scoutPanel === "results" && <ScanResults />}
             {mode === "intraday" && <IntradayDesk />}
             {mode === "paper" && <PaperTradingPlaceholder />}
           </div>
         </main>
-        <MuichiroDock />
       </div>
     </AppContext.Provider>
-  );
-}
-
-function MuichiroDock() {
-  return (
-    <div className="fixed right-4 bottom-4 z-40 hidden xl:block">
-      <div className="overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-lg)]">
-        <Image
-          src="/muichiro-user.png"
-          alt="Tokito Muichiro"
-          width={220}
-          height={360}
-          className="h-[320px] w-[190px] object-cover object-center"
-          priority
-        />
-      </div>
-    </div>
   );
 }
 

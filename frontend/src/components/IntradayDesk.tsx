@@ -17,6 +17,53 @@ import Select from "./ui/Select";
 import { clsx } from "clsx";
 import { toast } from "sonner";
 
+const REGIME_LABELS_KO: Record<string, string> = {
+  MIXED: "혼조",
+  RISK_ON: "위험 선호",
+  RISK_OFF: "위험 회피",
+  NEUTRAL: "중립",
+};
+
+const STATE_LABELS_KO: Record<string, string> = {
+  PREPARE: "준비",
+  CONFIRM: "확인",
+  TRIGGERED: "진입 신호",
+  BLOCKED: "보류",
+  EXPIRED: "만료",
+};
+
+const SETUP_LABELS_KO: Record<string, string> = {
+  intraday_continuation: "장중 추세 지속",
+  opening_drive: "시초가 돌파",
+  gap_and_go: "갭 상승 지속",
+  pullback: "눌림목",
+  reversal: "반전 시도",
+};
+
+function translateRegime(value?: string, lang?: "ko" | "en") {
+  if (!value) return "-";
+  return lang === "ko" ? (REGIME_LABELS_KO[value] ?? value) : value;
+}
+
+function translateState(value: string, lang: "ko" | "en") {
+  return lang === "ko" ? (STATE_LABELS_KO[value] ?? value) : value;
+}
+
+function translateSetup(value?: string, lang?: "ko" | "en") {
+  if (!value) return "";
+  return lang === "ko" ? (SETUP_LABELS_KO[value] ?? value) : value;
+}
+
+function translateReason(reason: string, lang: "ko" | "en") {
+  if (lang !== "ko") return reason;
+  const normalized = reason.toLowerCase();
+  if (normalized.includes("watch only")) return "감시만 유지";
+  if (normalized.includes("today turnover filter passed")) return "당일 거래대금 조건 충족";
+  if (normalized.includes("relative volume filter passed")) return "상대 거래량 조건 충족";
+  if (normalized.includes("session")) return "장중 흐름 확인";
+  return reason;
+}
+
 export default function IntradayDesk() {
   const { lang } = useApp();
   const [loading, setLoading] = useState(false);
@@ -107,8 +154,8 @@ export default function IntradayDesk() {
   const watch = rows.filter((row) => !["TRIGGERED", "CONFIRM", "PREPARE"].includes(row.state));
 
   return (
-    <div className="max-w-[1320px] mx-auto space-y-10 animate-fade-in">
-      <div className="space-y-10">
+    <div className="w-full max-w-[1180px] mx-auto animate-fade-in">
+      <div className="flex flex-col gap-10 sm:gap-12">
         <div className="space-y-2">
           <h1 className="text-3xl sm:text-[2.15rem] font-bold tracking-tight">{t.title}</h1>
           <p className="text-base leading-8 text-[var(--muted)]">{t.subtitle}</p>
@@ -128,13 +175,15 @@ export default function IntradayDesk() {
                 marketDecision.new_entries_allowed ? "bg-[var(--good)]" : "bg-[var(--danger)]"
               )} />
               <span className="text-base font-bold">
-                {t.marketJudge}: {marketDecision.regime}
+                {t.marketJudge}: {translateRegime(marketDecision.regime, lang)}
               </span>
               <Badge variant={marketDecision.new_entries_allowed ? "good" : "danger"}>
                 {marketDecision.new_entries_allowed ? t.entryOk : t.entryNo}
               </Badge>
             </div>
-            <p className="text-sm leading-7 text-[var(--muted)]">{marketDecision.reason?.join(" · ")}</p>
+            <p className="text-sm leading-7 text-[var(--muted)]">
+              {marketDecision.reason?.map((reason) => translateReason(reason, lang)).join(" · ")}
+            </p>
           </div>
         )}
 
@@ -148,9 +197,11 @@ export default function IntradayDesk() {
             <Input label={t.equity} type="number" value={equity} onChange={(e) => setEquity(Number(e.target.value))} />
             <Input label={t.risk} type="number" step="0.1" value={riskBudget} onChange={(e) => setRiskBudget(Number(e.target.value))} suffix="%" />
           </div>
-          <Button variant="primary" className="w-full sm:w-auto" loading={loading} onClick={loadIdeas}>
-            {t.refresh}
-          </Button>
+          <div className="flex justify-center pt-2">
+            <Button variant="primary" className="w-full max-w-[320px] justify-center" loading={loading} onClick={loadIdeas}>
+              {t.refresh}
+            </Button>
+          </div>
         </Card>
 
         {!rows.length ? (
@@ -169,7 +220,7 @@ export default function IntradayDesk() {
             {approved.length > 0 && (
               <Section title={t.approved} count={approved.length} suffix={t.items}>
                 {approved.map((row) => (
-                  <IntradayIdeaCard key={row.symbol} row={row} market={intradayMarket} labels={t} />
+                  <IntradayIdeaCard key={row.symbol} row={row} market={intradayMarket} labels={t} lang={lang} />
                 ))}
               </Section>
             )}
@@ -177,7 +228,7 @@ export default function IntradayDesk() {
             {watch.length > 0 && (
               <Section title={t.watch} count={watch.length} suffix={t.items}>
                 {watch.map((row) => (
-                  <IntradayIdeaCard key={row.symbol} row={row} market={intradayMarket} labels={t} muted />
+                  <IntradayIdeaCard key={row.symbol} row={row} market={intradayMarket} labels={t} lang={lang} muted />
                 ))}
               </Section>
             )}
@@ -217,11 +268,13 @@ function IntradayIdeaCard({
   row,
   market,
   labels,
+  lang,
   muted,
 }: {
   row: IntradayRadarRow;
   market: string;
   labels: Record<string, string>;
+  lang: "ko" | "en";
   muted?: boolean;
 }) {
   const currency = market === "KR" ? "KRW" : "USD";
@@ -242,15 +295,15 @@ function IntradayIdeaCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2.5 flex-wrap">
           <span className="font-bold tracking-tight text-xl">{row.symbol}</span>
-          <Badge variant={badgeVariant}>{row.state}</Badge>
-          {row.setup_type && <Badge variant="muted">{row.setup_type}</Badge>}
+          <Badge variant={badgeVariant}>{translateState(row.state, lang)}</Badge>
+          {row.setup_type && <Badge variant="muted">{translateSetup(row.setup_type, lang)}</Badge>}
         </div>
         <p className="text-sm text-[var(--muted)] mt-1.5 truncate">{row.name}</p>
         {row.state_reason?.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {row.state_reason.slice(0, 3).map((reason) => (
               <span key={reason} className="text-xs text-[var(--accent)] bg-[var(--accent-dim)] px-2.5 py-1 rounded-full">
-                {reason}
+                {translateReason(reason, lang)}
               </span>
             ))}
           </div>

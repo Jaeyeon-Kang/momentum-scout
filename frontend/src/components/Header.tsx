@@ -1,69 +1,46 @@
 "use client";
+import Image from "next/image";
+import { useState } from "react";
 import { useApp } from "@/lib/store";
 import { clsx } from "clsx";
 
 export default function Header() {
-  const { theme, setTheme, mode, setMode, lang, setLang } = useApp();
+  const { theme, setTheme, lang, setLang, mode, setMode } = useApp();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const text = lang === "ko"
     ? {
+        brand: "Momentum Scout",
         scout: "모멘텀 트레이딩",
         intraday: "데이트레이딩",
         paper: "모의투자기록",
-        search: "검색",
         theme: "테마 전환",
         lang: "언어 전환",
+        menu: "메뉴",
       }
     : {
+        brand: "Momentum Scout",
         scout: "Momentum Trading",
         intraday: "Day Trading",
         paper: "Paper Trades",
-        search: "Search",
         theme: "Toggle theme",
         lang: "Switch language",
+        menu: "Menu",
       };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--header-bg)] backdrop-blur-xl">
-      <div className="w-full px-5 sm:px-8 lg:px-12 xl:px-16">
-        <div className="max-w-[1480px] mx-auto min-h-[76px] grid grid-cols-[auto_1fr_auto] items-center gap-4 sm:gap-6">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--accent)] text-base font-extrabold tracking-tight text-white shadow-sm">
-              M
+    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--header-bg)]/96 backdrop-blur-xl">
+      <div className="relative w-full px-5 sm:px-8 lg:px-10 xl:px-12">
+        <div className="mx-auto relative flex min-h-[88px] items-center justify-between gap-4">
+          <div className="flex flex-1" />
+
+          <div className="pointer-events-none absolute left-1/2 top-1/2 min-w-0 -translate-x-1/2 -translate-y-1/2">
+            <div className="min-w-0 text-center">
+              <p className="truncate text-lg sm:text-xl font-bold tracking-tight">{text.brand}</p>
             </div>
-            <span className="whitespace-nowrap text-lg sm:text-xl font-bold tracking-tight">
-              Momentum Scout
-            </span>
           </div>
 
-          <nav className="flex min-w-0 items-center justify-center">
-            <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 shadow-[var(--shadow-sm)] overflow-x-auto">
-              <TabButton active={mode === "scout"} onClick={() => setMode("scout")}>
-                {text.scout}
-              </TabButton>
-              <TabButton active={mode === "intraday"} onClick={() => setMode("intraday")}>
-                {text.intraday}
-              </TabButton>
-              <TabButton active={mode === "paper"} onClick={() => setMode("paper")}>
-                {text.paper}
-              </TabButton>
-            </div>
-          </nav>
-
-          <div className="flex items-center justify-end gap-2 shrink-0">
-            <button
-              className="hidden md:flex h-10 px-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] text-sm text-[var(--muted)] items-center gap-2.5 hover:border-[var(--accent)]/40 transition-colors cursor-pointer"
-              id="searchTrigger"
-              title={text.search}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-              <span>{text.search}</span>
-              <kbd className="text-[11px] px-1.5 py-0.5 rounded-lg bg-[var(--card2)] border border-[var(--border)] font-mono">/</kbd>
-            </button>
-
+          <div className="flex flex-1 items-center justify-end gap-2 shrink-0">
             <button
               onClick={() => setLang(lang === "ko" ? "en" : "ko")}
               className="h-10 min-w-10 px-3 rounded-2xl flex items-center justify-center text-sm font-semibold text-[var(--muted)] hover:bg-[var(--card2)] transition-colors cursor-pointer"
@@ -91,35 +68,82 @@ export default function Header() {
                   <circle cx="12" cy="12" r="4" />
                   <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
                 </svg>
-              )}
+                )}
             </button>
+
+            <button
+              onClick={() => setMenuOpen((prev) => !prev)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] shadow-[var(--shadow-sm)] transition-colors hover:text-[var(--text)] cursor-pointer"
+              title={text.menu}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className={clsx(
+          "absolute right-5 sm:right-8 lg:right-10 xl:right-12 top-[78px] w-[280px] overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-lg)] transition-all duration-200",
+          menuOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
+        )}>
+          <div className="flex flex-col gap-3 p-3">
+            <button
+              onClick={() => {
+                setMode("scout");
+                setMenuOpen(false);
+              }}
+              className={clsx(
+                "rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-colors cursor-pointer",
+                mode === "scout"
+                  ? "bg-[var(--accent-dim)] text-[var(--accent)]"
+                  : "text-[var(--muted)] hover:bg-[var(--card2)] hover:text-[var(--text)]"
+              )}
+            >
+              {text.scout}
+            </button>
+            <button
+              onClick={() => {
+                setMode("intraday");
+                setMenuOpen(false);
+              }}
+              className={clsx(
+                "rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-colors cursor-pointer",
+                mode === "intraday"
+                  ? "bg-[var(--accent-dim)] text-[var(--accent)]"
+                  : "text-[var(--muted)] hover:bg-[var(--card2)] hover:text-[var(--text)]"
+              )}
+            >
+              {text.intraday}
+            </button>
+            <button
+              onClick={() => {
+                setMode("paper");
+                setMenuOpen(false);
+              }}
+              className={clsx(
+                "rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-colors cursor-pointer",
+                mode === "paper"
+                  ? "bg-[var(--accent-dim)] text-[var(--accent)]"
+                  : "text-[var(--muted)] hover:bg-[var(--card2)] hover:text-[var(--text)]"
+              )}
+            >
+              {text.paper}
+            </button>
+
+            <div className="mt-2 overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--card2)]">
+              <Image
+                src="/muichiro-user.png"
+                alt="Tokito Muichiro"
+                width={280}
+                height={360}
+                className="h-[220px] w-full object-cover object-top"
+                priority
+              />
+            </div>
           </div>
         </div>
       </div>
     </header>
-  );
-}
-
-function TabButton({
-  children,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={clsx(
-        "relative rounded-full px-4 py-2.5 text-sm sm:text-base font-semibold transition-colors cursor-pointer whitespace-nowrap",
-        active
-          ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-          : "text-[var(--muted)] hover:text-[var(--text)]"
-      )}
-    >
-      {children}
-    </button>
   );
 }
