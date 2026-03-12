@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--card);
+  --color-card2: var(--card2);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-danger: var(--danger);
+  --color-danger-dim: var(--danger-dim);
+  --color-good: var(--good);
+  --color-good-dim: var(--good-dim);
+  --color-warn: var(--warn);
+  --font-sans: "Pretendard Variable", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+}
+
+/* ─── Muichiro (霞柱) palette ─── */
+/* Misty teal / turquoise / fog-blue inspired by Tokito Muichiro */
+
+:root {
+  --bg: #ffffff;
+  --bg2: #f6fbf9;
+  --card: #ffffff;
+  --card2: #f5fbf9;
+  --text: #1a2e2b;
+  --muted: #6f8e89;
+  --border: #d7e6e1;
+  --accent: #5ba6a0;
+  --accent-dim: rgba(91, 166, 160, 0.1);
+  --accent-hover: #4d9690;
+  --danger: #d4615a;
+  --danger-dim: rgba(212, 97, 90, 0.08);
+  --good: #4caf82;
+  --good-dim: rgba(76, 175, 130, 0.08);
+  --warn: #d4a24c;
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --shadow-sm: 0 1px 3px rgba(26, 46, 43, 0.04);
+  --shadow: 0 4px 20px rgba(26, 46, 43, 0.06);
+  --shadow-lg: 0 12px 40px rgba(26, 46, 43, 0.1);
+  --radius: 16px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+}
+
+[data-theme="dark"] {
+  --bg: #0c1413;
+  --bg2: #131f1e;
+  --card: #111b1a;
+  --card2: #182523;
+  --text: #e4efed;
+  --muted: #7a9e99;
+  --border: #253c39;
+  --accent: #7ec8b8;
+  --accent-dim: rgba(126, 200, 184, 0.12);
+  --accent-hover: #8fd4c3;
+  --danger: #f0807a;
+  --danger-dim: rgba(240, 128, 122, 0.12);
+  --good: #6ddba2;
+  --good-dim: rgba(109, 219, 162, 0.1);
+  --warn: #e8bb66;
+  --header-bg: rgba(12, 20, 19, 0.88);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+  --shadow: 0 4px 20px rgba(0,0,0,0.3);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+input, select, textarea, button {
+  font-family: inherit;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+.stagger-1 { animation-delay: 0.05s; opacity: 0; }
+.stagger-2 { animation-delay: 0.1s; opacity: 0; }
+.stagger-3 { animation-delay: 0.15s; opacity: 0; }
+.stagger-4 { animation-delay: 0.2s; opacity: 0; }
+.stagger-5 { animation-delay: 0.25s; opacity: 0; }
+
+/* Skeleton loader */
+.skeleton {
+  background: linear-gradient(90deg, var(--card2) 25%, var(--border) 50%, var(--card2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-xs);
+}

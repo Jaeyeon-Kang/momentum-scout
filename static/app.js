@@ -174,8 +174,78 @@ function syncUsLiquidityPreset(notify = false) {
   if (notify) showToast(`US ${preset.label} 기준으로 최소 평균 거래대금을 맞췄습니다.`, "info");
 }
 
+function currentProfile() {
+  return PROFILE_HELP[$("scanProfile")?.value || "surge"] || PROFILE_HELP.surge;
+}
+
+function currentLiquidityLabel() {
+  if (getMarket() === "KR") return "KR 기본";
+  return US_LIQUIDITY_PRESETS[$("liquidityLevel")?.value || "balanced"]?.label || "균형";
+}
+
+function setViewMode(mode) {
+  const next = mode === "focus" ? "focus" : "guide";
+  document.body.dataset.view = next;
+  localStorage.setItem("ms_view_mode", next);
+  $("guideModeBtn")?.classList.toggle("active", next === "guide");
+  $("focusModeBtn")?.classList.toggle("active", next === "focus");
+  $("guideModeBtn")?.setAttribute("aria-selected", next === "guide" ? "true" : "false");
+  $("focusModeBtn")?.setAttribute("aria-selected", next === "focus" ? "true" : "false");
+}
+
+function rebuildHeader() {
+  const header = document.querySelector(".header");
+  if (!header) return;
+
+  header.innerHTML = `
+    <div class="header-main">
+      <div class="title">
+        <div class="h1">Momentum Scout</div>
+        <div class="sub" id="asof">시장 판단, 신규 진입 후보, 관찰 후보, 보유 종목 리뷰를 한 화면에서 확인합니다.</div>
+      </div>
+      <nav class="top-menu mode-menu" aria-label="Main menu">
+        <button class="menu-btn active" id="modeScoutBtn" data-mode="scout">Momentum Scout</button>
+        <button class="menu-btn" id="modeIntradayBtn" data-mode="intraday">Intraday Desk</button>
+      </nav>
+      <nav class="top-menu scout-menu" aria-label="Momentum Scout menu" id="scoutMenu">
+        <button class="menu-btn active" id="menuScan" data-panel="panelScan">스캔 설정</button>
+        <button class="menu-btn" id="menuList" data-panel="panelList">결과 보기</button>
+      </nav>
+    </div>
+    <div class="hdr-actions">
+      <label class="header-search" for="headerSearch">
+        <span class="header-search-icon">⌕</span>
+        <span class="header-search-shortcut">/</span>
+        <input id="headerSearch" type="text" placeholder="종목 또는 티커 검색" />
+      </label>
+      <div class="header-toggle" id="viewModeToggle" role="tablist" aria-label="View mode">
+        <button class="header-toggle-btn active" id="guideModeBtn" type="button" data-view="guide" aria-selected="true">Guide</button>
+        <button class="header-toggle-btn" id="focusModeBtn" type="button" data-view="focus" aria-selected="false">Focus</button>
+      </div>
+      <button class="hdr-btn" id="langBtn" aria-label="Switch language">EN</button>
+      <button class="hdr-btn" id="themeBtn" aria-label="Toggle theme">Theme</button>
+      <button class="hdr-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">새로고침</button>
+    </div>
+  `;
+
+  document.querySelectorAll(".legacy-nav").forEach((node) => node.remove());
+}
+
+function syncHeaderSearchToSymbols() {
+  const search = $("headerSearch");
+  const symbols = $("symbols");
+  const raw = (search?.value || "").trim();
+  if (!search || !symbols || !raw) return;
+  symbols.value = raw;
+  switchMode("scout");
+  switchPanel("panelScan");
+  symbols.focus();
+  symbols.scrollIntoView({ behavior: "smooth", block: "center" });
+  showToast("검색어를 직접 확인 종목 칸에 넣었습니다.", "ok");
+}
+
 function renderProfileGuide() {
-  const profile = PROFILE_HELP[$("scanProfile")?.value || "surge"] || PROFILE_HELP.surge;
+  const profile = currentProfile();
   $("profileGuide").innerHTML = `
     <div class="guide-title">지금 선택한 프로필: ${esc(profile.title)}</div>
     <div class="guide-text">${esc(profile.desc)}</div>
@@ -201,7 +271,7 @@ function updatePlanSummary() {
     return;
   }
 
-  const profile = PROFILE_HELP[$("scanProfile")?.value || "surge"] || PROFILE_HELP.surge;
+  const profile = currentProfile();
   const liquidity = $("liquidityLevel")?.value || "balanced";
   const liqPreset = US_LIQUIDITY_PRESETS[liquidity] || US_LIQUIDITY_PRESETS.balanced;
   $("planSummary").innerHTML = `
@@ -1280,6 +1350,18 @@ function copyAll() {
 }
 
 window.addEventListener("load", () => {
+  rebuildHeader();
+  setViewMode(localStorage.getItem("ms_view_mode") || "guide");
+  const introTitle = document.querySelector("#panelScan .section-head .h2");
+  const introBody = document.querySelector("#panelScan .section-head .muted.small");
+  const scanTab = document.querySelector("#scoutMenu .menu-btn[data-panel='panelScan']");
+  const listTab = document.querySelector("#scoutMenu .menu-btn[data-panel='panelList']");
+  if (introTitle) introTitle.textContent = "스캔 전에 시장과 기준을 먼저 정하세요.";
+  if (introBody) introBody.textContent = "기본 설정으로 시작한 뒤 필요한 항목만 조정해도 충분합니다. 직접 보고 싶은 종목이 있으면 아래 입력칸에 함께 넣어보세요.";
+  if (scanTab) scanTab.textContent = "스캔 설정";
+  if (listTab) listTab.textContent = "결과 보기";
+  if ($("headerSearch")) $("headerSearch").placeholder = "종목 또는 티커 검색";
+  document.querySelector(".header-search-icon")?.replaceChildren(document.createTextNode("⌕"));
   $("themeBtn").textContent = document.documentElement.dataset.theme === "dark" ? "Light" : "Dark";
   $("themeBtn").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
@@ -1293,6 +1375,21 @@ window.addEventListener("load", () => {
     localStorage.setItem("ms_lang", document.documentElement.lang);
     showToast("언어 토글은 아직 간단 모드입니다.", "info");
   });
+  $("headerSearch")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      syncHeaderSearchToSymbols();
+    }
+  });
+  window.addEventListener("keydown", (event) => {
+    const tag = event.target?.tagName;
+    if (event.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      event.preventDefault();
+      $("headerSearch")?.focus();
+    }
+  });
+  $("guideModeBtn")?.addEventListener("click", () => setViewMode("guide"));
+  $("focusModeBtn")?.addEventListener("click", () => setViewMode("focus"));
 
   $("market").addEventListener("change", () => updateMarketUI(true));
   $("intradayMarket")?.addEventListener("change", async () => {
@@ -1303,6 +1400,7 @@ window.addEventListener("load", () => {
     renderProfileGuide();
     updatePlanSummary();
   });
+  $("horizon")?.addEventListener("change", updatePlanSummary);
   $("liquidityLevel")?.addEventListener("change", () => {
     syncUsLiquidityPreset(true);
     updatePlanSummary();
@@ -1330,8 +1428,9 @@ window.addEventListener("load", () => {
   $("dataCopyBtn").addEventListener("click", copySingleData);
   $("copyBtn").addEventListener("click", copySinglePrompt);
   $("toastClose").addEventListener("click", () => $("toast").classList.add("hidden"));
-  $("menuScan").addEventListener("click", () => switchPanel("panelScan"));
-  $("menuList").addEventListener("click", () => switchPanel("panelList"));
+  document.querySelectorAll("#scoutMenu .menu-btn[data-panel]").forEach((node) => {
+    node.addEventListener("click", () => switchPanel(node.dataset.panel));
+  });
   $("modeScoutBtn")?.addEventListener("click", () => switchMode("scout"));
   $("modeIntradayBtn")?.addEventListener("click", async () => {
     switchMode("intraday");

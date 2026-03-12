@@ -18,30 +18,49 @@
 </head>
 <body>
   <header class="header">
-    <div class="title">
+    <div class="header-main">
+      <div class="title">
       <div class="h1">Momentum Scout</div>
       <div class="sub" id="asof">시장 판단, 신규 진입 승인, 관찰 후보, 보유 종목 리뷰를 한 화면에서 봅니다.</div>
+      </div>
+      <nav class="top-menu mode-menu" aria-label="Main menu">
+        <button class="menu-btn active" id="modeScoutBtn" data-mode="scout">Momentum Scout</button>
+        <button class="menu-btn" id="modeIntradayBtn" data-mode="intraday">Intraday Desk</button>
+      </nav>
+      <nav class="top-menu scout-menu" aria-label="Momentum Scout menu" id="scoutMenu">
+    <button class="menu-btn active" id="legacyMenuScan" data-panel="panelScan">1. ?ㅼ틪 ?ㅼ젙</button>
+    <button class="menu-btn" id="legacyMenuList" data-panel="panelList">2. 寃곌낵 蹂닿린</button>
+  </nav>
     </div>
     <div class="hdr-actions">
+      <label class="header-search" for="headerSearch">
+        <span class="header-search-icon">⌕</span>
+        <span class="header-search-shortcut">/</span>
+        <input id="headerSearch" type="text" placeholder="종목 또는 티커 검색" />
+      </label>
+      <div class="header-toggle" id="viewModeToggle" role="tablist" aria-label="View mode">
+        <button class="header-toggle-btn active" id="guideModeBtn" type="button" data-view="guide" aria-selected="true">Guide</button>
+        <button class="header-toggle-btn" id="focusModeBtn" type="button" data-view="focus" aria-selected="false">Focus</button>
+      </div>
       <button class="hdr-btn" id="langBtn" aria-label="Switch language">EN</button>
       <button class="hdr-btn" id="themeBtn" aria-label="Toggle theme">Theme</button>
       <button class="hdr-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">새로고침</button>
     </div>
   </header>
 
-  <nav class="top-menu mode-menu" aria-label="Main menu">
-    <button class="menu-btn active" id="modeScoutBtn" data-mode="scout">Momentum Scout</button>
-    <button class="menu-btn" id="modeIntradayBtn" data-mode="intraday">Intraday Desk</button>
+  <nav class="top-menu mode-menu hidden legacy-nav" aria-label="Legacy main menu" aria-hidden="true">
+    <button class="menu-btn active" id="legacyModeScoutBtn" data-mode="scout">Momentum Scout</button>
+    <button class="menu-btn" id="legacyModeIntradayBtn" data-mode="intraday">Intraday Desk</button>
   </nav>
 
-  <nav class="top-menu scout-menu" aria-label="Momentum Scout menu" id="scoutMenu">
+  <nav class="top-menu scout-menu hidden legacy-nav" aria-label="Legacy scout menu" id="legacyScoutMenu" aria-hidden="true">
     <button class="menu-btn active" id="menuScan" data-panel="panelScan">1. 스캔 설정</button>
     <button class="menu-btn" id="menuList" data-panel="panelList">2. 결과 보기</button>
   </nav>
 
   <main class="main">
     <section class="panel active" id="panelScan">
-      <section class="card">
+      <section class="card scan-shell">
         <div class="section-head">
           <div class="h2">처음이면 기본값으로 바로 시작해도 됩니다.</div>
           <div class="muted small">평소에는 추천 기본값만 보고 시작해도 됩니다. 바꾸는 값마다 왜 필요한지 아래에 같이 적어뒀습니다.</div>
