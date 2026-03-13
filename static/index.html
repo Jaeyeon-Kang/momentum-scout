@@ -66,35 +66,11 @@
           <div class="muted small">평소에는 추천 기본값만 보고 시작해도 됩니다. 바꾸는 값마다 왜 필요한지 아래에 같이 적어뒀습니다.</div>
         </div>
 
-<<<<<<< ours
         <div class="guide-box" id="quickStartBox">
           <div class="guide-title">빠른 시작</div>
           <div class="guide-text">KR은 <code>대형주 포함 공격형</code>이 기본 추천입니다. ETF/ETN은 기본 제외하고, 거래대금 상위권과 대형주를 우선 봅니다.</div>
           <div class="guide-text">US는 <code>스캔 프로필</code>과 <code>유동성 기준</code>만 먼저 고르면 됩니다. 나머지는 기본값으로 시작해도 충분합니다.</div>
         </div>
-=======
-      <div class="row">
-        <button class="btn sm ghost" id="toggleAdvancedBtn" data-i18n="btnAdvancedShow">Show advanced filters</button>
-      </div>
-
-<<<<<<< ours
-=======
-      <div class="row">
-        <button class="btn sm ghost" id="toggleAdvancedBtn" data-i18n="btnAdvancedShow">Show advanced filters</button>
-      </div>
-
->>>>>>> theirs
-      <div class="row hidden" id="advancedFiltersRow">
-        <label class="field">
-          <div class="label"><span data-i18n="lbMaxPrice">Max Price</span> <span id="currencyTag" class="currency-tag">($)</span></div>
-          <input id="maxPrice" type="number" inputmode="decimal" value="80" min="0" step="0.5" />
-        </label>
-        <label class="field">
-          <div class="label" data-i18n="lbMinTurnover">Min Avg Turnover (20D)</div>
-          <input id="minTurnover" type="number" inputmode="numeric" value="20000000" min="0" step="1000000" />
-        </label>
-      </div>
->>>>>>> theirs
 
         <section class="scan-block">
           <div class="scan-block-head">
@@ -314,8 +290,6 @@
       </section>
     </section>
 
-<<<<<<< ours
-<<<<<<< ours
     <section class="panel" id="panelList">
       <section class="card">
         <div class="section-head section-head-inline">
@@ -373,44 +347,6 @@
           <div class="muted small" id="reportHint">원하는 종목을 먼저 체크한 뒤 버튼을 누르세요.</div>
         </div>
       </section>
-=======
-=======
->>>>>>> theirs
-    <!-- ── AI copy pad (optional) ── -->
-    <section class="card" style="margin-top:14px;">
-      <div class="row" style="align-items:center; justify-content:space-between;">
-        <div>
-          <div class="h2" data-i18n="hBatch">AI copy pad (optional)</div>
-          <div class="sub" id="reportMeta" data-i18n="metaBatch"></div>
-        </div>
-        <button class="btn sm" id="clearBtn">✕</button>
-      </div>
-      <div class="label" data-i18n="lbReportOutput">Report output</div>
-      <div class="row" style="flex-wrap:wrap;">
-        <button class="btn primary" id="reportSelBtn">
-          <span data-i18n="btnReportSel">Generate: Selected</span>
-          <span id="selCount" class="sel-count hidden">(0)</span>
-        </button>
-        <button class="btn" id="copyAllBtn" data-i18n="btnCopy">Copy</button>
-        <button class="btn ghost" id="selectTextBtn" data-i18n="btnSelectText">Select report text</button>
-      </div>
-      <textarea id="reportBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phReport"></textarea>
-
-      <div class="label" style="margin-top:10px;" data-i18n="lbPromptOutput">Prompt output</div>
-      <div class="row" style="flex-wrap:wrap;align-items:center;">
-        <label class="field grow" style="min-width:220px;">
-          <select id="promptType">
-            <option value="KR_SWING" data-i18n="optPromptKr">Korea momentum swing</option>
-            <option value="US_SWING" data-i18n="optPromptUs">US momentum swing</option>
-            <option value="US_DAY" data-i18n="optPromptDay">US day trading</option>
-          </select>
-        </label>
-        <button class="btn primary" id="genPromptBtn" data-i18n="btnPromptGen">Generate prompt</button>
-        <button class="btn" id="copyPromptBtn" data-i18n="btnPromptCopy">Copy prompt</button>
-      </div>
-      <textarea id="promptBox" class="reportBox" readonly spellcheck="false" data-i18n-ph="phPrompt"></textarea>
-      <div class="muted small" id="reportHint" data-i18n="iosHint"></div>
->>>>>>> theirs
     </section>
 
     <section class="panel" id="panelIntraday">

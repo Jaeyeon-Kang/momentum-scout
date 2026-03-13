@@ -1,4 +1,3 @@
-<<<<<<< ours
 ﻿const $ = (id) => document.getElementById(id);
 
 const KR_DEFAULT_PRESET = {
@@ -76,223 +75,6 @@ let lastDetailPayload = null;
 let advancedOpen = false;
 let lastIntradayPayload = null;
 let lastIntradayMeta = null;
-=======
-// ═══════════════════════════════════════════════════════════════════════════════
-// i18n
-// ═══════════════════════════════════════════════════════════════════════════════
-const S = {
-  en: {
-    tagline:       'loading…',
-    lbMarket:      'Market',
-    lbHorizon:     'Horizon (trading days)',
-    lbMaxPrice:    'Max Price',
-    lbMinTurnover: 'Min Avg Turnover (20D)',
-    lbSymbols:     'Analyze specific symbols (overrides screener)',
-    lbScreeners:   'US Screeners',
-    phSymbols:     'e.g. TSLA,NVDA or 005930.KS,035420.KS',
-    phReport:      'Scan first. Report will appear here.',
-    phPrompt:      'Choose prompt type and click Generate prompt.',
-    opt5d:         '5D (default)',
-    opt20d:        '20D (~1 month)',
-    btnScan:       'Scan',
-    btnScanning:   'Scanning…',
-    btnAdvancedShow:'Show advanced filters',
-    btnAdvancedHide:'Hide advanced filters',
-    hBatch:        'AI copy pad (optional)',
-    metaBatch:     'One report output + one copy/paste prompt output.',
-    lbReportOutput:'Report output',
-    lbPromptOutput:'Prompt output',
-    btnReportSel:  'Generate: Selected',
-    btnPromptGen:  'Generate prompt',
-    btnPromptCopy: 'Copy prompt',
-    optPromptKr:   'Korea momentum swing',
-    optPromptUs:   'US momentum swing',
-    optPromptDay:  'US day trading',
-    btnCopy:       'Copy',
-    btnSelectText: 'Select report text',
-    btnCheckAll:   'Check all',
-    btnUncheckAll: 'Uncheck all',
-    btnCopySingle: 'Copy report',
-    directMode:    'Direct mode',
-    disclaimer:    "No API keys. Data: Yahoo Finance (public) + SEC + Yahoo RSS. Not financial advice.",
-    iosHint:       'iPhone: tap textarea → Select All → Copy.',
-    scanning:      'Scanning…',
-    detailLoading: 'loading…',
-    noCandidate:   'No candidates found. Try relaxing your filters (raise max price or lower min turnover).',
-    noRss:         'No news available.',
-    noSec:         'None / unavailable',
-    noSelected:    'Select tickers first by checking the boxes.',
-    reportEmpty:   'Report is empty.',
-    reportCleared: 'Cleared.',
-    copied:        'Copied ✓',
-    reportDone:    'Report generated ✓',
-    promptDone:    'Prompt generated ✓',
-    // sections
-    secQuote:  'Quote',
-    secLevels: 'Levels',
-    secPlan:   'Rule-based plan (not advice)',
-    secExtras: 'Extras (best-effort)',
-    secNews:   'News (Yahoo RSS)',
-    secSec:    'SEC filings (last 7d)',
-    // detail labels
-    dlLast:       'Last',
-    dlDayPct:     'Day %',
-    dlVolume:     'Volume',
-    dlRelVol:     'RelVol(20d)',
-    dlReturns:    '3d / 5d / 20d',
-    dlHorizon:    'Horizon return',
-    dlAtr:        'ATR(14)',
-    dlBidAsk:     'Bid / Ask',
-    dlResist:     'Resistance (20d high)',
-    dlSupport:    'Support (20d low)',
-    dlDayHL:      'Day high / low',
-    dlEntry:      'Entry (breakout above)',
-    dlStop:       'Stop loss',
-    dlTarget:     'Target price',
-    dlHoldMax:    'Max hold',
-    dlShortFloat: 'Short % of float',
-    dlShortRatio: 'Short ratio',
-    dlEarnings:   'Earnings (ET)',
-    dlOptVol:     'Options Call / Put vol',
-    dlCallPut:    'Call:Put ratio',
-    dlExpiry:     'Nearest expiry (ET)',
-    disclaimer2:  'Prototype. Data may be delayed/incomplete. Your money, your responsibility.',
-    // errors
-    errNetwork:   'Check your internet connection.',
-    errAuth:      'Data auth expired. Please refresh the page.',
-    errRateLimit: 'Too many requests. Please wait a moment.',
-    errUpstream:  'No response from data server. Try again shortly.',
-    errUnknown:   'Unexpected error',
-    // market switch
-    krDefaults:   'Switched to KR defaults (₩100,000 / ₩5B)',
-    usDefaults:   'Switched to US defaults ($80 / $20M)',
-    // dynamic
-    asof:         (kst, mkt, h, ctx, n) => `${kst} · ${mkt} · ${h}D · ${ctx} · ${n} candidates`,
-    loadingRep:   (n) => `Generating report (${n} symbols)…`,
-    reportReady:  (mkt, h, n) => `Ready · ${mkt} · ${h}D · ${n} symbols`,
-    horizonLbl:   (h) => h === 20 ? '20d' : '5d',
-    entryAbove:   (v) => `above ${v}`,
-    holdDays:     (d) => `${d} trading days`,
-    directScan:   (n) => `Analyzing ${n} symbols (direct mode)…`,
-  },
-  ko: {
-    tagline:       '로딩 중…',
-    lbMarket:      '마켓',
-    lbHorizon:     '보유 기간 (거래일)',
-    lbMaxPrice:    '최대 가격',
-    lbMinTurnover: '최소 평균 거래대금 (20일)',
-    lbSymbols:     '종목 직접 분석 (입력 시 스크리너 무시)',
-    lbScreeners:   'US 스크리너',
-    phSymbols:     '예: TSLA,NVDA 또는 005930.KS,035420.KS',
-    phReport:      '먼저 스캔하세요. 리포트가 여기에 생성됩니다.',
-    phPrompt:      '프롬프트 유형 선택 후 생성 버튼을 누르세요.',
-    opt5d:         '5일 (기본)',
-    opt20d:        '20일 (~1개월)',
-    btnScan:       '스캔',
-    btnScanning:   '스캔 중…',
-    btnAdvancedShow:'고급 필터 보기',
-    btnAdvancedHide:'고급 필터 숨기기',
-    hBatch:        'AI 복사용 패드 (선택)',
-    metaBatch:     '보고서 1개 + 복붙 프롬프트 1개를 분리해서 생성합니다.',
-    lbReportOutput:'보고서 출력',
-    lbPromptOutput:'프롬프트 출력',
-    btnReportSel:  '생성: 선택 종목',
-    btnPromptGen:  '프롬프트 생성',
-    btnPromptCopy: '프롬프트 복사',
-    optPromptKr:   '한국 단기스윙 모멘텀',
-    optPromptUs:   '미국 단기스윙 모멘텀',
-    optPromptDay:  '미국 데이트레이딩',
-    btnCopy:       '복사',
-    btnSelectText: '텍스트 전체 선택',
-    btnCheckAll:   '전체 체크',
-    btnUncheckAll: '전체 해제',
-    btnCopySingle: '리포트 복사',
-    directMode:    '직접입력 모드',
-    disclaimer:    'API 키 없음. 데이터: Yahoo Finance (공개) + SEC + Yahoo RSS. 투자 조언 아님.',
-    iosHint:       'iPhone: 텍스트 영역 탭 → 전체 선택 → 복사.',
-    scanning:      '스캔 중…',
-    detailLoading: '로딩 중…',
-    noCandidate:   '조건에 맞는 종목 없음. 필터를 완화해보세요 (최대가격 올리기 또는 최소거래대금 낮추기).',
-    noRss:         '뉴스 없음.',
-    noSec:         '없음 / 확인 불가',
-    noSelected:    '종목을 먼저 선택하세요 (체크박스).',
-    reportEmpty:   '리포트가 비어있습니다.',
-    reportCleared: '초기화됨.',
-    copied:        '복사됨 ✓',
-    reportDone:    '리포트 생성 완료 ✓',
-    promptDone:    '프롬프트 생성 완료 ✓',
-    secQuote:  '시세',
-    secLevels: '레벨',
-    secPlan:   '규칙 기반 플랜 (투자 조언 아님)',
-    secExtras: '추가 정보',
-    secNews:   '뉴스 (Yahoo RSS)',
-    secSec:    'SEC 공시 (최근 7일)',
-    dlLast:       '현재가',
-    dlDayPct:     '등락',
-    dlVolume:     '거래량',
-    dlRelVol:     '상대거래량 (20일)',
-    dlReturns:    '3일 / 5일 / 20일',
-    dlHorizon:    '선택 기간 수익률',
-    dlAtr:        'ATR(14)',
-    dlBidAsk:     'Bid / Ask',
-    dlResist:     '저항 (20일 고점)',
-    dlSupport:    '지지 (20일 저점)',
-    dlDayHL:      '당일 고가 / 저가',
-    dlEntry:      '진입 (돌파 시)',
-    dlStop:       '손절가',
-    dlTarget:     '목표가',
-    dlHoldMax:    '최대 보유',
-    dlShortFloat: '공매도 비율',
-    dlShortRatio: '숏 레이쇼',
-    dlEarnings:   '실적 발표 (ET)',
-    dlOptVol:     '옵션 콜/풋 거래량',
-    dlCallPut:    '콜:풋 비율',
-    dlExpiry:     '가장 가까운 만기 (ET)',
-    disclaimer2:  '프로토타입. 데이터 지연/누락 가능. 투자 판단은 본인 책임.',
-    errNetwork:   '인터넷 연결을 확인하세요.',
-    errAuth:      '데이터 인증 만료. 페이지를 새로고침하세요.',
-    errRateLimit: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
-    errUpstream:  '데이터 서버 응답 없음. 잠시 후 다시 시도하세요.',
-    errUnknown:   '알 수 없는 오류',
-    krDefaults:   'KR 기본값 전환 (₩100,000 / ₩5B)',
-    usDefaults:   'US 기본값 전환 ($80 / $20M)',
-    asof:         (kst, mkt, h, ctx, n) => `${kst} · ${mkt} · ${h}일 · ${ctx} · ${n}개 종목`,
-    loadingRep:   (n) => `리포트 생성 중 (${n}개 종목)…`,
-    reportReady:  (mkt, h, n) => `완료 · ${mkt} · ${h}일 · ${n}개 종목`,
-    horizonLbl:   (h) => h === 20 ? '20일' : '5일',
-    entryAbove:   (v) => `${v} 이상 돌파 시`,
-    holdDays:     (d) => `${d} 거래일`,
-    directScan:   (n) => `${n}개 종목 직접 분석 중…`,
-  },
-};
-
-// ─── i18n helpers ───────────────────────────────────────────────
-function getLang() { return document.documentElement.lang || 'en'; }
-function setLang(lang) {
-  document.documentElement.lang = lang;
-  localStorage.setItem('ms_lang', lang);
-  applyLang();
-}
-function t(key, ...args) {
-  const lang = getLang();
-  const val = (S[lang] || S.en)[key] ?? S.en[key] ?? key;
-  return typeof val === 'function' ? val(...args) : val;
-}
-function applyLang() {
-  $('langBtn').textContent = getLang() === 'ko' ? 'EN' : '한국어';
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const v = t(el.dataset.i18n);
-    if (typeof v === 'string') el.textContent = v;
-  });
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
-    const v = t(el.dataset.i18nPh);
-    if (typeof v === 'string') el.placeholder = v;
-  });
-  updateMarketUI(false);  // refresh labels that depend on market
-  updateSelectedCount();
-  updateToggleButtons();
-}
->>>>>>> theirs
 
 function esc(s) {
   return String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -555,131 +337,10 @@ function updateMarketUI(notify = false) {
   }
 }
 
-<<<<<<< ours
 function switchPanel(id) {
   activePanel = id;
   ["panelScan", "panelList"].forEach((panelId) => $(panelId)?.classList.toggle("active", panelId === id));
   document.querySelectorAll("#scoutMenu .menu-btn").forEach((node) => node.classList.toggle("active", node.dataset.panel === id));
-=======
-// ─── Selected count ─────────────────────────────────────────────
-let lastCandidates = [];
-let selected = new Set();
-let advancedOpen = false;
-<<<<<<< ours
-=======
-
-function updateToggleButtons() {
-  $('toggleAdvancedBtn').textContent = t(advancedOpen ? 'btnAdvancedHide' : 'btnAdvancedShow');
-}
-
-function toggleAdvanced() {
-  advancedOpen = !advancedOpen;
-  $('advancedFiltersRow').classList.toggle('hidden', !advancedOpen);
-  updateToggleButtons();
-}
-
-function _promptKR(horizon, maxLoss) {
-  return `단기스윙 모멘텀 프롬프트\n한국\n너는 한국 주식 단기 모멘텀(1~[${horizon}]거래일) 스윙 트레이딩 분석가다.\n반드시 아래 순서로 진행해라.\n\n0) 먼저 KST 기준 현재 날짜/시간을 한 줄로 쓰고, 네가 가져온 데이터의 “기준 시각(장중/장마감/장전)”을 각각 명시해라.\n1) 웹검색으로 최신 데이터를 확보해라. 최소한 다음은 종목별로 실제 숫자로 가져와라:\n   - 현재가(또는 장마감가) / 당일 등락률 / 거래대금\n   - 최근 20거래일 평균 거래대금 대비 오늘의 배수(가능하면)\n   - 수급: 외국인/기관/개인 순매수(최근 1일·5일·20일)\n   - 관련 뉴스/공시: 최근 [7]일 내 핵심 3개(제목+날짜+요지). 오래된 뉴스로 “방금 나온 것처럼” 말하지 마라.\n   - 공매도 비중 또는 대차잔고 변화(확인 가능한 범위에서)\n   각 항목은 “출처 + 날짜/시각”을 같이 써라.\n\n2) KOSPI+KOSDAQ 전체에서 “단기 모멘텀 후보”를 [1~3]개만 뽑아라.\n   필터:\n   - 유동성: 일 거래대금이 너무 작은 종목은 제외(최소 [예: 200억] 기준. 숫자 확인 불가면 ‘확인 불가’로 표기)\n   - 오늘 급등만 한 테마가 아니라, 수급/거래대금/뉴스가 같이 붙는 후보 우선\n   - 공격적 관점: 변동성은 허용하되, 손절 기준은 반드시 명확히\n\n3) 각 후보마다 아래 포맷으로만 출력해라(군더더기 말 금지):\n   - 종목: [이름/티커]\n   - 한 줄 결론: “왜 지금 모멘텀인지” (수급/촉매/거래대금/차트 중 최소 2개 근거를 숫자로)\n   - 모멘텀 근거(숫자 중심):\n     * 거래대금/거래량 이상치:\n     * 수급(1일·5일·20일):\n     * 촉매(뉴스/공시/테마):\n     * 차트 레벨(전고점/지지/저항을 가격으로):\n   - 리스크(틀어질 조건 3개):\n     * 예: 촉매 소멸, 수급 반전, 갭 하락, 공매도/대차 압력 등\n   - 트레이드 플랜(필수):\n     * 진입가(범위):\n     * 손절가(‘무효화 가격’으로 1개 숫자):\n     * 목표가(1차/2차):\n     * 보유기한: 최대 [${horizon}]거래일 + “시간손절” 규칙(예: [2]거래일 내 모멘텀 미발생 시 정리)\n     * 시나리오: A(상승 추세 유지) / B(실패 시 손절 트리거)\n\n4) 마지막에 전체 후보 중 “가장 가능성이 높은 1개”를 골라라.\n   단, 근거는 반드시 ‘데이터 기준 시각’이 최신인 것만 써라.\n   확인 못한 데이터는 ‘추정’하지 말고 ‘확인 불가’로 적어라.\n\n내 조건:\n- 스타일: 공격적 단기 스윙\n- 최대 보유기간: [${horizon}] 거래일\n- 손실 허용: 1트레이드 기준 최대 [${maxLoss}%] (X 미입력 시 5% 가정)\n- 관심종목(있으면 우선 평가):`;
-}
-
-function _promptUSSwing(horizon, maxLoss) {
-  return `미국 모멘텀\n\n너는 미국주식 단기 모멘텀(1~[${horizon}]거래일) 스윙 트레이딩 분석가다.\n반드시 “최신 데이터 기반”으로만 말하고, 확인 못한 건 추정하지 말고 ‘확인 불가’라고 써라.\n\n0) 먼저 시간부터 고정:\n   - 현재 시간: ET와 KST를 각각 한 줄로 적어라.\n   - 네가 쓰는 가격/뉴스/지표가 RTH(정규장)인지 PM(프리마켓)인지 AH(애프터)인지 각각 표시해라.\n\n1) 웹검색으로 최신 데이터를 확보해라. 최소한 아래는 종목별로 “실제 숫자”로 적어라(각 항목에 출처 + 시각 포함):\n   - 현재가(또는 마지막 체결가) / 당일 등락률 / 거래량 / 거래대금(가능하면)\n   - 최근 20거래일 평균 대비 오늘 거래량(배수, 가능하면)\n   - 촉매:\n     * 최근 [7]일 뉴스/공시 핵심 3개(제목+날짜/시각+요지)\n     * 실적(earnings) 일정: 날짜 + 발표 시간(BMO/AMC) + 컨센서스(EPS/매출 가능하면)\n     * SEC: 8-K/10-Q/S-3/Form 4 중 관련 있으면 요약(없으면 ‘없음/확인 불가’)\n   - 옵션/숏(가능한 범위):\n     * 옵션 거래량(콜/풋 비율 또는 분위기)\n     * Short interest(가능하면) / borrow fee(CTB) 또는 대차 관련 지표\n   - 시장 맥락:\n     * SPY/QQQ 중 해당 종목이 속한 쪽의 당일 흐름(상승/하락 + 대략 %)\n     * 섹터 ETF(가능하면) 동행 여부\n\n2) “단기 모멘텀 후보”를 [1~3]개만 뽑아라.\n   필터:\n   - 유동성: Avg Dollar Volume이 너무 낮거나 스프레드가 과하게 넓어 보이면 제외(확인 불가면 그 사실을 적고 보수적으로 제외)\n   - 단발 뉴스만으로 튄 게 아니라, 거래량/촉매/옵션·숏 구조 중 최소 2개가 같이 붙은 후보 우선\n   - 공격적 관점: 변동성 허용. 대신 손절 규칙은 무조건 명확히\n\n3) 각 후보는 아래 포맷으로만 출력해라(잡담 금지):\n   - Ticker / 회사명:\n   - 한 줄 결론: “왜 지금 모멘텀인지” (근거 최소 2개를 숫자/사실로)\n   - 모멘텀 근거(팩트 중심):\n     * 거래량/거래대금 이상치:\n     * 촉매(뉴스/공시/실적):\n     * 옵션/숏 구조(있으면):\n     * 차트 레벨(전고점/지지/저항을 가격으로):\n     * 지수/섹터 동행(있으면):\n   - 리스크(틀어질 조건 3개, 구체적으로):\n     * 예: 실적 리스크, 갭다운, 촉매 부정확/반박 기사, 지수 급락, 숏 리버설 등\n   - 트레이드 플랜(필수):\n     * 진입가(범위):\n     * 손절가(‘무효화 가격’ 1개 숫자):\n     * 목표가:\n     * 보유기한: 최대 [${horizon}]거래일 + 시간손절 규칙([2]거래일 내 모멘텀 미발생 시 정리 등)\n     * 이벤트 규칙: 실적/중요 발표가 보유기간에 걸리면 ‘보유/회피’ 중 하나를 명시하고 이유를 적어라.\n\n4) 마지막에 전체 후보 중 “가장 가능성이 높은 1개”를 골라라.\n   단, 근거는 반드시 ‘가장 최신 시각 데이터’만 써라.\n   확인 못한 데이터는 ‘확인 불가’로 남겨라.\n\n내 조건:\n- 스타일: 공격적 단기 스윙\n- 최대 보유기간: [${horizon}] 거래일\n- 1트레이드 최대 허용손실: [${maxLoss}%] (X 미입력 시 6% 가정)\n- 관심 티커(있으면 우선 평가): [예: TSLA, NVDA … / 없으면 비워둠]\n- 제외 섹터/테마(있으면): [없으면 비워둠]`;
-}
-
-function _promptUSDay(maxPrice) {
-  return `미국데이트레이딩\n너는 미국주식 단기 모멘텀 ‘데이트레이딩(+최대 2거래일 스윙 가능)’ 트레이딩 분석가다.\n반드시 최신 데이터만 사용하고, 확인 못한 건 추정하지 말고 “확인 불가”라고 써라.\n내 조건: 1주만 매수, 공격적, 너무 비싼 종목 제외, 분할매도 금지(한 번에 전량 매도).\n\n0) 시간 고정 (반드시 맨 위에 표기)\n- 현재 시간: ET 한 줄 / KST 한 줄\n- 데이터 기준이 RTH(정규장) / PM(프리) / AH(애프터) 중 무엇인지 각각 표시\n\n1) 유니버스(후보군) 제약\n- 주가 상한: [$${maxPrice}] 이하 (미입력 시 $80)\n- 1주만 사니까 옵션처럼 미친 변동성은 허용하되, “스프레드가 넓은 종목”은 제외(확인 가능하면 %로, 불가하면 ‘불가’ 표기 후 제외)\n- 유동성 필터: 오늘 거래량 또는 평균 거래량이 너무 낮으면 제외(숫자 확인 불가면 보수적으로 제외)\n\n2) 웹검색으로 ‘당일 트리거’ 후보를 1개만 골라라 (딱 1개)\n각 항목은 반드시 “출처 + 시각(ET)”을 붙여라.\n- 가격/수급:\n  * 현재가(마지막 체결가) / 당일 등락률 / 거래량 / 거래대금(가능하면)\n  * 상대 거래량(Relative Volume): 최근 20거래일 평균 대비 배수(가능하면)\n  * 스프레드(가능하면): bid/ask 또는 %로\n- 촉매(최근 48~72시간만 인정):\n  * 뉴스/공시 핵심 3개(제목+날짜/시각+요지)\n  * 실적(earnings) 일정: 날짜 + 발표 시간(BMO/AMC) (있으면)\n  * SEC: 8-K/10-Q/S-3/Form 4 관련 있으면 요약(없으면 ‘없음/확인 불가’)\n- 옵션/숏(가능한 범위만):\n  * 콜/풋 분위기(수치 있으면 수치, 없으면 ‘확인 불가’)\n  * Short interest 또는 borrow fee(CTB) 등(가능하면)\n\n3) 차트는 “숫자 레벨”로만 말해라(느낌 금지)\n- 오늘의 핵심 레벨 3개를 가격으로 제시:\n  * 저항(돌파 시 가속 구간)\n  * 지지(깨지면 끝나는 구간)\n  * 갭/전고점/프리마켓 고점 등 핵심 1개 추가\n\n4) 트레이드 플랜(반드시 1주 기준, 분할매도 금지, 전량 1회 매도)\n아래 포맷 그대로 채워라:\n- 종목: [Ticker / 회사명]\n- 한 줄 결론(왜 오늘 ‘당일 모멘텀’인지): (거래량 이상치 + 촉매 중 최소 2개 근거)\n- 진입 방식(둘 중 하나만 선택, 숫자 포함):\n  A) 돌파 진입: [진입 트리거 가격] 이상 체결 시 매수\n  B) 눌림 진입: [지지 가격] 부근에서 반등 확인 시 매수 (확인 기준 가격 1개)\n- 손절가(무효화 가격, 하드 스톱 1개 숫자): [손절가]\n- 목표가(전량 1회 매도 가격 1개 숫자): [목표가]\n- 시간손절 규칙(반드시):\n  * 당일 데이 기준: [예: 특정 시간까지 목표/추세 미달성 시 전량 청산]\n  * 1~2일 보유 허용 기준: [예: D+1 시가/전일 저가 이탈 시 전량 청산 등]\n- 실패 시나리오 3개(구체적으로):\n  * 촉매 반박/악재 뉴스\n  * 거래량 급감(상대거래량 기준)\n  * 지수 급락/섹터 동반 약세 등(있으면)\n\n5) 금지사항\n- “아마/대충/추정” 금지. 모르면 ‘확인 불가’\n- 분할매도/피라미딩(추가매수) 전략 제시 금지\n- 1개 종목만 제시`;
-}
-
-function generatePromptText() {
-  const horizon = getHorizon();
-  const maxPrice = Number($('maxPrice').value || 80) || 80;
-  const maxLoss = getMarket() === 'KR' ? '-X' : '-X';
-  const kind = $('promptType').value;
-  if (kind === 'KR_SWING') return _promptKR(horizon, maxLoss);
-  if (kind === 'US_DAY') return _promptUSDay(maxPrice);
-  return _promptUSSwing(horizon, maxLoss);
-}
-
-function generatePrompt() {
-  $('promptBox').value = generatePromptText();
-  showToast(t('promptDone'), 'ok');
-}
-
-async function copyPrompt() {
-  const text = $('promptBox').value || '';
-  if (!text.trim()) { showToast(t('reportEmpty'), 'warn'); return; }
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast(t('copied'), 'ok');
-    const btn = $('copyPromptBtn');
-    btn.textContent = t('copied');
-    setTimeout(() => (btn.textContent = t('btnPromptCopy')), 1500);
-  } catch { window.prompt('Copy:', text); }
-}
-
-function setPromptTypeByMarket() {
-  const market = getMarket();
-  const sel = $('promptType');
-  if (market === 'KR' && sel.value !== 'KR_SWING') sel.value = 'KR_SWING';
-  if (market === 'US' && sel.value === 'KR_SWING') sel.value = 'US_SWING';
-}
->>>>>>> theirs
-
-function updateToggleButtons() {
-  $('toggleAdvancedBtn').textContent = t(advancedOpen ? 'btnAdvancedHide' : 'btnAdvancedShow');
-}
-
-function toggleAdvanced() {
-  advancedOpen = !advancedOpen;
-  $('advancedFiltersRow').classList.toggle('hidden', !advancedOpen);
-  updateToggleButtons();
-}
-
-function _promptKR(horizon, maxLoss) {
-  return `단기스윙 모멘텀 프롬프트\n한국\n너는 한국 주식 단기 모멘텀(1~[${horizon}]거래일) 스윙 트레이딩 분석가다.\n반드시 아래 순서로 진행해라.\n\n0) 먼저 KST 기준 현재 날짜/시간을 한 줄로 쓰고, 네가 가져온 데이터의 “기준 시각(장중/장마감/장전)”을 각각 명시해라.\n1) 웹검색으로 최신 데이터를 확보해라. 최소한 다음은 종목별로 실제 숫자로 가져와라:\n   - 현재가(또는 장마감가) / 당일 등락률 / 거래대금\n   - 최근 20거래일 평균 거래대금 대비 오늘의 배수(가능하면)\n   - 수급: 외국인/기관/개인 순매수(최근 1일·5일·20일)\n   - 관련 뉴스/공시: 최근 [7]일 내 핵심 3개(제목+날짜+요지). 오래된 뉴스로 “방금 나온 것처럼” 말하지 마라.\n   - 공매도 비중 또는 대차잔고 변화(확인 가능한 범위에서)\n   각 항목은 “출처 + 날짜/시각”을 같이 써라.\n\n2) KOSPI+KOSDAQ 전체에서 “단기 모멘텀 후보”를 [1~3]개만 뽑아라.\n   필터:\n   - 유동성: 일 거래대금이 너무 작은 종목은 제외(최소 [예: 200억] 기준. 숫자 확인 불가면 ‘확인 불가’로 표기)\n   - 오늘 급등만 한 테마가 아니라, 수급/거래대금/뉴스가 같이 붙는 후보 우선\n   - 공격적 관점: 변동성은 허용하되, 손절 기준은 반드시 명확히\n\n3) 각 후보마다 아래 포맷으로만 출력해라(군더더기 말 금지):\n   - 종목: [이름/티커]\n   - 한 줄 결론: “왜 지금 모멘텀인지” (수급/촉매/거래대금/차트 중 최소 2개 근거를 숫자로)\n   - 모멘텀 근거(숫자 중심):\n     * 거래대금/거래량 이상치:\n     * 수급(1일·5일·20일):\n     * 촉매(뉴스/공시/테마):\n     * 차트 레벨(전고점/지지/저항을 가격으로):\n   - 리스크(틀어질 조건 3개):\n     * 예: 촉매 소멸, 수급 반전, 갭 하락, 공매도/대차 압력 등\n   - 트레이드 플랜(필수):\n     * 진입가(범위):\n     * 손절가(‘무효화 가격’으로 1개 숫자):\n     * 목표가(1차/2차):\n     * 보유기한: 최대 [${horizon}]거래일 + “시간손절” 규칙(예: [2]거래일 내 모멘텀 미발생 시 정리)\n     * 시나리오: A(상승 추세 유지) / B(실패 시 손절 트리거)\n\n4) 마지막에 전체 후보 중 “가장 가능성이 높은 1개”를 골라라.\n   단, 근거는 반드시 ‘데이터 기준 시각’이 최신인 것만 써라.\n   확인 못한 데이터는 ‘추정’하지 말고 ‘확인 불가’로 적어라.\n\n내 조건:\n- 스타일: 공격적 단기 스윙\n- 최대 보유기간: [${horizon}] 거래일\n- 손실 허용: 1트레이드 기준 최대 [${maxLoss}%] (X 미입력 시 5% 가정)\n- 관심종목(있으면 우선 평가):`;
-}
-
-function _promptUSSwing(horizon, maxLoss) {
-  return `미국 모멘텀\n\n너는 미국주식 단기 모멘텀(1~[${horizon}]거래일) 스윙 트레이딩 분석가다.\n반드시 “최신 데이터 기반”으로만 말하고, 확인 못한 건 추정하지 말고 ‘확인 불가’라고 써라.\n\n0) 먼저 시간부터 고정:\n   - 현재 시간: ET와 KST를 각각 한 줄로 적어라.\n   - 네가 쓰는 가격/뉴스/지표가 RTH(정규장)인지 PM(프리마켓)인지 AH(애프터)인지 각각 표시해라.\n\n1) 웹검색으로 최신 데이터를 확보해라. 최소한 아래는 종목별로 “실제 숫자”로 적어라(각 항목에 출처 + 시각 포함):\n   - 현재가(또는 마지막 체결가) / 당일 등락률 / 거래량 / 거래대금(가능하면)\n   - 최근 20거래일 평균 대비 오늘 거래량(배수, 가능하면)\n   - 촉매:\n     * 최근 [7]일 뉴스/공시 핵심 3개(제목+날짜/시각+요지)\n     * 실적(earnings) 일정: 날짜 + 발표 시간(BMO/AMC) + 컨센서스(EPS/매출 가능하면)\n     * SEC: 8-K/10-Q/S-3/Form 4 중 관련 있으면 요약(없으면 ‘없음/확인 불가’)\n   - 옵션/숏(가능한 범위):\n     * 옵션 거래량(콜/풋 비율 또는 분위기)\n     * Short interest(가능하면) / borrow fee(CTB) 또는 대차 관련 지표\n   - 시장 맥락:\n     * SPY/QQQ 중 해당 종목이 속한 쪽의 당일 흐름(상승/하락 + 대략 %)\n     * 섹터 ETF(가능하면) 동행 여부\n\n2) “단기 모멘텀 후보”를 [1~3]개만 뽑아라.\n   필터:\n   - 유동성: Avg Dollar Volume이 너무 낮거나 스프레드가 과하게 넓어 보이면 제외(확인 불가면 그 사실을 적고 보수적으로 제외)\n   - 단발 뉴스만으로 튄 게 아니라, 거래량/촉매/옵션·숏 구조 중 최소 2개가 같이 붙은 후보 우선\n   - 공격적 관점: 변동성 허용. 대신 손절 규칙은 무조건 명확히\n\n3) 각 후보는 아래 포맷으로만 출력해라(잡담 금지):\n   - Ticker / 회사명:\n   - 한 줄 결론: “왜 지금 모멘텀인지” (근거 최소 2개를 숫자/사실로)\n   - 모멘텀 근거(팩트 중심):\n     * 거래량/거래대금 이상치:\n     * 촉매(뉴스/공시/실적):\n     * 옵션/숏 구조(있으면):\n     * 차트 레벨(전고점/지지/저항을 가격으로):\n     * 지수/섹터 동행(있으면):\n   - 리스크(틀어질 조건 3개, 구체적으로):\n     * 예: 실적 리스크, 갭다운, 촉매 부정확/반박 기사, 지수 급락, 숏 리버설 등\n   - 트레이드 플랜(필수):\n     * 진입가(범위):\n     * 손절가(‘무효화 가격’ 1개 숫자):\n     * 목표가:\n     * 보유기한: 최대 [${horizon}]거래일 + 시간손절 규칙([2]거래일 내 모멘텀 미발생 시 정리 등)\n     * 이벤트 규칙: 실적/중요 발표가 보유기간에 걸리면 ‘보유/회피’ 중 하나를 명시하고 이유를 적어라.\n\n4) 마지막에 전체 후보 중 “가장 가능성이 높은 1개”를 골라라.\n   단, 근거는 반드시 ‘가장 최신 시각 데이터’만 써라.\n   확인 못한 데이터는 ‘확인 불가’로 남겨라.\n\n내 조건:\n- 스타일: 공격적 단기 스윙\n- 최대 보유기간: [${horizon}] 거래일\n- 1트레이드 최대 허용손실: [${maxLoss}%] (X 미입력 시 6% 가정)\n- 관심 티커(있으면 우선 평가): [예: TSLA, NVDA … / 없으면 비워둠]\n- 제외 섹터/테마(있으면): [없으면 비워둠]`;
-}
-
-function _promptUSDay(maxPrice) {
-  return `미국데이트레이딩\n너는 미국주식 단기 모멘텀 ‘데이트레이딩(+최대 2거래일 스윙 가능)’ 트레이딩 분석가다.\n반드시 최신 데이터만 사용하고, 확인 못한 건 추정하지 말고 “확인 불가”라고 써라.\n내 조건: 1주만 매수, 공격적, 너무 비싼 종목 제외, 분할매도 금지(한 번에 전량 매도).\n\n0) 시간 고정 (반드시 맨 위에 표기)\n- 현재 시간: ET 한 줄 / KST 한 줄\n- 데이터 기준이 RTH(정규장) / PM(프리) / AH(애프터) 중 무엇인지 각각 표시\n\n1) 유니버스(후보군) 제약\n- 주가 상한: [$${maxPrice}] 이하 (미입력 시 $80)\n- 1주만 사니까 옵션처럼 미친 변동성은 허용하되, “스프레드가 넓은 종목”은 제외(확인 가능하면 %로, 불가하면 ‘불가’ 표기 후 제외)\n- 유동성 필터: 오늘 거래량 또는 평균 거래량이 너무 낮으면 제외(숫자 확인 불가면 보수적으로 제외)\n\n2) 웹검색으로 ‘당일 트리거’ 후보를 1개만 골라라 (딱 1개)\n각 항목은 반드시 “출처 + 시각(ET)”을 붙여라.\n- 가격/수급:\n  * 현재가(마지막 체결가) / 당일 등락률 / 거래량 / 거래대금(가능하면)\n  * 상대 거래량(Relative Volume): 최근 20거래일 평균 대비 배수(가능하면)\n  * 스프레드(가능하면): bid/ask 또는 %로\n- 촉매(최근 48~72시간만 인정):\n  * 뉴스/공시 핵심 3개(제목+날짜/시각+요지)\n  * 실적(earnings) 일정: 날짜 + 발표 시간(BMO/AMC) (있으면)\n  * SEC: 8-K/10-Q/S-3/Form 4 관련 있으면 요약(없으면 ‘없음/확인 불가’)\n- 옵션/숏(가능한 범위만):\n  * 콜/풋 분위기(수치 있으면 수치, 없으면 ‘확인 불가’)\n  * Short interest 또는 borrow fee(CTB) 등(가능하면)\n\n3) 차트는 “숫자 레벨”로만 말해라(느낌 금지)\n- 오늘의 핵심 레벨 3개를 가격으로 제시:\n  * 저항(돌파 시 가속 구간)\n  * 지지(깨지면 끝나는 구간)\n  * 갭/전고점/프리마켓 고점 등 핵심 1개 추가\n\n4) 트레이드 플랜(반드시 1주 기준, 분할매도 금지, 전량 1회 매도)\n아래 포맷 그대로 채워라:\n- 종목: [Ticker / 회사명]\n- 한 줄 결론(왜 오늘 ‘당일 모멘텀’인지): (거래량 이상치 + 촉매 중 최소 2개 근거)\n- 진입 방식(둘 중 하나만 선택, 숫자 포함):\n  A) 돌파 진입: [진입 트리거 가격] 이상 체결 시 매수\n  B) 눌림 진입: [지지 가격] 부근에서 반등 확인 시 매수 (확인 기준 가격 1개)\n- 손절가(무효화 가격, 하드 스톱 1개 숫자): [손절가]\n- 목표가(전량 1회 매도 가격 1개 숫자): [목표가]\n- 시간손절 규칙(반드시):\n  * 당일 데이 기준: [예: 특정 시간까지 목표/추세 미달성 시 전량 청산]\n  * 1~2일 보유 허용 기준: [예: D+1 시가/전일 저가 이탈 시 전량 청산 등]\n- 실패 시나리오 3개(구체적으로):\n  * 촉매 반박/악재 뉴스\n  * 거래량 급감(상대거래량 기준)\n  * 지수 급락/섹터 동반 약세 등(있으면)\n\n5) 금지사항\n- “아마/대충/추정” 금지. 모르면 ‘확인 불가’\n- 분할매도/피라미딩(추가매수) 전략 제시 금지\n- 1개 종목만 제시`;
-}
-
-function generatePromptText() {
-  const horizon = getHorizon();
-  const maxPrice = Number($('maxPrice').value || 80) || 80;
-  const maxLoss = getMarket() === 'KR' ? '-X' : '-X';
-  const kind = $('promptType').value;
-  if (kind === 'KR_SWING') return _promptKR(horizon, maxLoss);
-  if (kind === 'US_DAY') return _promptUSDay(maxPrice);
-  return _promptUSSwing(horizon, maxLoss);
-}
-
-function generatePrompt() {
-  $('promptBox').value = generatePromptText();
-  showToast(t('promptDone'), 'ok');
-}
-
-async function copyPrompt() {
-  const text = $('promptBox').value || '';
-  if (!text.trim()) { showToast(t('reportEmpty'), 'warn'); return; }
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast(t('copied'), 'ok');
-    const btn = $('copyPromptBtn');
-    btn.textContent = t('copied');
-    setTimeout(() => (btn.textContent = t('btnPromptCopy')), 1500);
-  } catch { window.prompt('Copy:', text); }
-}
-
-function setPromptTypeByMarket() {
-  const market = getMarket();
-  const sel = $('promptType');
-  if (market === 'KR' && sel.value !== 'KR_SWING') sel.value = 'KR_SWING';
-  if (market === 'US' && sel.value === 'KR_SWING') sel.value = 'US_SWING';
->>>>>>> theirs
 }
 
 function switchMode(mode) {
@@ -754,7 +415,6 @@ function updateSelectionUi() {
     cb.checked = selected.has(cb.dataset.sym);
   });
 
-<<<<<<< ours
   allChecked = !!lastCandidates.length && selected.size === lastCandidates.length;
   $("checkAllBtn").textContent = allChecked ? "전체 해제" : "전체 체크";
 
@@ -776,34 +436,6 @@ function updateSelectionUi() {
     $("promptSelBtn").textContent = approvedCnt > 0
       ? "신규 진입 판단 프롬프트 복사"
       : "관찰 후보 프롬프트 복사";
-=======
-  try {
-    const r = await fetch(`/api/candidates?${params}`);
-    if (!r.ok) {
-      const msg = await parseErr(r);
-      setStatus(''); $('list').innerHTML = `<div class="err-state">${msg}</div>`;
-      showToast(msg);
-      return;
-    }
-    const j = await r.json();
-    lastCandidates = j.candidates || [];
-    selected = new Set();
-    updateSelectedCount();
-
-    const ctx = j.context || {};
-    const ctxStr = market === 'US'
-      ? `SPY ${fmtPct(ctx.SPY_day_chg_pct)} · QQQ ${fmtPct(ctx.QQQ_day_chg_pct)}`
-      : `KOSPI ${fmtPct(ctx.KOSPI_day_chg_pct)} · KOSDAQ ${fmtPct(ctx.KOSDAQ_day_chg_pct)}`;
-    setStatus(t('asof', j.asof_kst || j.asof_et, market, j.horizon_days, ctxStr, lastCandidates.length));
-    renderList(lastCandidates, j.horizon_days);
-
-  } catch (e) {
-    const msg = e.name === 'TypeError' ? t('errNetwork') : `${t('errUnknown')}: ${e.message}`;
-    setStatus(''); $('list').innerHTML = `<div class="err-state">${msg}</div>`;
-    showToast(msg);
-  } finally {
-    setScanLoading(false);
->>>>>>> theirs
   }
 
   updatePromptActionHelp();
@@ -1118,7 +750,6 @@ async function copySinglePrompt() {
     horizon_days: String(getHorizon()),
   });
   try {
-<<<<<<< ours
     const resp = await fetch(`/prompt/${encodeURIComponent(sym)}?${params}`);
     if (!resp.ok) throw new Error(await parseErrText(resp));
     const text = await resp.text();
@@ -1171,26 +802,6 @@ async function generateReport(symbols) {
 async function copyPromptSelected() {
   const symbols = getSelectedSymbols();
   if (!symbols.length) return;
-=======
-    const r = await fetch(`/report/${encodeURIComponent(sym)}?market=${market}&horizon_days=${horizon}`);
-    if (!r.ok) { showToast(await parseErr(r)); return; }
-    await navigator.clipboard.writeText(await r.text());
-    showToast(t('copied'), 'ok');
-    const btn = $('copyBtn');
-    btn.textContent = t('copied');
-    setTimeout(() => (btn.textContent = t('btnCopySingle')), 1500);
-  } catch (e) {
-    showToast(e.name === 'TypeError' ? t('errNetwork') : e.message);
-  }
-}
-
-// ─── Batch report ────────────────────────────────────────────────
-async function generateReport(symbolList) {
-  if (!symbolList?.length) return;
-  const market = getMarket(), horizon = getHorizon();
-  $('reportMeta').textContent = t('loadingRep', symbolList.length);
-  setReportLoading('reportSelBtn', true);
->>>>>>> theirs
 
   const heldSymbols = ($("heldSymbols")?.value || "").trim();
   const params = new URLSearchParams({
@@ -1709,8 +1320,6 @@ async function loadIntradayDesk() {
     $("intradayRadar").innerHTML = `<div class="err-state">${esc(friendly)}</div>`;
     showToast(friendly, "error");
   } finally {
-<<<<<<< ours
-<<<<<<< ours
     $("intradayRefreshBtn").disabled = false;
   }
 }
@@ -1731,61 +1340,6 @@ function toggleCheckAll() {
   });
   updateSelectionUi();
 }
-=======
-    setReportLoading('reportSelBtn', false);
-  }
-}
-=======
-    setReportLoading('reportSelBtn', false);
-  }
-}
->>>>>>> theirs
-async function reportSelected() {
-  const syms = Array.from(selected);
-  if (!syms.length) { showToast(t('noSelected'), 'warn'); return; }
-  await generateReport(syms);
-}
-async function copyAll() {
-  const text = $('reportBox').value || '';
-  if (!text.trim()) { showToast(t('reportEmpty'), 'warn'); return; }
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast(t('copied'), 'ok');
-    const btn = $('copyAllBtn');
-    btn.textContent = t('copied');
-    setTimeout(() => (btn.textContent = t('btnCopy')), 1500);
-  } catch { window.prompt('Copy:', text); }
-}
-function selectText() { const b = $('reportBox'); b.focus(); b.select(); }
-function clearReport() {
-  $('reportBox').value = '';
-  $('promptBox').value = '';
-  $('reportMeta').textContent = t('reportCleared');
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Init
-// ═══════════════════════════════════════════════════════════════════════════════
-window.addEventListener('load', async () => {
-  // Theme
-  $('themeBtn').textContent = getTheme() === 'dark' ? '☀' : '☾';
-  $('themeBtn').addEventListener('click', () => setTheme(getTheme() === 'dark' ? 'light' : 'dark'));
-
-  // Lang
-  applyLang();
-  $('langBtn').addEventListener('click', () => setLang(getLang() === 'ko' ? 'en' : 'ko'));
-
-  // Toast
-  $('toastClose').addEventListener('click', hideToast);
-
-  // Market switch → UI adaptation
-  $('market').addEventListener('change', () => updateMarketUI(true));
-  updateMarketUI(false);
-  setPromptTypeByMarket();
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
 
 function copyAll() {
   const text = $("reportBox").value || "";
@@ -1853,7 +1407,6 @@ window.addEventListener("load", () => {
   });
   $("scrPreset")?.addEventListener("change", updateScreenerUi);
 
-<<<<<<< ours
   $("scanBtn").addEventListener("click", scan);
   $("refreshBtn").addEventListener("click", async () => { await scan(); });
   $("toggleAdvancedBtn").addEventListener("click", toggleAdvanced);
@@ -1903,24 +1456,6 @@ window.addEventListener("load", () => {
       updatePlanSummary();
     });
   });
-=======
-  // Batch report
-  $('toggleAdvancedBtn').addEventListener('click', toggleAdvanced);
-  $('reportSelBtn').addEventListener('click', reportSelected);
-  $('copyAllBtn').addEventListener('click', copyAll);
-  $('selectTextBtn').addEventListener('click', selectText);
-  $('genPromptBtn').addEventListener('click', generatePrompt);
-  $('copyPromptBtn').addEventListener('click', copyPrompt);
-  $('market').addEventListener('change', setPromptTypeByMarket);
-  $('clearBtn').addEventListener('click', clearReport);
-
-  updateToggleButtons();
-
-  // Modal
-  $('closeBtn').addEventListener('click', closeModal);
-  $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
-  $('copyBtn').addEventListener('click', copySingleReport);
->>>>>>> theirs
 
   applyKrPresetToInputs();
   renderProfileGuide();
