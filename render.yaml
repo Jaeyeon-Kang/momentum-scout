@@ -1,0 +1,5 @@
+services:
+  - type: web
+    name: momentum-scout-app-v2
+    runtime: docker
+    autoDeploy: true

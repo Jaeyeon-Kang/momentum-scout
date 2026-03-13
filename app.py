@@ -25,6 +25,10 @@ from fastapi.staticfiles import StaticFiles
 APP_NAME = "Momentum Scout (no-key prototype)"
 UA = "MomentumScout/0.2 (contact: local-user)"
 YF_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+ROOT_DIR = Path(__file__).parent.resolve()
+FRONTEND_EXPORT_DIR = ROOT_DIR / "frontend" / "out"
+LEGACY_STATIC_DIR = ROOT_DIR / "static"
+WEB_UI_DIR = FRONTEND_EXPORT_DIR if FRONTEND_EXPORT_DIR.exists() else LEGACY_STATIC_DIR
 
 ET = ZoneInfo("America/New_York")
 KST = ZoneInfo("Asia/Seoul")
@@ -5186,7 +5190,7 @@ async def report_multi(
 # Serve the mobile web UI (mounted last so it doesn't shadow /api routes).
 app.mount(
     "/",
-    StaticFiles(directory=str((__import__("pathlib").Path(__file__).parent / "static").resolve()), html=True),
+    StaticFiles(directory=str(WEB_UI_DIR), html=True),
     name="static",
 )
 

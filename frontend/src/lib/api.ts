@@ -2,7 +2,8 @@
 // API client – all calls to FastAPI backend
 // ---------------------------------------------------------------------------
 
-const BASE = "";
+const rawBase = process.env.NEXT_PUBLIC_API_BASE?.trim() || "";
+const BASE = rawBase.replace(/\/$/, "");
 
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(`${BASE}${url}`);
