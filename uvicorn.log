@@ -163,3 +163,16 @@ INFO:     127.0.0.1:53229 - "GET /api/intraday/radar?market=KR&account_cash=1000
 INFO:     127.0.0.1:53414 - "GET /api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000&risk_budget_pct=0.008 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:53588 - "GET /api/candidates?market=US&horizon_days=5&top_n=10&max_price=2000&min_avg_turnover=20000000&scr_ids=day_gainers%2Cmost_actives HTTP/1.1" 200 OK
 INFO:     127.0.0.1:53605 - "GET /prompt_multi?symbols=HIMS%2CNVTS%2CDOCN%2CNBIS%2CSOC%2CAXTI%2CORCL%2CPBR%2CCZR%2CMOS&market=US&horizon_days=5&max_items=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63186 - "GET /api/intraday/meta?market=KR HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63190 - "GET /api/intraday/meta?market=KR HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63187 - "GET /api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000&risk_budget_pct=0.008 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63427 - "GET /api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000&risk_budget_pct=0.008 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54549 - "GET /api/candidates?market=US&horizon_days=5&top_n=10&max_price=2000&min_avg_turnover=20000000&scr_ids=day_gainers%2Cmost_actives HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54569 - "GET /api/intraday/meta?market=KR HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54574 - "GET /api/intraday/meta?market=KR HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54571 - "GET /api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000&risk_budget_pct=0.008 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54788 - "GET /api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000&risk_budget_pct=0.008 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54811 - "GET /api/intraday/meta?market=KR HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54816 - "GET /api/intraday/meta?market=KR HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54813 - "GET /api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000&risk_budget_pct=0.008 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54828 - "GET /api/intraday/radar?market=KR&account_cash=10000000&account_equity=10000000&risk_budget_pct=0.008 HTTP/1.1" 200 OK
