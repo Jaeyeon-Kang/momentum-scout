@@ -18,10 +18,10 @@ export default function Input({ label, help, suffix, className, ...props }: Inpu
       <div className="relative">
         <input
           className={clsx(
-            "w-full h-12 sm:h-[52px] px-4 rounded-2xl border border-[var(--border)] bg-[var(--card)]",
+            "w-full h-12 sm:h-[52px] px-4 rounded-[20px] border border-[var(--border)] bg-[var(--card2)]",
             "text-base text-[var(--text)] outline-none",
             "transition-all duration-200",
-            "focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15",
+            "focus:border-[var(--text)] focus:ring-2 focus:ring-[var(--text)]/8",
             "placeholder:text-[var(--muted)]/50",
             suffix && "pr-12",
             className

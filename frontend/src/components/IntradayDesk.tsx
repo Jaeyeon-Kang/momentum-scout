@@ -1,5 +1,7 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { clsx } from "clsx";
+import { toast } from "sonner";
 import { useApp } from "@/lib/store";
 import {
   fetchIntradayMeta,
@@ -8,36 +10,34 @@ import {
   type IntradayRadarResult,
   type IntradayRadarRow,
 } from "@/lib/api";
-import { fmtPrice, fmtCompact } from "@/lib/format";
-import Card from "./ui/Card";
-import Button from "./ui/Button";
+import { fmtCompact, fmtPrice } from "@/lib/format";
 import Badge from "./ui/Badge";
+import Button from "./ui/Button";
+import Card from "./ui/Card";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
-import { clsx } from "clsx";
-import { toast } from "sonner";
 
 const REGIME_LABELS_KO: Record<string, string> = {
   MIXED: "혼조",
-  RISK_ON: "위험 선호",
-  RISK_OFF: "위험 회피",
+  RISK_ON: "리스크 온",
+  RISK_OFF: "리스크 오프",
   NEUTRAL: "중립",
 };
 
 const STATE_LABELS_KO: Record<string, string> = {
   PREPARE: "준비",
   CONFIRM: "확인",
-  TRIGGERED: "진입 신호",
+  TRIGGERED: "트리거",
   BLOCKED: "보류",
   EXPIRED: "만료",
 };
 
 const SETUP_LABELS_KO: Record<string, string> = {
-  intraday_continuation: "장중 추세 지속",
-  opening_drive: "시초가 돌파",
-  gap_and_go: "갭 상승 지속",
-  pullback: "눌림목",
-  reversal: "반전 시도",
+  intraday_continuation: "추세 지속",
+  opening_drive: "시가 드라이브",
+  gap_and_go: "갭앤고",
+  pullback: "눌림",
+  reversal: "반전",
 };
 
 function translateRegime(value?: string, lang?: "ko" | "en") {
@@ -57,10 +57,10 @@ function translateSetup(value?: string, lang?: "ko" | "en") {
 function translateReason(reason: string, lang: "ko" | "en") {
   if (lang !== "ko") return reason;
   const normalized = reason.toLowerCase();
-  if (normalized.includes("watch only")) return "감시만 유지";
-  if (normalized.includes("today turnover filter passed")) return "당일 거래대금 조건 충족";
-  if (normalized.includes("relative volume filter passed")) return "상대 거래량 조건 충족";
-  if (normalized.includes("session")) return "장중 흐름 확인";
+  if (normalized.includes("watch only")) return "감시 전용";
+  if (normalized.includes("today turnover filter passed")) return "당일 거래대금 기준 통과";
+  if (normalized.includes("relative volume filter passed")) return "상대 거래량 기준 통과";
+  if (normalized.includes("session")) return "세션 점검 완료";
   return reason;
 }
 
@@ -69,198 +69,200 @@ export default function IntradayDesk() {
   const [loading, setLoading] = useState(false);
   const [meta, setMeta] = useState<IntradayMeta | null>(null);
   const [radar, setRadar] = useState<IntradayRadarResult | null>(null);
-
-  const [intradayMarket, setIntradayMarket] = useState<"KR" | "US">("KR");
+  const [market, setMarket] = useState<"KR" | "US">("KR");
   const [cash, setCash] = useState(10000000);
   const [equity, setEquity] = useState(10000000);
   const [riskBudget, setRiskBudget] = useState(0.8);
 
-  const t = lang === "ko"
+  const copy = lang === "ko"
     ? {
-        title: "데이트레이딩",
-        subtitle: "당일 매매 후보를 한 번에 추려봅니다.",
-        desc: "모멘텀 스카우트와 같은 흐름으로, 시장 상태를 보고 당일 대응 후보만 간단하게 추천받는 화면입니다.",
-        refresh: "후보 다시 받기",
+        title: "인트라데이 데스크",
+        subtitle: "같은 날 안에서 바로 반응할 만한 세팅만 짧고 선명하게 정리합니다.",
+        desc: "모멘텀 스카우트가 스윙용 정찰이라면, 여기는 당일 트리거를 빠르게 훑는 상황판에 가깝습니다.",
+        refresh: "아이디어 새로고침",
         market: "시장",
-        cash: "계좌 현금",
-        equity: "평가 금액",
+        cash: "현금",
+        equity: "총 평가금액",
         risk: "리스크 예산 (%)",
-        marketJudge: "시장 판단",
-        entryOk: "진입 가능",
-        entryNo: "진입 제한",
-        approved: "우선 확인 후보",
-        watch: "관찰 / 보류 후보",
-        items: "개",
+        marketDecision: "시장 판단",
+        entryAllowed: "공격 가능",
+        entryBlocked: "보수 운영",
+        priority: "우선 감시",
+        watch: "관찰 또는 대기",
+        empty: "지금은 당길 만한 세팅이 없습니다",
+        emptyDesc: "시장, 자금, 리스크 비율을 바꾸고 다시 불러와 보세요.",
         trigger: "트리거",
         stop: "손절",
         target: "목표",
-        size: "추천 금액",
-        empty: "추천 후보가 없습니다",
-        emptyDesc: "조건을 조금 바꾸거나 다시 불러와 보세요.",
-        disclaimer: "공개 데이터 기반 참고용 화면입니다. 실제 주문 전에는 호가와 체결을 직접 확인하세요.",
+        size: "권장 규모",
+        disclaimer: "공개 데이터 기준 참고 화면입니다. 실제 체결 전에는 라이브 호가를 꼭 다시 보세요.",
+        loadError: "인트라데이 데이터를 불러오지 못했습니다.",
       }
     : {
-        title: "Day Trading",
-        subtitle: "Review same-day setups in one place.",
-        desc: "This mirrors Momentum Scout, but focuses on simple intraday setup recommendations instead of desk-style tools.",
+        title: "Intraday desk",
+        subtitle: "A tighter board for same-session setups that might actually be worth your attention.",
+        desc: "If Momentum Scout is the swing watchlist, this is the shorter-horizon radar for same-day triggers.",
         refresh: "Refresh ideas",
         market: "Market",
         cash: "Cash",
         equity: "Equity",
-        risk: "Risk Budget (%)",
-        marketJudge: "Market Decision",
-        entryOk: "Entry Allowed",
-        entryNo: "Entry Restricted",
-        approved: "Priority Setups",
-        watch: "Watch / Hold",
-        items: "items",
+        risk: "Risk budget (%)",
+        marketDecision: "Market read",
+        entryAllowed: "Can press",
+        entryBlocked: "Stay selective",
+        priority: "Priority watch",
+        watch: "Watch or wait",
+        empty: "No actionable intraday setups right now",
+        emptyDesc: "Try another market, cash size, or risk budget and refresh.",
         trigger: "Trigger",
         stop: "Stop",
         target: "Target",
         size: "Size",
-        empty: "No setups found",
-        emptyDesc: "Try refreshing with a different configuration.",
-        disclaimer: "Reference view based on public data. Check live quotes before sending any order.",
+        disclaimer: "Reference view based on public data. Check live spreads before touching any order button.",
+        loadError: "Failed to load intraday data.",
       };
 
-  const loadIdeas = useCallback(async () => {
+  const loadIdeas = async () => {
     setLoading(true);
     try {
-      const [m, r] = await Promise.all([
-        fetchIntradayMeta(intradayMarket),
+      const [nextMeta, nextRadar] = await Promise.all([
+        fetchIntradayMeta(market),
         fetchIntradayRadar({
-          market: intradayMarket,
+          market,
           account_cash: cash,
           account_equity: equity,
           risk_budget_pct: riskBudget / 100,
         }),
       ]);
-      setMeta(m);
-      setRadar(r);
-    } catch (err) {
-      toast.error(`${lang === "ko" ? "불러오기 실패" : "Load failed"}: ${err instanceof Error ? err.message : ""}`);
+      setMeta(nextMeta);
+      setRadar(nextRadar);
+    } catch (error) {
+      toast.error(
+        `${copy.loadError}${error instanceof Error && error.message ? ` (${error.message})` : ""}`
+      );
     } finally {
       setLoading(false);
     }
-  }, [intradayMarket, cash, equity, riskBudget, lang]);
+  };
 
   useEffect(() => {
-    loadIdeas();
-  }, [loadIdeas]);
+    void loadIdeas();
+  }, []);
 
-  const marketDecision = radar?.market_decision || meta?.market_decision;
-  const rows = radar?.radar || [];
-  const approved = rows.filter((row) => ["TRIGGERED", "CONFIRM", "PREPARE"].includes(row.state));
-  const watch = rows.filter((row) => !["TRIGGERED", "CONFIRM", "PREPARE"].includes(row.state));
+  const marketDecision = radar?.market_decision ?? meta?.market_decision;
+  const rows = radar?.radar ?? [];
+  const priorityRows = useMemo(
+    () => rows.filter((row) => ["TRIGGERED", "CONFIRM", "PREPARE"].includes(row.state)),
+    [rows]
+  );
+  const watchRows = useMemo(
+    () => rows.filter((row) => !["TRIGGERED", "CONFIRM", "PREPARE"].includes(row.state)),
+    [rows]
+  );
 
   return (
     <div className="w-full max-w-[1180px] mx-auto animate-fade-in">
-      <div className="flex flex-col gap-10 sm:gap-12">
-        <div className="space-y-2">
-          <h1 className="text-3xl sm:text-[2.15rem] font-bold tracking-tight">{t.title}</h1>
-          <p className="text-base leading-8 text-[var(--muted)]">{t.subtitle}</p>
-          <p className="text-base leading-8 text-[var(--muted)]">{t.desc}</p>
-        </div>
+      <div className="space-y-7">
+        <Card className="p-8 sm:p-10">
+          <div className="max-w-[820px] space-y-3">
+            <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+              Intraday Radar
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-[2.2rem]">{copy.title}</h2>
+            <p className="text-base leading-8 text-[var(--muted)]">{copy.subtitle}</p>
+            <p className="text-sm leading-7 text-[var(--muted)]">{copy.desc}</p>
+          </div>
+        </Card>
 
         {marketDecision && (
-          <div className={clsx(
-            "rounded-[24px] p-6 sm:p-7 border",
-            marketDecision.new_entries_allowed
-              ? "bg-[var(--good-dim)] border-[var(--good)]/20"
-              : "bg-[var(--danger-dim)] border-[var(--danger)]/20"
-          )}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className={clsx(
-                "w-3 h-3 rounded-full animate-pulse",
-                marketDecision.new_entries_allowed ? "bg-[var(--good)]" : "bg-[var(--danger)]"
-              )} />
-              <span className="text-base font-bold">
-                {t.marketJudge}: {translateRegime(marketDecision.regime, lang)}
-              </span>
+          <Card className={clsx("p-6", marketDecision.new_entries_allowed ? "border-[var(--good)]/20" : "border-[var(--danger)]/20")}>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className={clsx("h-2.5 w-2.5 rounded-full", marketDecision.new_entries_allowed ? "bg-[var(--good)]" : "bg-[var(--danger)]")} />
+              <div className="text-base font-semibold">
+                {copy.marketDecision}: {translateRegime(marketDecision.regime, lang)}
+              </div>
               <Badge variant={marketDecision.new_entries_allowed ? "good" : "danger"}>
-                {marketDecision.new_entries_allowed ? t.entryOk : t.entryNo}
+                {marketDecision.new_entries_allowed ? copy.entryAllowed : copy.entryBlocked}
               </Badge>
             </div>
-            <p className="text-sm leading-7 text-[var(--muted)]">
+            <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
               {marketDecision.reason?.map((reason) => translateReason(reason, lang)).join(" · ")}
             </p>
-          </div>
+          </Card>
         )}
 
-        <Card className="space-y-5 p-7 sm:p-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <Select label={t.market} value={intradayMarket} onChange={(e) => setIntradayMarket(e.target.value as "KR" | "US")}>
+        <Card className="p-7">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Select label={copy.market} value={market} onChange={(e) => setMarket(e.target.value as "KR" | "US")}>
               <option value="KR">KR</option>
               <option value="US">US</option>
             </Select>
-            <Input label={t.cash} type="number" value={cash} onChange={(e) => setCash(Number(e.target.value))} />
-            <Input label={t.equity} type="number" value={equity} onChange={(e) => setEquity(Number(e.target.value))} />
-            <Input label={t.risk} type="number" step="0.1" value={riskBudget} onChange={(e) => setRiskBudget(Number(e.target.value))} suffix="%" />
+            <Input label={copy.cash} type="number" value={cash} onChange={(e) => setCash(Number(e.target.value))} />
+            <Input label={copy.equity} type="number" value={equity} onChange={(e) => setEquity(Number(e.target.value))} />
+            <Input label={copy.risk} type="number" step="0.1" value={riskBudget} onChange={(e) => setRiskBudget(Number(e.target.value))} suffix="%" />
           </div>
-          <div className="flex justify-center pt-2">
+          <div className="mt-5 flex justify-center">
             <Button variant="primary" className="w-full max-w-[320px] justify-center" loading={loading} onClick={loadIdeas}>
-              {t.refresh}
+              {copy.refresh}
             </Button>
           </div>
         </Card>
 
         {!rows.length ? (
-          <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[var(--card2)] flex items-center justify-center">
+          <div className="flex min-h-[36vh] flex-col items-center justify-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[22px] border border-[var(--border)] bg-[var(--card2)]">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5">
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 8v4l2.5 2.5" />
               </svg>
             </div>
-            <p className="text-lg font-semibold">{t.empty}</p>
-            <p className="text-base text-[var(--muted)]">{t.emptyDesc}</p>
+            <p className="text-lg font-semibold">{copy.empty}</p>
+            <p className="text-sm text-[var(--muted)]">{copy.emptyDesc}</p>
           </div>
         ) : (
-          <>
-            {approved.length > 0 && (
-              <Section title={t.approved} count={approved.length} suffix={t.items}>
-                {approved.map((row) => (
-                  <IntradayIdeaCard key={row.symbol} row={row} market={intradayMarket} labels={t} lang={lang} />
+          <div className="space-y-7">
+            {priorityRows.length > 0 && (
+              <DeskSection title={copy.priority} count={priorityRows.length}>
+                {priorityRows.map((row) => (
+                  <IntradayIdeaCard key={row.symbol} row={row} market={market} lang={lang} labels={copy} />
                 ))}
-              </Section>
+              </DeskSection>
             )}
 
-            {watch.length > 0 && (
-              <Section title={t.watch} count={watch.length} suffix={t.items}>
-                {watch.map((row) => (
-                  <IntradayIdeaCard key={row.symbol} row={row} market={intradayMarket} labels={t} lang={lang} muted />
+            {watchRows.length > 0 && (
+              <DeskSection title={copy.watch} count={watchRows.length}>
+                {watchRows.map((row) => (
+                  <IntradayIdeaCard key={row.symbol} row={row} market={market} lang={lang} labels={copy} muted />
                 ))}
-              </Section>
+              </DeskSection>
             )}
-          </>
+          </div>
         )}
 
-        <p className="text-sm leading-7 text-[var(--muted)] text-center pb-10">{t.disclaimer}</p>
+        <p className="pb-10 text-center text-sm leading-7 text-[var(--muted)]">{copy.disclaimer}</p>
       </div>
     </div>
   );
 }
 
-function Section({
+function DeskSection({
   title,
   count,
-  suffix,
   children,
 }: {
   title: string;
   count: number;
-  suffix: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2.5 mb-1">
-        <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
-        <h2 className="text-lg font-bold">{title}</h2>
-        <span className="text-sm text-[var(--muted)]">{count}{suffix}</span>
+    <section className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+        <h3 className="text-lg font-semibold">{title}</h3>
+        <span className="text-sm text-[var(--muted)]">{count}</span>
       </div>
-      <div className="space-y-6">{children}</div>
-    </div>
+      <div className="space-y-4">{children}</div>
+    </section>
   );
 }
 
@@ -279,66 +281,73 @@ function IntradayIdeaCard({
 }) {
   const currency = market === "KR" ? "KRW" : "USD";
   const strongState = row.state === "TRIGGERED" || row.state === "CONFIRM";
-  const badgeVariant = row.state === "BLOCKED" || row.state === "EXPIRED"
-    ? "danger"
-    : strongState
-      ? "good"
-      : "accent";
+  const badgeVariant = row.state === "BLOCKED" || row.state === "EXPIRED" ? "danger" : strongState ? "good" : "accent";
 
   return (
-    <div className={clsx(
-      "group flex items-start gap-5 p-6 sm:p-7 rounded-[26px] border shadow-[var(--shadow-sm)] transition-all duration-200",
-      muted
-        ? "border-[var(--border)] bg-white"
-        : "border-[var(--accent)]/25 bg-white"
-    )}>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <span className="font-bold tracking-tight text-xl">{row.symbol}</span>
-          <Badge variant={badgeVariant}>{translateState(row.state, lang)}</Badge>
-          {row.setup_type && <Badge variant="muted">{translateSetup(row.setup_type, lang)}</Badge>}
-        </div>
-        <p className="text-sm text-[var(--muted)] mt-1.5 truncate">{row.name}</p>
-        {row.state_reason?.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {row.state_reason.slice(0, 3).map((reason) => (
-              <span key={reason} className="text-xs text-[var(--accent)] bg-[var(--accent-dim)] px-2.5 py-1 rounded-full">
-                {translateReason(reason, lang)}
-              </span>
-            ))}
+    <Card className={clsx("p-6 sm:p-7", muted ? "" : "border-[var(--accent)]/18")}>
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="text-xl font-semibold tracking-tight">{row.symbol}</span>
+            <Badge variant={badgeVariant}>{translateState(row.state, lang)}</Badge>
+            {row.setup_type && <Badge variant="muted">{translateSetup(row.setup_type, lang)}</Badge>}
           </div>
-        )}
-        <div className="flex flex-wrap gap-2 mt-3">
-          {typeof row.position_notional === "number" && row.position_notional > 0 && (
-            <Badge variant="muted">{labels.size} {fmtCompact(row.position_notional)}</Badge>
+          <p className="mt-2 text-sm text-[var(--muted)]">{row.name}</p>
+
+          {row.state_reason?.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {row.state_reason.slice(0, 3).map((reason) => (
+                <span key={reason} className="rounded-full bg-[var(--card2)] px-3 py-1 text-xs text-[var(--muted)]">
+                  {translateReason(reason, lang)}
+                </span>
+              ))}
+            </div>
           )}
-          {typeof row.allowed_chase_pct === "number" && (
-            <Badge variant="muted">Chase {row.allowed_chase_pct.toFixed(1)}%</Badge>
-          )}
-          {row.last_updated_at && <Badge variant="muted">{row.last_updated_at}</Badge>}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {typeof row.position_notional === "number" && row.position_notional > 0 && (
+              <Badge variant="muted">
+                {labels.size} {fmtCompact(row.position_notional)}
+              </Badge>
+            )}
+            {typeof row.allowed_chase_pct === "number" && (
+              <Badge variant="muted">Chase {row.allowed_chase_pct.toFixed(1)}%</Badge>
+            )}
+            {row.last_updated_at && <Badge variant="muted">{row.last_updated_at}</Badge>}
+          </div>
+        </div>
+
+        <div className="grid shrink-0 grid-cols-3 gap-4 xl:min-w-[320px]">
+          <DeskStat label={labels.trigger} value={fmtPrice(row.trigger_price, currency)} />
+          <DeskStat label={labels.stop} value={fmtPrice(row.stop_price, currency)} tone="danger" />
+          <DeskStat label={labels.target} value={fmtPrice(row.target_price_1, currency)} tone="good" />
         </div>
       </div>
-
-      <div className="flex gap-6 shrink-0 text-right">
-        <Stat label={labels.trigger} value={fmtPrice(row.trigger_price, currency)} />
-        <Stat label={labels.stop} value={fmtPrice(row.stop_price, currency)} color={false} />
-        <Stat label={labels.target} value={fmtPrice(row.target_price_1, currency)} color />
-      </div>
-    </div>
+    </Card>
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color?: boolean }) {
+function DeskStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "good" | "danger";
+}) {
   return (
-    <div className="flex flex-col items-end gap-1 min-w-[64px]">
-      <span className="text-xs text-[var(--muted)]">{label}</span>
-      <span className={clsx(
-        "text-base font-bold tabular-nums",
-        color === true && "text-[var(--good)]",
-        color === false && "text-[var(--danger)]"
-      )}>
+    <div className="rounded-[22px] border border-[var(--border)] bg-[var(--card2)] px-4 py-3">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">{label}</div>
+      <div
+        className={clsx(
+          "mt-2 text-base font-semibold tabular-nums",
+          tone === "good" && "text-[var(--good)]",
+          tone === "danger" && "text-[var(--danger)]"
+        )}
+      >
         {value}
-      </span>
+      </div>
     </div>
   );
 }

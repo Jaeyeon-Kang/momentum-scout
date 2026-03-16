@@ -1,149 +1,204 @@
 "use client";
 import Image from "next/image";
-import { useState } from "react";
-import { useApp } from "@/lib/store";
+import { useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
+import { useApp } from "@/lib/store";
 
 export default function Header() {
-  const { theme, setTheme, lang, setLang, mode, setMode } = useApp();
+  const { theme, setTheme, lang, setLang, mode, setMode, viewMode, setViewMode } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const text = lang === "ko"
-    ? {
-        brand: "Momentum Scout",
-        scout: "모멘텀 트레이딩",
-        intraday: "데이트레이딩",
-        paper: "모의투자기록",
-        theme: "테마 전환",
-        lang: "언어 전환",
-        menu: "메뉴",
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
       }
-    : {
-        brand: "Momentum Scout",
-        scout: "Momentum Trading",
-        intraday: "Day Trading",
-        paper: "Paper Trades",
-        theme: "Toggle theme",
-        lang: "Switch language",
-        menu: "Menu",
-      };
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
+
+  const copy =
+    lang === "ko"
+      ? {
+          eyebrow: "Tape First",
+          title: "Momentum Scout",
+          subtitle: "시끄러운 장에서도 지금 볼 만한 흐름만 남기는 스카우트 콘솔",
+          scout: "스카우트",
+          intraday: "인트라데이",
+          paper: "모의 기록",
+          guide: "가이드",
+          focus: "집중",
+          theme: "테마 전환",
+          lang: "언어 전환",
+          menu: "메뉴",
+          panelTitle: "작업 보드",
+          panelBody: "메뉴는 조용히, 데이터는 또렷하게. 괜히 번쩍거리면 차트가 삐집니다.",
+        }
+      : {
+          eyebrow: "Tape First",
+          title: "Momentum Scout",
+          subtitle: "A calmer console for spotting momentum without turning the whole screen into a circus.",
+          scout: "Scout",
+          intraday: "Intraday",
+          paper: "Journal",
+          guide: "Guide",
+          focus: "Focus",
+          theme: "Toggle theme",
+          lang: "Switch language",
+          menu: "Menu",
+          panelTitle: "Workbench",
+          panelBody: "Quiet chrome, louder signal. The chart gets the spotlight, not the garnish.",
+        };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--header-bg)]/96 backdrop-blur-xl">
-      <div className="relative w-full px-5 sm:px-8 lg:px-10 xl:px-12">
-        <div className="mx-auto relative flex min-h-[88px] items-center justify-between gap-4">
-          <div className="flex flex-1" />
-
-          <div className="pointer-events-none absolute left-1/2 top-1/2 min-w-0 -translate-x-1/2 -translate-y-1/2">
-            <div className="min-w-0 text-center">
-              <p className="truncate text-lg sm:text-xl font-bold tracking-tight">{text.brand}</p>
+    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--header-bg)] backdrop-blur-2xl">
+      <div className="mx-auto w-full max-w-[1280px] px-4 sm:px-8 lg:px-10 xl:px-12">
+        <div className="flex min-h-[92px] items-center justify-between gap-4 py-4">
+          <div className="min-w-0 flex-1">
+            <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+              {copy.eyebrow}
+            </div>
+            <div className="mt-2">
+              <h1 className="text-[1.1rem] font-bold tracking-tight sm:text-[1.25rem]">{copy.title}</h1>
+              <p className="hidden max-w-[560px] text-sm leading-7 text-[var(--muted)] sm:block">{copy.subtitle}</p>
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-end gap-2 shrink-0">
+          <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-1 py-1 shadow-[var(--shadow-sm)] sm:flex">
+            <ModePill active={viewMode === "guide"} onClick={() => setViewMode("guide")}>
+              {copy.guide}
+            </ModePill>
+            <ModePill active={viewMode === "focus"} onClick={() => setViewMode("focus")}>
+              {copy.focus}
+            </ModePill>
+          </div>
+
+          <div className="flex flex-1 items-center justify-end gap-2">
             <button
               onClick={() => setLang(lang === "ko" ? "en" : "ko")}
-              className="h-10 min-w-10 px-3 rounded-2xl flex items-center justify-center text-sm font-semibold text-[var(--muted)] hover:bg-[var(--card2)] transition-colors cursor-pointer"
-              title={text.lang}
+              className="flex h-10 min-w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-semibold text-[var(--muted)] transition-colors hover:text-[var(--text)]"
+              title={copy.lang}
             >
               {lang === "ko" ? "EN" : "KO"}
             </button>
 
             <button
-              onClick={() => {
-                const next = theme === "light" ? "dark" : "light";
-                setTheme(next);
-                document.documentElement.dataset.theme = next;
-                localStorage.setItem("ms_theme", next);
-              }}
-              className="h-10 w-10 rounded-2xl flex items-center justify-center text-[var(--muted)] hover:bg-[var(--card2)] transition-colors cursor-pointer"
-              title={text.theme}
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] transition-colors hover:text-[var(--text)]"
+              title={copy.theme}
             >
               {theme === "light" ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79Z" />
                 </svg>
               ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <circle cx="12" cy="12" r="4" />
                   <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
                 </svg>
+              )}
+            </button>
+
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen((prev) => !prev)}
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] shadow-[var(--shadow-sm)] transition-colors hover:text-[var(--text)]"
+                title={copy.menu}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </button>
+
+              <div
+                className={clsx(
+                  "absolute right-0 top-[56px] w-[320px] overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-lg)] transition-all duration-200",
+                  menuOpen ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0"
                 )}
-            </button>
+              >
+                <div className="border-b border-[var(--border)] px-5 py-4">
+                  <div className="text-sm font-semibold text-[var(--text)]">{copy.panelTitle}</div>
+                  <p className="mt-1 text-sm leading-7 text-[var(--muted)]">{copy.panelBody}</p>
+                </div>
 
-            <button
-              onClick={() => setMenuOpen((prev) => !prev)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] shadow-[var(--shadow-sm)] transition-colors hover:text-[var(--text)] cursor-pointer"
-              title={text.menu}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 7h16M4 12h16M4 17h16" />
-              </svg>
-            </button>
-          </div>
-        </div>
+                <div className="space-y-2 p-3">
+                  <MenuButton active={mode === "scout"} onClick={() => { setMode("scout"); setMenuOpen(false); }}>
+                    {copy.scout}
+                  </MenuButton>
+                  <MenuButton active={mode === "intraday"} onClick={() => { setMode("intraday"); setMenuOpen(false); }}>
+                    {copy.intraday}
+                  </MenuButton>
+                  <MenuButton active={mode === "paper"} onClick={() => { setMode("paper"); setMenuOpen(false); }}>
+                    {copy.paper}
+                  </MenuButton>
+                </div>
 
-        <div className={clsx(
-          "absolute right-5 sm:right-8 lg:right-10 xl:right-12 top-[78px] w-[280px] overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-lg)] transition-all duration-200",
-          menuOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
-        )}>
-          <div className="flex flex-col gap-3 p-3">
-            <button
-              onClick={() => {
-                setMode("scout");
-                setMenuOpen(false);
-              }}
-              className={clsx(
-                "rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-colors cursor-pointer",
-                mode === "scout"
-                  ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-                  : "text-[var(--muted)] hover:bg-[var(--card2)] hover:text-[var(--text)]"
-              )}
-            >
-              {text.scout}
-            </button>
-            <button
-              onClick={() => {
-                setMode("intraday");
-                setMenuOpen(false);
-              }}
-              className={clsx(
-                "rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-colors cursor-pointer",
-                mode === "intraday"
-                  ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-                  : "text-[var(--muted)] hover:bg-[var(--card2)] hover:text-[var(--text)]"
-              )}
-            >
-              {text.intraday}
-            </button>
-            <button
-              onClick={() => {
-                setMode("paper");
-                setMenuOpen(false);
-              }}
-              className={clsx(
-                "rounded-2xl px-4 py-3 text-left text-sm font-semibold transition-colors cursor-pointer",
-                mode === "paper"
-                  ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-                  : "text-[var(--muted)] hover:bg-[var(--card2)] hover:text-[var(--text)]"
-              )}
-            >
-              {text.paper}
-            </button>
-
-            <div className="mt-2 overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--card2)]">
-              <Image
-                src="/muichiro-user.png"
-                alt="Tokito Muichiro"
-                width={280}
-                height={360}
-                className="h-[220px] w-full object-cover object-top"
-                priority
-              />
+                <div className="border-t border-[var(--border)] p-3 pt-4">
+                  <div className="overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--card2)]">
+                    <Image
+                      src="/muichiro-user.png"
+                      alt="Momentum Scout illustration"
+                      width={320}
+                      height={240}
+                      className="h-[176px] w-full object-cover object-top"
+                      priority
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </header>
+  );
+}
+
+function ModePill({
+  children,
+  active,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        "rounded-full px-4 py-2 text-sm font-semibold transition-colors",
+        active ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--muted)] hover:text-[var(--text)]"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MenuButton({
+  children,
+  active,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        "w-full rounded-[22px] px-4 py-3 text-left text-sm font-semibold transition-colors",
+        active
+          ? "bg-[var(--accent-dim)] text-[var(--accent)]"
+          : "text-[var(--muted)] hover:bg-[var(--card2)] hover:text-[var(--text)]"
+      )}
+    >
+      {children}
+    </button>
   );
 }

@@ -18,22 +18,20 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={clsx(
-          "relative inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-200 cursor-pointer select-none",
+          "relative inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all duration-200 cursor-pointer select-none",
           "disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none",
           "active:scale-[0.97]",
-          // Size
-          size === "sm" && "h-9 px-3.5 text-sm rounded-xl",
-          size === "md" && "h-11 px-[18px] text-base",
-          size === "lg" && "h-[52px] px-7 text-lg",
-          // Variant
+          size === "sm" && "h-9 px-4 text-sm",
+          size === "md" && "h-11 px-5 text-sm sm:text-base",
+          size === "lg" && "h-[54px] px-7 text-base sm:text-lg",
           variant === "primary" &&
-            "bg-[var(--accent)] text-white shadow-sm hover:brightness-110 hover:shadow-md",
+            "bg-[var(--text)] text-[var(--bg)] shadow-[var(--shadow-sm)] hover:opacity-92",
           variant === "secondary" &&
-            "bg-[var(--card)] text-[var(--text)] border border-[var(--border)] hover:border-[var(--accent)] hover:bg-[var(--card2)]",
+            "bg-[var(--card)] text-[var(--text)] border border-[var(--border)] hover:bg-[var(--card2)]",
           variant === "ghost" &&
-            "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--card2)]",
+            "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--card2)]/80",
           variant === "danger" &&
-            "bg-[var(--danger-dim)] text-[var(--danger)] border border-[var(--danger)]/20 hover:bg-[var(--danger)]/15",
+            "bg-[var(--danger-dim)] text-[var(--danger)] border border-[var(--danger)]/20 hover:bg-[var(--danger-dim)]/80",
           className
         )}
         {...props}

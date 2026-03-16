@@ -42,8 +42,8 @@ export default function Modal({
       <div
         className={clsx(
           "relative w-full sm:max-w-2xl max-h-[92vh] flex flex-col",
-          "bg-[var(--card)] border border-[var(--border)]",
-          "rounded-t-2xl sm:rounded-2xl",
+          "glass-panel border border-[var(--border)]",
+          "rounded-t-[28px] sm:rounded-[28px]",
           "shadow-[var(--shadow-lg)] overflow-hidden",
           "animate-[slideUp_0.3s_ease-out]",
           className
