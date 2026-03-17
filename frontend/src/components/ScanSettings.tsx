@@ -94,14 +94,14 @@ export default function ScanSettings() {
       ? {
           title: "스캔 설정",
           subtitle: "강한 종목을 뽑는 앱이 아니라, 오늘 신규 진입을 열어도 되는지부터 판단하는 도구입니다.",
-          heroNote: "평소에는 기본값으로 시작해도 충분합니다. 바꾸는 값마다 왜 필요한지 같이 보여줍니다.",
+          heroNote: "시장부터 먼저 고르면 아래 필터와 후보 해석이 그 기준으로 따라옵니다. 평소에는 기본값으로 시작해도 충분합니다.",
           quickTitle: "지금 스캔 기준",
           quickBody:
-            "시장, 보유 기간, 유동성 기준만 먼저 정해도 방향이 잡힙니다. 나머지는 필요할 때만 건드리면 됩니다.",
-          profileTitle: "무슨 장면을 찾는지 먼저 정합니다.",
-          profileDesc: "시가 돌파를 볼지, 장중 추세를 볼지처럼 탐색 리듬부터 맞춥니다.",
-          contextTitle: "어느 시장을 볼지, 얼마나 짧게 볼지 정합니다.",
-          contextDesc: "시장과 보유 기간이 먼저 고정돼야 결과를 같은 기준으로 비교할 수 있습니다.",
+            "한국주식인지 미국주식인지 먼저 정하고, 그다음에 보유 기간과 탐색 강도를 얹습니다.",
+          profileTitle: "그다음 찾을 장면을 고릅니다.",
+          profileDesc: "시장 선택이 끝났다면, 시가 돌파를 볼지 추세 지속을 볼지처럼 탐색 리듬을 정합니다.",
+          contextTitle: "먼저 어느 시장을 볼지 정합니다.",
+          contextDesc: "한국주식인지 미국주식인지 먼저 고르면, 아래 프로필과 필터가 그 시장 기준으로 바뀝니다.",
           filterTitle: "실패하기 쉬운 종목을 먼저 빼는 기본 필터입니다.",
           filterDesc: "결과를 크게 바꾸는 값만 앞에 두고, 나머지는 뒤로 숨겼습니다.",
           symbolTitle: "이미 가진 종목은 새 후보와 분리해서 봅니다.",
@@ -166,14 +166,14 @@ export default function ScanSettings() {
           title: "Scan Setup",
           subtitle:
             "This is not a stock picker that must always find something. It decides whether fresh entries even deserve attention today.",
-          heroNote: "The defaults are enough to start. When you change a value, the UI tells you why it exists.",
+          heroNote: "Choose the market first, then let the rest of the desk follow that context. The defaults are enough to start.",
           quickTitle: "Current scan stance",
           quickBody:
-            "Market, holding window, and liquidity bias usually do most of the work. Touch the rest only when you need to.",
-          profileTitle: "Choose the scene you want to find first.",
-          profileDesc: "Set the scan rhythm before you start tweaking filters.",
-          contextTitle: "Pick the market and time window.",
-          contextDesc: "You need a fixed arena and holding horizon before you compare candidates cleanly.",
+            "Pick KR or US first, then layer in the holding window and scan intensity.",
+          profileTitle: "Choose the scene after that.",
+          profileDesc: "Once the market is fixed, set the scan rhythm you want to look for.",
+          contextTitle: "Choose the market first.",
+          contextDesc: "KR vs US should come before the downstream filters because the whole desk changes with it.",
           filterTitle: "Use basic filters to remove easy failures first.",
           filterDesc: "Only the settings that materially change the result stay in front.",
           symbolTitle: "Separate held names from new candidates.",
@@ -242,9 +242,9 @@ export default function ScanSettings() {
 
   // Dynamic step numbering
   const steps = useMemo(() => {
-    const list: string[] = [];
+    const list: string[] = ["context"];
     if (market === "US") list.push("profile");
-    list.push("context", "filter", "symbol");
+    list.push("filter", "symbol");
     return list;
   }, [market]);
 
@@ -382,6 +382,29 @@ export default function ScanSettings() {
       </section>
 
       <div className="mt-8 flex flex-col gap-7">
+        <StepCard step={stepNumber("context")} title={copy.contextTitle} desc={copy.contextDesc}>
+          <div className="grid gap-5 md:grid-cols-2">
+            <Select
+              label={copy.market}
+              value={market}
+              help={copy.marketHelp}
+              onChange={(e) => handleMarketChange(e.target.value as "US" | "KR")}
+            >
+              <option value="US">US</option>
+              <option value="KR">KR</option>
+            </Select>
+            <Select
+              label={copy.horizon}
+              value={String(horizon)}
+              help={copy.horizonHelp}
+              onChange={(e) => setHorizon(Number(e.target.value) as 5 | 20)}
+            >
+              <option value="5">{lang === "ko" ? "5일 스윙" : "5-day swing"}</option>
+              <option value="20">{lang === "ko" ? "20일 추세" : "20-day trend"}</option>
+            </Select>
+          </div>
+        </StepCard>
+
         {market === "US" && (
           <StepCard step={stepNumber("profile")} title={copy.profileTitle} desc={copy.profileDesc}>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -411,29 +434,6 @@ export default function ScanSettings() {
             </div>
           </StepCard>
         )}
-
-        <StepCard step={stepNumber("context")} title={copy.contextTitle} desc={copy.contextDesc}>
-          <div className="grid gap-5 md:grid-cols-2">
-            <Select
-              label={copy.market}
-              value={market}
-              help={copy.marketHelp}
-              onChange={(e) => handleMarketChange(e.target.value as "US" | "KR")}
-            >
-              <option value="US">US</option>
-              <option value="KR">KR</option>
-            </Select>
-            <Select
-              label={copy.horizon}
-              value={String(horizon)}
-              help={copy.horizonHelp}
-              onChange={(e) => setHorizon(Number(e.target.value) as 5 | 20)}
-            >
-              <option value="5">{lang === "ko" ? "5일 스윙" : "5-day swing"}</option>
-              <option value="20">{lang === "ko" ? "20일 추세" : "20-day trend"}</option>
-            </Select>
-          </div>
-        </StepCard>
 
         <StepCard step={stepNumber("filter")} title={copy.filterTitle} desc={copy.filterDesc}>
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">

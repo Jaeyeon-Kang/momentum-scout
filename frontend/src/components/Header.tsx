@@ -10,6 +10,8 @@ export default function Header() {
     setTheme,
     lang,
     setLang,
+    market,
+    setMarket,
     mode,
     setMode,
     scoutPanel,
@@ -38,6 +40,11 @@ export default function Header() {
           title: "Momentum Scout",
           subtitle: "시끄러운 장에서도 지금 볼 만한 흐름만 남기는 스카우트 콘솔",
           home: "홈",
+          marketTitle: "먼저 시장 선택",
+          marketBody: "여기서 한국주식, 미국주식을 먼저 고르고 아래 작업으로 내려갑니다.",
+          marketCompact: "시장",
+          kr: "한국주식",
+          us: "미국주식",
           scout: "스카우트",
           intraday: "인트라데이",
           guide: "가이드",
@@ -53,6 +60,11 @@ export default function Header() {
           title: "Momentum Scout",
           subtitle: "A calmer console for spotting momentum without turning the whole screen into a circus.",
           home: "Home",
+          marketTitle: "Choose market first",
+          marketBody: "Pick KR or US here first, then move into the desk below it.",
+          marketCompact: "Market",
+          kr: "Korean Stocks",
+          us: "US Stocks",
           scout: "Scout",
           intraday: "Intraday",
           guide: "Guide",
@@ -71,10 +83,18 @@ export default function Header() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const selectMarket = (nextMarket: "KR" | "US") => {
+    setMarket(nextMarket);
+    setMode("scout");
+    setScoutPanel("scan");
+    setMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--header-bg)] backdrop-blur-2xl">
       <div className="mx-auto w-full max-w-[1280px] px-4 sm:px-8 lg:px-10 xl:px-12">
-        <div className="flex min-h-[92px] flex-wrap items-start justify-between gap-4 py-4 sm:flex-nowrap sm:items-center">
+        <div className="flex min-h-[92px] flex-wrap items-start justify-between gap-4 py-4 xl:flex-nowrap xl:items-center">
           <button
             type="button"
             onClick={goHome}
@@ -90,7 +110,28 @@ export default function Header() {
             </div>
           </button>
 
-          <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-1 py-1 shadow-[var(--shadow-sm)] sm:flex">
+          <div className="order-3 w-full xl:order-none xl:w-auto xl:flex-1">
+            <div className="rounded-[28px] border border-[var(--border)] bg-[var(--card)] p-1.5 shadow-[var(--shadow-sm)]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="px-3 pt-2 sm:pt-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                    {copy.marketTitle}
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{copy.marketBody}</p>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  <MarketPill active={market === "KR"} onClick={() => selectMarket("KR")}>
+                    {copy.kr}
+                  </MarketPill>
+                  <MarketPill active={market === "US"} onClick={() => selectMarket("US")}>
+                    {copy.us}
+                  </MarketPill>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-1 py-1 shadow-[var(--shadow-sm)] lg:flex">
             <ModePill active={viewMode === "guide"} onClick={() => setViewMode("guide")}>
               {copy.guide}
             </ModePill>
@@ -104,12 +145,16 @@ export default function Header() {
               type="button"
               onClick={goHome}
               className={clsx(
-                "hidden h-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] px-4 text-sm font-semibold transition-colors hover:text-[var(--text)] sm:inline-flex",
+                "hidden h-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] px-4 text-sm font-semibold transition-colors hover:text-[var(--text)] lg:inline-flex",
                 mode === "scout" && scoutPanel === "scan" ? "text-[var(--text)]" : "text-[var(--muted)]"
               )}
             >
               {copy.home}
             </button>
+            <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm font-semibold text-[var(--muted)] sm:flex lg:hidden">
+              <span className="text-[11px] uppercase tracking-[0.14em]">{copy.marketCompact}</span>
+              <span className="text-[var(--text)]">{market === "KR" ? copy.kr : copy.us}</span>
+            </div>
             <button
               onClick={() => setLang(lang === "ko" ? "en" : "ko")}
               className="flex h-10 min-w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-semibold text-[var(--muted)] transition-colors hover:text-[var(--text)]"
@@ -158,6 +203,19 @@ export default function Header() {
                 </div>
 
                 <div className="space-y-2 p-3">
+                  <div className="rounded-[24px] border border-[var(--border)] bg-[var(--card2)] p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+                      {copy.marketTitle}
+                    </div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      <MenuButton active={market === "KR"} onClick={() => selectMarket("KR")}>
+                        {copy.kr}
+                      </MenuButton>
+                      <MenuButton active={market === "US"} onClick={() => selectMarket("US")}>
+                        {copy.us}
+                      </MenuButton>
+                    </div>
+                  </div>
                   <MenuButton active={mode === "scout" && scoutPanel === "scan"} onClick={goHome}>
                     {copy.home}
                   </MenuButton>
@@ -225,6 +283,31 @@ function ModePill({
       className={clsx(
         "rounded-full px-4 py-2 text-sm font-semibold transition-colors",
         active ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--muted)] hover:text-[var(--text)]"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MarketPill({
+  children,
+  active,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        "rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200",
+        active
+          ? "bg-[var(--text)] text-[var(--bg)] shadow-[var(--shadow-sm)]"
+          : "bg-[var(--card2)] text-[var(--muted)] hover:bg-[var(--accent-dim)] hover:text-[var(--text)]"
       )}
     >
       {children}
