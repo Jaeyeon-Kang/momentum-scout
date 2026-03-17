@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useState, useTransition } from "react";
 import { AppContext, type AppState } from "@/lib/store";
 import type { ScanResult } from "@/lib/api";
 import Header from "@/components/Header";
@@ -22,30 +22,34 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<"guide" | "focus">("guide");
   const [, startTransition] = useTransition();
 
-  useEffect(() => {
+  const hydratePrefs = useEffectEvent(() => {
     const nextTheme =
       (localStorage.getItem("ms_theme") as "light" | "dark" | null) ||
       (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     const nextLang = (localStorage.getItem("ms_lang") as "ko" | "en" | null) || "ko";
-    setThemeState(nextTheme);
-    setLangState(nextLang);
+    if (nextTheme !== theme) setThemeState(nextTheme);
+    if (nextLang !== lang) setLangState(nextLang);
     document.documentElement.dataset.theme = nextTheme;
     document.documentElement.lang = nextLang;
+  });
+
+  useEffect(() => {
+    hydratePrefs();
   }, []);
 
-  const setTheme = (nextTheme: "light" | "dark") => {
+  const setTheme = useCallback((nextTheme: "light" | "dark") => {
     setThemeState(nextTheme);
     document.documentElement.dataset.theme = nextTheme;
     localStorage.setItem("ms_theme", nextTheme);
-  };
+  }, []);
 
-  const setLang = (nextLang: "ko" | "en") => {
+  const setLang = useCallback((nextLang: "ko" | "en") => {
     setLangState(nextLang);
     document.documentElement.lang = nextLang;
     localStorage.setItem("ms_lang", nextLang);
-  };
+  }, []);
 
-  const toggleSelected = (sym: string) => {
+  const toggleSelected = useCallback((sym: string) => {
     startTransition(() => {
       setSelectedSet((prev) => {
         const next = new Set(prev);
@@ -54,20 +58,20 @@ export default function Home() {
         return next;
       });
     });
-  };
+  }, [startTransition]);
 
-  const selectAll = () => {
+  const selectAll = useCallback(() => {
     if (!scanResult?.candidates) return;
     startTransition(() => {
       setSelectedSet(new Set(scanResult.candidates.map((candidate) => candidate.symbol)));
     });
-  };
+  }, [scanResult, startTransition]);
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     startTransition(() => {
       setSelectedSet(new Set());
     });
-  };
+  }, [startTransition]);
 
   const ctx: AppState = useMemo(
     () => ({
@@ -94,7 +98,23 @@ export default function Home() {
       viewMode,
       setViewMode,
     }),
-    [theme, lang, mode, scoutPanel, market, horizon, scanResult, scanning, selectedSet, viewMode]
+    [
+      theme,
+      setTheme,
+      lang,
+      setLang,
+      mode,
+      scoutPanel,
+      market,
+      horizon,
+      scanResult,
+      scanning,
+      selectedSet,
+      toggleSelected,
+      selectAll,
+      clearSelection,
+      viewMode,
+    ]
   );
 
   return (

@@ -1,8 +1,8 @@
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
-import { useApp } from "@/lib/store";
 import {
   fetchIntradayMeta,
   fetchIntradayRadar,
@@ -10,7 +10,16 @@ import {
   type IntradayRadarResult,
   type IntradayRadarRow,
 } from "@/lib/api";
+import {
+  calcRiskReward,
+  formatUpdatedAt,
+  getIntradayModeHint,
+  getStateActionHint,
+  sortIntradayRows,
+  translateReasonText,
+} from "@/lib/decision";
 import { fmtCompact, fmtPrice } from "@/lib/format";
+import { useApp } from "@/lib/store";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import Card from "./ui/Card";
@@ -26,42 +35,33 @@ const REGIME_LABELS_KO: Record<string, string> = {
 
 const STATE_LABELS_KO: Record<string, string> = {
   PREPARE: "준비",
-  CONFIRM: "확인",
-  TRIGGERED: "트리거",
-  BLOCKED: "보류",
-  EXPIRED: "만료",
+  CONFIRM: "확인 중",
+  TRIGGERED: "진입 신호",
+  EXPIRED: "추격 금지",
+  BLOCKED: "신규 진입 금지",
 };
 
 const SETUP_LABELS_KO: Record<string, string> = {
-  intraday_continuation: "추세 지속",
-  opening_drive: "시가 드라이브",
-  gap_and_go: "갭앤고",
-  pullback: "눌림",
-  reversal: "반전",
+  intraday_continuation: "장중 추세 지속",
+  opening_drive: "시가 돌파",
+  gap_and_go: "갭 상승 지속",
+  pullback: "눌림목",
+  reversal: "반전 시도",
 };
 
 function translateRegime(value?: string, lang?: "ko" | "en") {
   if (!value) return "-";
-  return lang === "ko" ? (REGIME_LABELS_KO[value] ?? value) : value;
+  return lang === "ko" ? (REGIME_LABELS_KO[value] ?? value) : value.replaceAll("_", " ");
 }
 
 function translateState(value: string, lang: "ko" | "en") {
-  return lang === "ko" ? (STATE_LABELS_KO[value] ?? value) : value;
+  return lang === "ko" ? (STATE_LABELS_KO[value] ?? value) : value.replaceAll("_", " ");
 }
 
 function translateSetup(value?: string, lang?: "ko" | "en") {
   if (!value) return "";
-  return lang === "ko" ? (SETUP_LABELS_KO[value] ?? value) : value;
-}
-
-function translateReason(reason: string, lang: "ko" | "en") {
-  if (lang !== "ko") return reason;
-  const normalized = reason.toLowerCase();
-  if (normalized.includes("watch only")) return "감시 전용";
-  if (normalized.includes("today turnover filter passed")) return "당일 거래대금 기준 통과";
-  if (normalized.includes("relative volume filter passed")) return "상대 거래량 기준 통과";
-  if (normalized.includes("session")) return "세션 점검 완료";
-  return reason;
+  if (lang === "ko") return SETUP_LABELS_KO[value] ?? value;
+  return value.replaceAll("_", " ");
 }
 
 export default function IntradayDesk() {
@@ -74,53 +74,86 @@ export default function IntradayDesk() {
   const [equity, setEquity] = useState(10000000);
   const [riskBudget, setRiskBudget] = useState(0.8);
 
-  const copy = lang === "ko"
-    ? {
-        title: "인트라데이 데스크",
-        subtitle: "같은 날 안에서 바로 반응할 만한 세팅만 짧고 선명하게 정리합니다.",
-        desc: "모멘텀 스카우트가 스윙용 정찰이라면, 여기는 당일 트리거를 빠르게 훑는 상황판에 가깝습니다.",
-        refresh: "아이디어 새로고침",
-        market: "시장",
-        cash: "현금",
-        equity: "총 평가금액",
-        risk: "리스크 예산 (%)",
-        marketDecision: "시장 판단",
-        entryAllowed: "공격 가능",
-        entryBlocked: "보수 운영",
-        priority: "우선 감시",
-        watch: "관찰 또는 대기",
-        empty: "지금은 당길 만한 세팅이 없습니다",
-        emptyDesc: "시장, 자금, 리스크 비율을 바꾸고 다시 불러와 보세요.",
-        trigger: "트리거",
-        stop: "손절",
-        target: "목표",
-        size: "권장 규모",
-        disclaimer: "공개 데이터 기준 참고 화면입니다. 실제 체결 전에는 라이브 호가를 꼭 다시 보세요.",
-        loadError: "인트라데이 데이터를 불러오지 못했습니다.",
-      }
-    : {
-        title: "Intraday desk",
-        subtitle: "A tighter board for same-session setups that might actually be worth your attention.",
-        desc: "If Momentum Scout is the swing watchlist, this is the shorter-horizon radar for same-day triggers.",
-        refresh: "Refresh ideas",
-        market: "Market",
-        cash: "Cash",
-        equity: "Equity",
-        risk: "Risk budget (%)",
-        marketDecision: "Market read",
-        entryAllowed: "Can press",
-        entryBlocked: "Stay selective",
-        priority: "Priority watch",
-        watch: "Watch or wait",
-        empty: "No actionable intraday setups right now",
-        emptyDesc: "Try another market, cash size, or risk budget and refresh.",
-        trigger: "Trigger",
-        stop: "Stop",
-        target: "Target",
-        size: "Size",
-        disclaimer: "Reference view based on public data. Check live spreads before touching any order button.",
-        loadError: "Failed to load intraday data.",
-      };
+  const currency = market === "KR" ? "KRW" : "USD";
+  const riskBudgetAmount = useMemo(
+    () => Math.max(0, equity * (riskBudget / 100)),
+    [equity, riskBudget]
+  );
+
+  const copy =
+    lang === "ko"
+      ? {
+          title: "인트라데이 데스크",
+          subtitle: "지금 눌러도 되는지부터 판단하는 당일 매매 작업대",
+          desc: "이 화면은 종목 추천보다 먼저, 시장 상태·손실 한도·진입 타이밍을 한 번에 보는 데 집중합니다.",
+          refresh: "실시간 후보 다시 계산",
+          market: "시장",
+          cash: "주문 가능 현금",
+          cashHelp: "오늘 새 포지션에 실제로 넣을 수 있는 현금입니다.",
+          equity: "총 자산 평가액",
+          equityHelp: "현금과 보유 종목을 합친 계좌 전체 크기입니다. 손실 한도 계산의 기준입니다.",
+          risk: "오늘 손실 한도 (%)",
+          riskHelp: "오늘 하루 이 계좌에서 감수할 최대 손실 비율입니다.",
+          marketDecision: "오늘의 운영 모드",
+          entryAllowed: "진입 열림",
+          entryBlocked: "보수 운영",
+          nextActionAllowed: "오늘은 신규 진입을 열어도 됩니다. 단, 진입 신호가 나온 후보만 보세요.",
+          nextActionBlocked: "오늘은 보수 운영이 기본입니다. 추격보다 관찰과 기록이 우선입니다.",
+          whyInputsMatterTitle: "왜 이 값을 묻나",
+          whyInputsMatterText:
+            "이 값들은 보기 좋으라고 받는 게 아니라, 추천별 포지션 규모와 허용 손실을 계산하려고 필요합니다.",
+          riskBudgetAmountLabel: "오늘 허용 손실",
+          stateLegendTitle: "상태 해석",
+          priority: "지금 볼 후보",
+          watch: "관찰 또는 제외",
+          empty: "지금 당길 만한 후보가 없습니다",
+          emptyDesc: "시장 상태가 애매하거나, 손실 한도 대비 좋은 자리가 아직 없습니다.",
+          trigger: "진입",
+          stop: "손절",
+          target: "1차 목표",
+          size: "권장 규모",
+          actionHint: "지금 행동",
+          reasons: "왜 이 후보인가",
+          disclaimer:
+            "공개 데이터 기준 참고 화면입니다. 실제 체결 전에는 호가와 스프레드를 한 번 더 확인하세요.",
+          loadError: "인트라데이 데이터를 불러오지 못했습니다.",
+        }
+      : {
+          title: "Intraday Desk",
+          subtitle: "A same-day decision desk that starts by asking whether pressing risk even makes sense.",
+          desc: "This screen focuses on market tone, loss limits, and entry timing before it talks about symbols.",
+          refresh: "Recompute live candidates",
+          market: "Market",
+          cash: "Orderable cash",
+          cashHelp: "Cash you can actually deploy into fresh positions today.",
+          equity: "Total account equity",
+          equityHelp: "Your full account size, including cash and open positions. It anchors risk sizing.",
+          risk: "Daily loss cap (%)",
+          riskHelp: "The maximum loss percentage you are willing to take today.",
+          marketDecision: "Today's operating mode",
+          entryAllowed: "Entry open",
+          entryBlocked: "Defensive mode",
+          nextActionAllowed: "New entries are allowed today, but only for candidates with valid trigger states.",
+          nextActionBlocked: "Stay defensive today. Observation and notes matter more than forcing a trade.",
+          whyInputsMatterTitle: "Why ask for this",
+          whyInputsMatterText:
+            "These values are used to size positions and calculate allowed loss, not to decorate the form.",
+          riskBudgetAmountLabel: "Today's allowed loss",
+          stateLegendTitle: "State legend",
+          priority: "Priority candidates",
+          watch: "Watch or avoid",
+          empty: "There is nothing worth forcing right now",
+          emptyDesc: "Market conditions are mixed, or no setup clears your loss budget cleanly yet.",
+          trigger: "Trigger",
+          stop: "Stop",
+          target: "Target 1",
+          size: "Suggested size",
+          actionHint: "Action",
+          reasons: "Why it is on the desk",
+          disclaimer:
+            "Reference view based on public data. Check live spreads and tape before you touch an order.",
+          loadError: "Failed to load intraday data.",
+        };
 
   const loadIdeas = async () => {
     setLoading(true);
@@ -147,10 +180,12 @@ export default function IntradayDesk() {
 
   useEffect(() => {
     void loadIdeas();
+    // Initial load only. Inputs update on explicit refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const marketDecision = radar?.market_decision ?? meta?.market_decision;
-  const rows = radar?.radar ?? [];
+  const rows = useMemo(() => sortIntradayRows(radar?.radar ?? []), [radar?.radar]);
   const priorityRows = useMemo(
     () => rows.filter((row) => ["TRIGGERED", "CONFIRM", "PREPARE"].includes(row.state)),
     [rows]
@@ -161,23 +196,37 @@ export default function IntradayDesk() {
   );
 
   return (
-    <div className="w-full max-w-[1180px] mx-auto animate-fade-in">
+    <div className="mx-auto w-full max-w-[1180px] animate-fade-in">
       <div className="space-y-7">
         <Card className="p-8 sm:p-10">
-          <div className="max-w-[820px] space-y-3">
+          <div className="max-w-[860px] space-y-4">
             <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-              Intraday Radar
+              Decision Desk
             </div>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-[2.2rem]">{copy.title}</h2>
-            <p className="text-base leading-8 text-[var(--muted)]">{copy.subtitle}</p>
-            <p className="text-sm leading-7 text-[var(--muted)]">{copy.desc}</p>
+            <div className="space-y-2">
+              <h2 className="text-3xl font-bold tracking-tight sm:text-[2.2rem]">{copy.title}</h2>
+              <p className="text-base leading-8 text-[var(--fg)]/84">{copy.subtitle}</p>
+            </div>
+            <p className="max-w-[760px] text-sm leading-7 text-[var(--muted)]">{copy.desc}</p>
           </div>
         </Card>
 
         {marketDecision && (
-          <Card className={clsx("p-6", marketDecision.new_entries_allowed ? "border-[var(--good)]/20" : "border-[var(--danger)]/20")}>
+          <Card
+            className={clsx(
+              "space-y-4 p-6",
+              marketDecision.new_entries_allowed
+                ? "border-[var(--good)]/20"
+                : "border-[var(--danger)]/20"
+            )}
+          >
             <div className="flex flex-wrap items-center gap-3">
-              <div className={clsx("h-2.5 w-2.5 rounded-full", marketDecision.new_entries_allowed ? "bg-[var(--good)]" : "bg-[var(--danger)]")} />
+              <div
+                className={clsx(
+                  "h-2.5 w-2.5 rounded-full",
+                  marketDecision.new_entries_allowed ? "bg-[var(--good)]" : "bg-[var(--danger)]"
+                )}
+              />
               <div className="text-base font-semibold">
                 {copy.marketDecision}: {translateRegime(marketDecision.regime, lang)}
               </div>
@@ -185,39 +234,150 @@ export default function IntradayDesk() {
                 {marketDecision.new_entries_allowed ? copy.entryAllowed : copy.entryBlocked}
               </Badge>
             </div>
-            <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-              {marketDecision.reason?.map((reason) => translateReason(reason, lang)).join(" · ")}
+            <p className="text-sm leading-7 text-[var(--fg)]/88">
+              {getIntradayModeHint(marketDecision.new_entries_allowed, lang)}
             </p>
+            {marketDecision.reason?.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {marketDecision.reason.slice(0, 4).map((reason) => (
+                  <span
+                    key={reason}
+                    className="rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-xs text-[var(--muted)]"
+                  >
+                    {translateReasonText(reason, lang)}
+                  </span>
+                ))}
+              </div>
+            )}
           </Card>
         )}
 
+        <Card className="space-y-5 p-7">
+          <div className="space-y-2">
+            <div className="text-sm font-semibold">{copy.whyInputsMatterTitle}</div>
+            <p className="text-sm leading-7 text-[var(--muted)]">{copy.whyInputsMatterText}</p>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            <SummaryMetricCard
+              label={copy.cash}
+              value={fmtPrice(cash, currency)}
+              description={copy.cashHelp}
+            />
+            <SummaryMetricCard
+              label={copy.equity}
+              value={fmtPrice(equity, currency)}
+              description={copy.equityHelp}
+            />
+            <SummaryMetricCard
+              label={copy.riskBudgetAmountLabel}
+              value={`${riskBudget.toFixed(1)}% · ${fmtPrice(riskBudgetAmount, currency)}`}
+              description={copy.riskHelp}
+            />
+          </div>
+        </Card>
+
         <Card className="p-7">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Select label={copy.market} value={market} onChange={(e) => setMarket(e.target.value as "KR" | "US")}>
+            <Select
+              label={copy.market}
+              value={market}
+              help={lang === "ko" ? "시장에 따라 통화와 후보 풀이 달라집니다." : "Market changes the currency and candidate pool."}
+              onChange={(e) => setMarket(e.target.value as "KR" | "US")}
+            >
               <option value="KR">KR</option>
               <option value="US">US</option>
             </Select>
-            <Input label={copy.cash} type="number" value={cash} onChange={(e) => setCash(Number(e.target.value))} />
-            <Input label={copy.equity} type="number" value={equity} onChange={(e) => setEquity(Number(e.target.value))} />
-            <Input label={copy.risk} type="number" step="0.1" value={riskBudget} onChange={(e) => setRiskBudget(Number(e.target.value))} suffix="%" />
+            <Input
+              label={copy.cash}
+              type="number"
+              value={cash}
+              help={copy.cashHelp}
+              onChange={(e) => setCash(Number(e.target.value))}
+            />
+            <Input
+              label={copy.equity}
+              type="number"
+              value={equity}
+              help={copy.equityHelp}
+              onChange={(e) => setEquity(Number(e.target.value))}
+            />
+            <Input
+              label={copy.risk}
+              type="number"
+              step="0.1"
+              value={riskBudget}
+              help={`${copy.riskHelp} ${copy.riskBudgetAmountLabel}: ${fmtPrice(riskBudgetAmount, currency)}`}
+              onChange={(e) => setRiskBudget(Number(e.target.value))}
+              suffix="%"
+            />
           </div>
           <div className="mt-5 flex justify-center">
-            <Button variant="primary" className="w-full max-w-[320px] justify-center" loading={loading} onClick={loadIdeas}>
+            <Button
+              variant="primary"
+              className="w-full max-w-[320px] justify-center"
+              loading={loading}
+              onClick={loadIdeas}
+            >
               {copy.refresh}
             </Button>
+          </div>
+        </Card>
+
+        <Card className="space-y-4 p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-base font-semibold">{copy.stateLegendTitle}</h3>
+            <Badge variant="muted">{lang === "ko" ? "신호 읽는 법" : "How to read states"}</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <LegendCard
+              state={translateState("PREPARE", lang)}
+              description={lang === "ko" ? "감시만 시작" : "Start watching only"}
+            />
+            <LegendCard
+              state={translateState("CONFIRM", lang)}
+              description={lang === "ko" ? "조건 거의 충족" : "Conditions nearly met"}
+            />
+            <LegendCard
+              state={translateState("TRIGGERED", lang)}
+              description={lang === "ko" ? "유효 구간 진입 가능" : "Valid entry window"}
+              tone="good"
+            />
+            <LegendCard
+              state={translateState("EXPIRED", lang)}
+              description={lang === "ko" ? "이미 많이 움직여 추격 위험" : "Already extended"}
+              tone="danger"
+            />
+            <LegendCard
+              state={translateState("BLOCKED", lang)}
+              description={
+                lang === "ko"
+                  ? "시장 리스크로 신규 진입 금지"
+                  : "Market risk blocks fresh entries"
+              }
+              tone="danger"
+            />
           </div>
         </Card>
 
         {!rows.length ? (
           <div className="flex min-h-[36vh] flex-col items-center justify-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-[22px] border border-[var(--border)] bg-[var(--card2)]">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--muted)"
+                strokeWidth="1.5"
+              >
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 8v4l2.5 2.5" />
               </svg>
             </div>
             <p className="text-lg font-semibold">{copy.empty}</p>
-            <p className="text-sm text-[var(--muted)]">{copy.emptyDesc}</p>
+            <p className="max-w-[520px] text-center text-sm leading-7 text-[var(--muted)]">
+              {copy.emptyDesc}
+            </p>
           </div>
         ) : (
           <div className="space-y-7">
@@ -232,7 +392,14 @@ export default function IntradayDesk() {
             {watchRows.length > 0 && (
               <DeskSection title={copy.watch} count={watchRows.length}>
                 {watchRows.map((row) => (
-                  <IntradayIdeaCard key={row.symbol} row={row} market={market} lang={lang} labels={copy} muted />
+                  <IntradayIdeaCard
+                    key={row.symbol}
+                    row={row}
+                    market={market}
+                    lang={lang}
+                    labels={copy}
+                    muted
+                  />
                 ))}
               </DeskSection>
             )}
@@ -266,6 +433,49 @@ function DeskSection({
   );
 }
 
+function SummaryMetricCard({
+  label,
+  value,
+  description,
+}: {
+  label: string;
+  value: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-[22px] border border-[var(--border)] bg-[var(--card2)] p-4">
+      <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">{label}</div>
+      <div className="mt-2 text-lg font-semibold tabular-nums">{value}</div>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p>
+    </div>
+  );
+}
+
+function LegendCard({
+  state,
+  description,
+  tone,
+}: {
+  state: string;
+  description: string;
+  tone?: "good" | "danger";
+}) {
+  return (
+    <div className="rounded-[20px] border border-[var(--border)] bg-[var(--card2)] p-4">
+      <div
+        className={clsx(
+          "text-sm font-semibold",
+          tone === "good" && "text-[var(--good)]",
+          tone === "danger" && "text-[var(--danger)]"
+        )}
+      >
+        {state}
+      </div>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p>
+    </div>
+  );
+}
+
 function IntradayIdeaCard({
   row,
   market,
@@ -281,7 +491,14 @@ function IntradayIdeaCard({
 }) {
   const currency = market === "KR" ? "KRW" : "USD";
   const strongState = row.state === "TRIGGERED" || row.state === "CONFIRM";
-  const badgeVariant = row.state === "BLOCKED" || row.state === "EXPIRED" ? "danger" : strongState ? "good" : "accent";
+  const badgeVariant =
+    row.state === "BLOCKED" || row.state === "EXPIRED" ? "danger" : strongState ? "good" : "accent";
+  const translatedReasons = row.state_reason
+    ?.map((reason) => translateReasonText(reason, lang))
+    .filter(Boolean)
+    .slice(0, 3);
+  const riskReward = calcRiskReward(row);
+  const updateLabel = formatUpdatedAt(row.last_updated_at, lang);
 
   return (
     <Card className={clsx("p-6 sm:p-7", muted ? "" : "border-[var(--accent)]/18")}>
@@ -291,29 +508,47 @@ function IntradayIdeaCard({
             <span className="text-xl font-semibold tracking-tight">{row.symbol}</span>
             <Badge variant={badgeVariant}>{translateState(row.state, lang)}</Badge>
             {row.setup_type && <Badge variant="muted">{translateSetup(row.setup_type, lang)}</Badge>}
+            <Badge variant="muted">{getStateActionHint(row.state, lang)}</Badge>
           </div>
           <p className="mt-2 text-sm text-[var(--muted)]">{row.name}</p>
 
-          {row.state_reason?.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {row.state_reason.slice(0, 3).map((reason) => (
-                <span key={reason} className="rounded-full bg-[var(--card2)] px-3 py-1 text-xs text-[var(--muted)]">
-                  {translateReason(reason, lang)}
-                </span>
-              ))}
+          {translatedReasons?.length ? (
+            <div className="mt-4 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                {labels.reasons}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {translatedReasons.map((reason) => (
+                  <span
+                    key={reason}
+                    className="rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-xs text-[var(--muted)]"
+                  >
+                    {reason}
+                  </span>
+                ))}
+              </div>
             </div>
-          )}
+          ) : null}
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             {typeof row.position_notional === "number" && row.position_notional > 0 && (
               <Badge variant="muted">
                 {labels.size} {fmtCompact(row.position_notional)}
               </Badge>
             )}
-            {typeof row.allowed_chase_pct === "number" && (
-              <Badge variant="muted">Chase {row.allowed_chase_pct.toFixed(1)}%</Badge>
+            {typeof row.allowed_chase_pct === "number" && row.allowed_chase_pct >= 0 && (
+              <Badge variant="muted">
+                {lang === "ko"
+                  ? `추격 허용 +${row.allowed_chase_pct.toFixed(1)}%`
+                  : `Chase room +${row.allowed_chase_pct.toFixed(1)}%`}
+              </Badge>
             )}
-            {row.last_updated_at && <Badge variant="muted">{row.last_updated_at}</Badge>}
+            {riskReward && (
+              <Badge variant={riskReward >= 2 ? "good" : "muted"}>
+                {lang === "ko" ? `손익비 ${riskReward.toFixed(1)}R` : `R:R ${riskReward.toFixed(1)}R`}
+              </Badge>
+            )}
+            {updateLabel && <Badge variant="muted">{updateLabel}</Badge>}
           </div>
         </div>
 
