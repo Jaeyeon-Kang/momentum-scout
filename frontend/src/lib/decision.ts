@@ -73,6 +73,22 @@ const DETAIL_KEY_LABELS: Record<string, { ko: string; en: string }> = {
   short_ratio: { ko: "공매도 비율", en: "Short ratio" },
 };
 
+const STATE_LABELS: Record<string, { ko: string; en: string }> = {
+  PREPARE: { ko: "준비", en: "Prepare" },
+  CONFIRM: { ko: "확인 중", en: "Confirm" },
+  TRIGGERED: { ko: "진입 신호", en: "Triggered" },
+  EXPIRED: { ko: "추격 금지", en: "Expired" },
+  BLOCKED: { ko: "신규 진입 금지", en: "Blocked" },
+};
+
+const SETUP_LABELS: Record<string, { ko: string; en: string }> = {
+  intraday_continuation: { ko: "장중 추세 지속", en: "Intraday continuation" },
+  opening_drive: { ko: "시가 돌파", en: "Opening drive" },
+  gap_and_go: { ko: "갭 상승 지속", en: "Gap & go" },
+  pullback: { ko: "눌림목", en: "Pullback" },
+  reversal: { ko: "반전 시도", en: "Reversal" },
+};
+
 // ---------------------------------------------------------------------------
 // Shared translators
 // ---------------------------------------------------------------------------
@@ -129,6 +145,19 @@ export function translateDetailKey(key: string, lang: Lang): string {
   return cleanSnakeCase(key);
 }
 
+export function translateState(value: string, lang: Lang): string {
+  const entry = STATE_LABELS[value];
+  if (entry) return lang === "ko" ? entry.ko : entry.en;
+  return value.replaceAll("_", " ");
+}
+
+export function translateSetup(value: string | undefined, lang: Lang): string {
+  if (!value) return "";
+  const entry = SETUP_LABELS[value];
+  if (entry) return lang === "ko" ? entry.ko : entry.en;
+  return cleanSnakeCase(value);
+}
+
 // ---------------------------------------------------------------------------
 // Reason translation (expanded)
 // ---------------------------------------------------------------------------
@@ -166,6 +195,7 @@ export function translateReasonText(reason: string, lang: Lang): string {
 
   // Fallback: clean up snake_case or raw-looking text
   if (reason.includes("_")) return cleanSnakeCase(reason);
+  if (/^[A-Z_\s]+$/.test(reason)) return cleanSnakeCase(reason.toLowerCase());
   return reason;
 }
 
@@ -213,11 +243,14 @@ export function calcRiskReward(row: Pick<IntradayRadarRow, "trigger_price" | "st
   const target = Number(row.target_price_1);
 
   if (![trigger, stop, target].every((value) => Number.isFinite(value))) return null;
-  if (trigger <= stop || target <= trigger) return null;
 
-  const risk = trigger - stop;
-  const reward = target - trigger;
+  // Support both long (trigger > stop) and short (trigger < stop)
+  const risk = Math.abs(trigger - stop);
+  const reward = Math.abs(target - trigger);
   if (risk <= 0 || reward <= 0) return null;
+  const isLong = trigger > stop;
+  if (isLong && target <= trigger) return null;
+  if (!isLong && target >= trigger) return null;
   return reward / risk;
 }
 
@@ -239,6 +272,9 @@ export function formatRelativeTime(dateStr: string, lang: Lang): string {
     if (isNaN(date.getTime())) return dateStr;
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) {
+      return date.toLocaleDateString(lang === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" });
+    }
     const diffMin = Math.floor(diffMs / 60_000);
     const diffHr = Math.floor(diffMs / 3_600_000);
     const diffDay = Math.floor(diffMs / 86_400_000);

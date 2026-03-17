@@ -36,7 +36,7 @@ export default function Input({ label, help, warn, suffix, className, ...props }
         )}
       </div>
       {warn && <span className="text-xs text-[var(--danger)] leading-relaxed">{warn}</span>}
-      {!warn && help && <span className="text-xs text-[var(--muted)] leading-relaxed">{help}</span>}
+      {help && <span className="text-xs text-[var(--muted)] leading-relaxed">{help}</span>}
     </label>
   );
 }

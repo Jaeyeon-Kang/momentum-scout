@@ -20,6 +20,8 @@ import {
   sortIntradayRows,
   translateReasonText,
   translateRegime,
+  translateSetup,
+  translateState,
 } from "@/lib/decision";
 import { fmtCompact, fmtPrice } from "@/lib/format";
 import { useApp } from "@/lib/store";
@@ -29,34 +31,8 @@ import Card from "./ui/Card";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
 
-const STATE_LABELS_KO: Record<string, string> = {
-  PREPARE: "준비",
-  CONFIRM: "확인 중",
-  TRIGGERED: "진입 신호",
-  EXPIRED: "추격 금지",
-  BLOCKED: "신규 진입 금지",
-};
-
-const SETUP_LABELS_KO: Record<string, string> = {
-  intraday_continuation: "장중 추세 지속",
-  opening_drive: "시가 돌파",
-  gap_and_go: "갭 상승 지속",
-  pullback: "눌림목",
-  reversal: "반전 시도",
-};
-
-function translateState(value: string, lang: "ko" | "en") {
-  return lang === "ko" ? (STATE_LABELS_KO[value] ?? value) : value.replaceAll("_", " ");
-}
-
-function translateSetup(value?: string, lang?: "ko" | "en") {
-  if (!value) return "";
-  if (lang === "ko") return SETUP_LABELS_KO[value] ?? value;
-  return value.replaceAll("_", " ");
-}
-
 export default function IntradayDesk() {
-  const { lang } = useApp();
+  const { lang, viewMode } = useApp();
   const [loading, setLoading] = useState(false);
   const [meta, setMeta] = useState<IntradayMeta | null>(null);
   const [radar, setRadar] = useState<IntradayRadarResult | null>(null);
@@ -205,7 +181,7 @@ export default function IntradayDesk() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] animate-fade-in">
+    <div className="mx-auto w-full max-w-[1280px] animate-fade-in">
       <div className="space-y-7">
         <Card className="p-8 sm:p-10">
           <div className="max-w-[860px] space-y-4">
@@ -262,7 +238,7 @@ export default function IntradayDesk() {
         )}
 
         {/* Rules strip */}
-        {marketDecision && (
+        {viewMode === "guide" && marketDecision && (
           <div className="flex flex-wrap gap-3">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)] self-center">
               {copy.rulesTitle}
@@ -279,10 +255,12 @@ export default function IntradayDesk() {
         )}
 
         <Card className="space-y-5 p-7">
-          <div className="space-y-2">
-            <div className="text-sm font-semibold">{copy.whyInputsMatterTitle}</div>
-            <p className="text-sm leading-7 text-[var(--muted)]">{copy.whyInputsMatterText}</p>
-          </div>
+          {viewMode === "guide" && (
+            <div className="space-y-2">
+              <div className="text-sm font-semibold">{copy.whyInputsMatterTitle}</div>
+              <p className="text-sm leading-7 text-[var(--muted)]">{copy.whyInputsMatterText}</p>
+            </div>
+          )}
           <div className="grid gap-3 lg:grid-cols-3">
             <SummaryMetricCard
               label={copy.cash}
@@ -353,41 +331,43 @@ export default function IntradayDesk() {
           </div>
         </Card>
 
-        <Card className="space-y-4 p-6">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-base font-semibold">{copy.stateLegendTitle}</h3>
-            <Badge variant="muted">{lang === "ko" ? "신호 읽는 법" : "How to read states"}</Badge>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <LegendCard
-              state={translateState("PREPARE", lang)}
-              description={lang === "ko" ? "감시만 시작" : "Start watching only"}
-            />
-            <LegendCard
-              state={translateState("CONFIRM", lang)}
-              description={lang === "ko" ? "조건 거의 충족" : "Conditions nearly met"}
-            />
-            <LegendCard
-              state={translateState("TRIGGERED", lang)}
-              description={lang === "ko" ? "유효 구간 진입 가능" : "Valid entry window"}
-              tone="good"
-            />
-            <LegendCard
-              state={translateState("EXPIRED", lang)}
-              description={lang === "ko" ? "이미 많이 움직여 추격 위험" : "Already extended"}
-              tone="danger"
-            />
-            <LegendCard
-              state={translateState("BLOCKED", lang)}
-              description={
-                lang === "ko"
-                  ? "시장 리스크로 신규 진입 금지"
-                  : "Market risk blocks fresh entries"
-              }
-              tone="danger"
-            />
-          </div>
-        </Card>
+        {viewMode === "guide" && (
+          <Card className="space-y-4 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-base font-semibold">{copy.stateLegendTitle}</h3>
+              <Badge variant="muted">{lang === "ko" ? "신호 읽는 법" : "How to read states"}</Badge>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <LegendCard
+                state={translateState("PREPARE", lang)}
+                description={lang === "ko" ? "감시만 시작" : "Start watching only"}
+              />
+              <LegendCard
+                state={translateState("CONFIRM", lang)}
+                description={lang === "ko" ? "조건 거의 충족" : "Conditions nearly met"}
+              />
+              <LegendCard
+                state={translateState("TRIGGERED", lang)}
+                description={lang === "ko" ? "유효 구간 진입 가능" : "Valid entry window"}
+                tone="good"
+              />
+              <LegendCard
+                state={translateState("EXPIRED", lang)}
+                description={lang === "ko" ? "이미 많이 움직여 추격 위험" : "Already extended"}
+                tone="danger"
+              />
+              <LegendCard
+                state={translateState("BLOCKED", lang)}
+                description={
+                  lang === "ko"
+                    ? "시장 리스크로 신규 진입 금지"
+                    : "Market risk blocks fresh entries"
+                }
+                tone="danger"
+              />
+            </div>
+          </Card>
+        )}
 
         {!rows.length ? (
           <div className="flex min-h-[36vh] flex-col items-center justify-center gap-4">
@@ -538,7 +518,7 @@ function IntradayIdeaCard({
   const sizeLabel = useMemo(() => {
     if (typeof row.position_notional !== "number" || row.position_notional <= 0) return null;
     const pct = equity > 0 ? ((row.position_notional / equity) * 100).toFixed(1) : null;
-    const amount = fmtCompact(row.position_notional);
+    const amount = fmtCompact(row.position_notional, lang);
     if (pct) {
       return lang === "ko"
         ? `${amount} · 자산의 ${pct}%`

@@ -20,7 +20,7 @@ export default function Badge({
         variant === "accent" && "bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--accent)]/30",
         variant === "good" && "bg-[var(--good-dim)] text-[var(--good)] border border-[var(--good)]/30",
         variant === "danger" && "bg-[var(--danger-dim)] text-[var(--danger)] border border-[var(--danger)]/30",
-        variant === "warn" && "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30",
+        variant === "warn" && "bg-[var(--card2)] text-[var(--danger)] border border-[var(--danger)]/25",
         variant === "muted" && "bg-transparent text-[var(--muted)] border border-[var(--border)]",
         className
       )}

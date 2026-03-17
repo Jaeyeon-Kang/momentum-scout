@@ -256,7 +256,7 @@ export default function ScanSettings() {
     const horizonLabel = lang === "ko" ? `${horizon}일 스윙` : `${horizon}-day swing`;
     const liquidityLabel =
       market === "US"
-        ? liquidityMeta.label
+        ? liquidityMeta.label[lang]
         : lang === "ko"
           ? `평균 거래대금 ${(krSettings.minTurnover / 1e8).toFixed(0)}억+`
           : `Avg turnover ${(krSettings.minTurnover / 1e8).toFixed(0)}e8+`;
@@ -273,12 +273,12 @@ export default function ScanSettings() {
       if (market === "KR") {
         return `거래대금이 붙고 뉴스가 아직 살아 있는 ${horizon}일 단기 모멘텀 후보를 먼저 찾습니다.`;
       }
-      return `${profileMeta.title} 기준, ${liquidityMeta.label} 유동성으로 ${horizon}일 신규 진입 후보를 압축합니다.`;
+      return `${profileMeta.title[lang]} 기준, ${liquidityMeta.label[lang]} 유동성으로 ${horizon}일 신규 진입 후보를 압축합니다.`;
     }
     if (market === "KR") {
       return `Looking for ${horizon}-day momentum candidates with active turnover and fresh catalysts.`;
     }
-    return `Compressing ${horizon}-day entry candidates using ${profileMeta.title} profile with ${liquidityMeta.label} liquidity.`;
+    return `Compressing ${horizon}-day entry candidates using ${profileMeta.title[lang]} profile with ${liquidityMeta.label[lang]} liquidity.`;
   }, [horizon, lang, liquidityMeta.label, market, profileMeta.title]);
 
   const handleMarketChange = (nextMarket: "US" | "KR") => {
@@ -339,7 +339,7 @@ export default function ScanSettings() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] animate-fade-in">
+    <div className="mx-auto w-full max-w-[1280px] animate-fade-in">
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_320px]">
         <Card className="glass-panel overflow-hidden p-8 sm:p-10">
           <div className="space-y-5">
@@ -374,7 +374,7 @@ export default function ScanSettings() {
               <div className="rounded-[24px] border border-[var(--border)] bg-[var(--card2)] px-4 py-4 text-sm leading-7 text-[var(--muted)]">
                 {market === "KR"
                   ? copy.autoGuideKr
-                  : copy.autoGuideUs(profileMeta.title, liquidityMeta.label)}
+                  : copy.autoGuideUs(profileMeta.title[lang], liquidityMeta.label[lang])}
               </div>
             )}
           </div>
@@ -403,8 +403,8 @@ export default function ScanSettings() {
                       </div>
                       {profile === key && <Badge variant="accent">{copy.active}</Badge>}
                     </div>
-                    <div className="mt-4 text-base font-semibold">{value.title}</div>
-                    <p className="mt-2 text-sm leading-7 text-[var(--muted)]">{value.desc}</p>
+                    <div className="mt-4 text-base font-semibold">{value.title[lang]}</div>
+                    <p className="mt-2 text-sm leading-7 text-[var(--muted)]">{value.desc[lang]}</p>
                   </button>
                 )
               )}
@@ -441,7 +441,7 @@ export default function ScanSettings() {
               <Select
                 label={copy.usLiquidity}
                 value={liquidity}
-                help={liquidityMeta.desc}
+                help={liquidityMeta.desc[lang]}
                 onChange={(e) => setLiquidity(e.target.value as LiquidityKey)}
               >
                 {(Object.entries(US_LIQUIDITY_PRESETS) as [
@@ -449,7 +449,7 @@ export default function ScanSettings() {
                   (typeof US_LIQUIDITY_PRESETS)[LiquidityKey],
                 ][]).map(([key, value]) => (
                   <option key={key} value={key}>
-                    {value.label}
+                    {value.label[lang]}
                   </option>
                 ))}
               </Select>

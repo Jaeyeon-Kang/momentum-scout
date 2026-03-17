@@ -29,7 +29,7 @@ export default function ScanResults() {
     useApp();
 
   const [detailModal, setDetailModal] = useState<{
-    symbol: string;
+    candidate: Candidate;
     data: TickerDetail | null;
     loading: boolean;
   } | null>(null);
@@ -146,11 +146,11 @@ export default function ScanResults() {
     [scanResult]
   );
 
-  const openDetail = async (symbol: string) => {
-    setDetailModal({ symbol, data: null, loading: true });
+  const openDetail = async (c: Candidate) => {
+    setDetailModal({ candidate: c, data: null, loading: true });
     try {
-      const data = await fetchTicker(symbol, market, horizon);
-      setDetailModal({ symbol, data, loading: false });
+      const data = await fetchTicker(c.symbol, market, horizon);
+      setDetailModal({ candidate: c, data, loading: false });
     } catch {
       toast.error(copy.detailError);
       setDetailModal(null);
@@ -168,8 +168,8 @@ export default function ScanResults() {
         max_items: String(Math.min(selected.size, 5)),
       });
       setPromptPreview(String(text));
-      // Open modal on narrow screens
-      if (window.innerWidth < 1280) {
+      // Open modal on narrow screens (xl breakpoint)
+      if (window.matchMedia("(max-width: 1279px)").matches) {
         setPromptModalOpen(true);
       }
     } catch {
@@ -181,14 +181,22 @@ export default function ScanResults() {
 
   const copyPrompt = async () => {
     if (!promptPreview) return;
-    await navigator.clipboard.writeText(promptPreview);
-    toast.success(copy.promptCopied);
+    try {
+      await navigator.clipboard.writeText(promptPreview);
+      toast.success(copy.promptCopied);
+    } catch {
+      toast.error(lang === "ko" ? "복사에 실패했습니다." : "Failed to copy.");
+    }
   };
 
   const copyRawDetail = async () => {
     if (!detailModal?.data) return;
-    await navigator.clipboard.writeText(JSON.stringify(detailModal.data, null, 2));
-    toast.success(copy.rawCopied);
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(detailModal.data, null, 2));
+      toast.success(copy.rawCopied);
+    } catch {
+      toast.error(lang === "ko" ? "복사에 실패했습니다." : "Failed to copy.");
+    }
   };
 
   if (!scanResult) {
@@ -332,7 +340,7 @@ export default function ScanResults() {
                 rank={index + 1}
                 checked={selected.has(candidate.symbol)}
                 onToggle={() => toggleSelected(candidate.symbol)}
-                onOpen={() => openDetail(candidate.symbol)}
+                onOpen={() => openDetail(candidate)}
                 market={market}
                 horizon={horizon}
                 lang={lang}
@@ -351,7 +359,7 @@ export default function ScanResults() {
                 rank={approved.length + index + 1}
                 checked={selected.has(candidate.symbol)}
                 onToggle={() => toggleSelected(candidate.symbol)}
-                onOpen={() => openDetail(candidate.symbol)}
+                onOpen={() => openDetail(candidate)}
                 market={market}
                 horizon={horizon}
                 lang={lang}
@@ -438,7 +446,7 @@ export default function ScanResults() {
             <ModalHeader onClose={() => setDetailModal(null)}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold">{detailModal.symbol}</h2>
+                  <h2 className="text-lg font-semibold">{detailModal.candidate.symbol}</h2>
                   {detailModal.data && (
                     <p className="text-sm text-[var(--muted)]">{detailModal.data.name}</p>
                   )}
@@ -460,7 +468,7 @@ export default function ScanResults() {
               ) : detailModal.data ? (
                 <DetailContent
                   data={detailModal.data}
-                  candidate={scanResult?.candidates.find((c) => c.symbol === detailModal.symbol)}
+                  candidate={detailModal.candidate}
                   market={market}
                   lang={lang}
                   labels={copy}
@@ -581,7 +589,7 @@ function CandidateCard({
             </Badge>
             {candidate.market_cap > 0 && (
               <Badge variant="muted">
-                {labels.marketCap} {fmtCompact(candidate.market_cap)}
+                {labels.marketCap} {fmtCompact(candidate.market_cap, lang)}
               </Badge>
             )}
             {candidate.extras?.market_turnover_rank && (

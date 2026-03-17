@@ -17,14 +17,19 @@ export function fmtPct(n: number | null | undefined): string {
   return `${sign}${n.toFixed(2)}%`;
 }
 
-export function fmtCompact(n: number | null | undefined): string {
+export function fmtCompact(n: number | null | undefined, lang: "ko" | "en" = "ko"): string {
   if (n == null || isNaN(n)) return "-";
   const abs = Math.abs(n);
   if (abs >= 1e12) return `${(n / 1e12).toFixed(1)}T`;
   if (abs >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
-  if (abs >= 1e8) return `${(n / 1e8).toFixed(0)}억`;
-  if (abs >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (abs >= 1e4) return `${(n / 1e4).toFixed(0)}만`;
+  if (lang === "en") {
+    if (abs >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+    if (abs >= 1e3) return `${(n / 1e3).toFixed(0)}K`;
+  } else {
+    if (abs >= 1e8) return `${(n / 1e8).toFixed(0)}억`;
+    if (abs >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+    if (abs >= 1e4) return `${(n / 1e4).toFixed(0)}만`;
+  }
   return fmtInt(n);
 }
 

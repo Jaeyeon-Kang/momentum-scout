@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useEffectEvent, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { AppContext, type AppState } from "@/lib/store";
 import type { ScanResult } from "@/lib/api";
 import Header from "@/components/Header";
@@ -22,19 +22,16 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<"guide" | "focus">("guide");
   const [, startTransition] = useTransition();
 
-  const hydratePrefs = useEffectEvent(() => {
+  useEffect(() => {
     const nextTheme =
       (localStorage.getItem("ms_theme") as "light" | "dark" | null) ||
       (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     const nextLang = (localStorage.getItem("ms_lang") as "ko" | "en" | null) || "ko";
-    if (nextTheme !== theme) setThemeState(nextTheme);
-    if (nextLang !== lang) setLangState(nextLang);
+    setThemeState(nextTheme);
+    setLangState(nextLang);
     document.documentElement.dataset.theme = nextTheme;
     document.documentElement.lang = nextLang;
-  });
-
-  useEffect(() => {
-    hydratePrefs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setTheme = useCallback((nextTheme: "light" | "dark") => {
@@ -164,7 +161,7 @@ function PaperTradingPlaceholder({ lang }: { lang: "ko" | "en" }) {
       <Card className="glass-panel p-8 sm:p-10 lg:p-12">
         <div className="space-y-4">
           <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-            Paper Mode
+            {lang === "ko" ? "모의 모드" : "Paper Mode"}
           </div>
           <h1 className="text-3xl font-bold tracking-tight">{copy.title}</h1>
           <p className="max-w-[760px] text-base leading-8 text-[var(--muted)]">{copy.body}</p>

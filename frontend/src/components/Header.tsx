@@ -134,6 +134,26 @@ export default function Header() {
                   <MenuButton active={mode === "paper"} onClick={() => { setMode("paper"); setMenuOpen(false); }}>
                     {copy.paper}
                   </MenuButton>
+                  <div className="flex gap-1 rounded-full border border-[var(--border)] bg-[var(--card2)] p-1 sm:hidden">
+                    <button
+                      onClick={() => setViewMode("guide")}
+                      className={clsx(
+                        "flex-1 rounded-full px-3 py-2 text-sm font-semibold transition-colors",
+                        viewMode === "guide" ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--muted)]"
+                      )}
+                    >
+                      {copy.guide}
+                    </button>
+                    <button
+                      onClick={() => setViewMode("focus")}
+                      className={clsx(
+                        "flex-1 rounded-full px-3 py-2 text-sm font-semibold transition-colors",
+                        viewMode === "focus" ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--muted)]"
+                      )}
+                    >
+                      {copy.focus}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="border-t border-[var(--border)] p-3 pt-4">
