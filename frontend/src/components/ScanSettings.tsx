@@ -14,6 +14,58 @@ import Select from "./ui/Select";
 type ProfileKey = keyof typeof SCAN_PROFILES;
 type LiquidityKey = keyof typeof US_LIQUIDITY_PRESETS;
 
+type KrPreset = typeof KR_DEFAULT_PRESET;
+
+const KR_CONSERVATIVE_PRESET: KrPreset = {
+  marketCapMin: 2_000_000_000_000,
+  minTurnover: 50_000_000_000,
+  todayTurnoverMin: 100_000_000_000,
+  relVolMin: 1.5,
+  ret5dMin: 3,
+  ret5dMax: 15,
+  closePosMin: 0.65,
+  freshNewsHours: 48,
+  marketTurnoverRankMax: 40,
+  largecapMin: 3_000_000_000_000,
+  largecapQuota: 3,
+  krExcludeFundlike: true,
+};
+
+const KR_AGGRESSIVE_PRESET: KrPreset = {
+  marketCapMin: 500_000_000_000,
+  minTurnover: 15_000_000_000,
+  todayTurnoverMin: 30_000_000_000,
+  relVolMin: 1.0,
+  ret5dMin: 5,
+  ret5dMax: 35,
+  closePosMin: 0.5,
+  freshNewsHours: 96,
+  marketTurnoverRankMax: 100,
+  largecapMin: 1_500_000_000_000,
+  largecapQuota: 1,
+  krExcludeFundlike: true,
+};
+
+type KrPresetKey = "default" | "conservative" | "aggressive";
+
+const KR_PRESETS: Record<KrPresetKey, { settings: KrPreset; label: { ko: string; en: string }; desc: { ko: string; en: string } }> = {
+  default: {
+    settings: KR_DEFAULT_PRESET,
+    label: { ko: "기본", en: "Default" },
+    desc: { ko: "가장 무난한 기본값. 대부분의 경우 여기서 시작하면 됩니다.", en: "The safest starting point for most sessions." },
+  },
+  conservative: {
+    settings: KR_CONSERVATIVE_PRESET,
+    label: { ko: "보수", en: "Conservative" },
+    desc: { ko: "대형주 위주, 거래대금 높은 종목만. 변동성을 줄이고 싶을 때.", en: "Large-caps only, higher liquidity floor. Less noise." },
+  },
+  aggressive: {
+    settings: KR_AGGRESSIVE_PRESET,
+    label: { ko: "공격", en: "Aggressive" },
+    desc: { ko: "더 넓은 범위, 더 빠른 종목까지. 변동성 감수할 준비가 됐을 때.", en: "Wider net, faster names. Ready for more volatility." },
+  },
+};
+
 export default function ScanSettings() {
   const {
     lang,
@@ -35,6 +87,7 @@ export default function ScanSettings() {
   const [heldSymbols, setHeldSymbols] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [krSettings, setKrSettings] = useState(KR_DEFAULT_PRESET);
+  const [krPreset, setKrPreset] = useState<KrPresetKey>("default");
 
   const copy =
     lang === "ko"
@@ -54,7 +107,9 @@ export default function ScanSettings() {
           symbolTitle: "이미 가진 종목은 새 후보와 분리해서 봅니다.",
           symbolDesc: "직접 확인할 종목과 기존 보유 종목을 나눠 적으면, 새 진입 후보와 섞이지 않습니다.",
           market: "시장",
+          marketHelp: "시장에 따라 후보 풀과 통화가 달라집니다.",
           horizon: "보유 기간",
+          horizonHelp: "보유 기간에 따라 모멘텀 기준과 결과 해석이 달라집니다.",
           usLiquidity: "유동성 기준",
           maxPrice: "최대 주가",
           maxPriceHelp: "너무 비싸서 관리가 어려운 종목이나 과열 구간을 초반에 걸러냅니다.",
@@ -63,13 +118,16 @@ export default function ScanSettings() {
           symbolInput: "직접 확인할 종목",
           symbolHintKr: "예: 005930.KS, 000660.KS",
           symbolHintUs: "예: NVDA, TSLA, HIMS",
+          symbolHelp: "이미 볼 종목이 정해져 있으면 스크리너보다 우선해서 확인합니다.",
           heldInput: "보유 종목",
           heldHintKr: "예: 005930.KS, 068270.KS",
           heldHintUs: "예: AAPL, AMD",
+          heldHelp: "보유 종목은 새 진입 후보와 분리해서 읽기 위한 입력입니다.",
           advanced: "고급 KR 필터",
           advancedOpen: "고급 필터 열기",
           advancedClose: "고급 필터 닫기",
           advancedDesc: "뉴스 신선도, 당일 거래대금, 대형주 자동 포함 같은 세부 기준을 직접 조절할 수 있습니다.",
+          advancedPresetTitle: "프리셋",
           reset: "기본값 복원",
           run: "후보 스캔 시작",
           running: "스캔 중...",
@@ -77,15 +135,24 @@ export default function ScanSettings() {
           success: (count: number) => `${count}개 후보를 정리했습니다.`,
           error: (msg: string) => `스캔 실패: ${msg}`,
           marketCapMin: "최소 시가총액",
+          marketCapMinHelp: "초저유동성 소형주를 초반에 거르기 위한 기준입니다.",
           todayTurnoverMin: "당일 거래대금 하한",
+          todayTurnoverMinHelp: "오늘 실제로 돈이 붙는 종목만 남기기 위한 기준입니다.",
           relVolMin: "상대 거래량 하한",
+          relVolMinHelp: "평소보다 거래가 붙는지 확인하는 기준입니다.",
           closePosMin: "종가 위치 하한",
+          closePosMinHelp: "종가가 눌려 끝난 종목을 덜 보기 위한 기준입니다.",
           ret5dMin: "5일 수익률 최소 (%)",
           ret5dMax: "5일 수익률 최대 (%)",
+          ret5dHelp: "너무 약하거나 너무 과열된 종목을 같이 걸러냅니다.",
           freshNewsHours: "뉴스 신선도 (시간)",
+          freshNewsHoursHelp: "오래된 재료보다 아직 시장이 반응하는 재료를 우선 보기 위한 기준입니다.",
           marketTurnoverRankMax: "거래대금 순위 상한",
+          marketTurnoverRankMaxHelp: "시장 전체에서 너무 뒤쪽 종목을 덜 보기 위한 기준입니다.",
           largecapMin: "대형주 기준 시가총액",
+          largecapMinHelp: "유동성 좋은 큰 종목을 자동으로 섞기 위한 기준입니다.",
           largecapQuota: "대형주 자동 포함 수",
+          largecapQuotaHelp: "유동성 좋은 큰 종목을 일부 자동으로 섞기 위한 설정입니다.",
           excludeFundlike: "ETF/ETN 제외",
           on: "사용",
           off: "해제",
@@ -112,7 +179,9 @@ export default function ScanSettings() {
           symbolTitle: "Separate held names from new candidates.",
           symbolDesc: "Direct symbols and held positions stay split so the desk can read them differently.",
           market: "Market",
+          marketHelp: "The market changes both the candidate pool and currency.",
           horizon: "Holding window",
+          horizonHelp: "Holding window changes the momentum lens and how results should be read.",
           usLiquidity: "Liquidity bias",
           maxPrice: "Max price",
           maxPriceHelp: "Keeps out names that are too stretched or too expensive to manage well.",
@@ -121,14 +190,17 @@ export default function ScanSettings() {
           symbolInput: "Symbols to inspect",
           symbolHintKr: "ex. 005930.KS, 000660.KS",
           symbolHintUs: "ex. NVDA, TSLA, HIMS",
+          symbolHelp: "If you already know the names, they override the screener.",
           heldInput: "Held symbols",
           heldHintKr: "ex. 005930.KS, 068270.KS",
           heldHintUs: "ex. AAPL, AMD",
+          heldHelp: "Held names are separated so the desk does not treat them like fresh entries.",
           advanced: "Advanced KR filters",
           advancedOpen: "Open advanced filters",
           advancedClose: "Hide advanced filters",
           advancedDesc:
             "Manually tune news freshness, today turnover, and large-cap inclusion when the defaults need help.",
+          advancedPresetTitle: "Presets",
           reset: "Restore defaults",
           run: "Run candidate scan",
           running: "Scanning...",
@@ -136,15 +208,24 @@ export default function ScanSettings() {
           success: (count: number) => `Sorted ${count} candidates.`,
           error: (msg: string) => `Scan failed: ${msg}`,
           marketCapMin: "Min market cap",
+          marketCapMinHelp: "Filters out micro-caps with very thin liquidity.",
           todayTurnoverMin: "Min today turnover",
+          todayTurnoverMinHelp: "Keeps only names where money is actually flowing today.",
           relVolMin: "Min relative volume",
+          relVolMinHelp: "Checks if today's volume is above the recent average.",
           closePosMin: "Min close position",
+          closePosMinHelp: "Avoids names that closed weak near the low of the range.",
           ret5dMin: "Min 5D return (%)",
           ret5dMax: "Max 5D return (%)",
+          ret5dHelp: "Filters out names that are too cold or too overheated.",
           freshNewsHours: "News freshness (hours)",
+          freshNewsHoursHelp: "Prioritizes names with catalysts the market is still reacting to.",
           marketTurnoverRankMax: "Turnover rank cap",
+          marketTurnoverRankMaxHelp: "Cuts names ranked too far back in market-wide turnover.",
           largecapMin: "Large-cap threshold",
+          largecapMinHelp: "Market cap floor for auto-included large-cap names.",
           largecapQuota: "Auto include large-cap",
+          largecapQuotaHelp: "Mixes in a few liquid large-cap names automatically.",
           excludeFundlike: "Exclude ETF/ETN",
           on: "On",
           off: "Off",
@@ -159,20 +240,55 @@ export default function ScanSettings() {
   const profileMeta = SCAN_PROFILES[profile];
   const liquidityMeta = US_LIQUIDITY_PRESETS[liquidity];
 
+  // Dynamic step numbering
+  const steps = useMemo(() => {
+    const list: string[] = [];
+    if (market === "US") list.push("profile");
+    list.push("context", "filter", "symbol");
+    return list;
+  }, [market]);
+
+  const stepNumber = (id: string) => String(steps.indexOf(id) + 1).padStart(2, "0");
+
+  // Human-readable summary badges
   const summaryBadges = useMemo(() => {
-    const marketLabel = market === "KR" ? "KR" : "US";
-    const horizonLabel = `${horizon}${lang === "ko" ? "일" : "D"}`;
+    const marketLabel = lang === "ko" ? `시장 ${market}` : `Market ${market}`;
+    const horizonLabel = lang === "ko" ? `${horizon}일 스윙` : `${horizon}-day swing`;
     const liquidityLabel =
       market === "US"
         ? liquidityMeta.label
-        : `${(krSettings.minTurnover / 100000000).toFixed(0)}${lang === "ko" ? "억+" : "e8+"}`;
-    const priceLabel = `${market === "KR" ? "￦" : "$"}${maxPrice.toLocaleString()}`;
+        : lang === "ko"
+          ? `평균 거래대금 ${(krSettings.minTurnover / 1e8).toFixed(0)}억+`
+          : `Avg turnover ${(krSettings.minTurnover / 1e8).toFixed(0)}e8+`;
+    const priceLabel =
+      lang === "ko"
+        ? `최대주가 ${market === "KR" ? "￦" : "$"}${maxPrice.toLocaleString()}`
+        : `Max ${market === "KR" ? "￦" : "$"}${maxPrice.toLocaleString()}`;
     return [marketLabel, horizonLabel, liquidityLabel, priceLabel];
   }, [horizon, krSettings.minTurnover, lang, liquidityMeta.label, market, maxPrice]);
+
+  // Intent sentence
+  const intentSentence = useMemo(() => {
+    if (lang === "ko") {
+      if (market === "KR") {
+        return `거래대금이 붙고 뉴스가 아직 살아 있는 ${horizon}일 단기 모멘텀 후보를 먼저 찾습니다.`;
+      }
+      return `${profileMeta.title} 기준, ${liquidityMeta.label} 유동성으로 ${horizon}일 신규 진입 후보를 압축합니다.`;
+    }
+    if (market === "KR") {
+      return `Looking for ${horizon}-day momentum candidates with active turnover and fresh catalysts.`;
+    }
+    return `Compressing ${horizon}-day entry candidates using ${profileMeta.title} profile with ${liquidityMeta.label} liquidity.`;
+  }, [horizon, lang, liquidityMeta.label, market, profileMeta.title]);
 
   const handleMarketChange = (nextMarket: "US" | "KR") => {
     setMarket(nextMarket);
     setMaxPrice(nextMarket === "KR" ? 100000 : 80);
+  };
+
+  const applyKrPreset = (key: KrPresetKey) => {
+    setKrPreset(key);
+    setKrSettings(KR_PRESETS[key].settings);
   };
 
   const runScan = async () => {
@@ -253,6 +369,7 @@ export default function ScanSettings() {
                 </Badge>
               ))}
             </div>
+            <p className="text-sm leading-7 text-[var(--fg)]/80">{intentSentence}</p>
             {viewMode === "guide" && (
               <div className="rounded-[24px] border border-[var(--border)] bg-[var(--card2)] px-4 py-4 text-sm leading-7 text-[var(--muted)]">
                 {market === "KR"
@@ -266,7 +383,7 @@ export default function ScanSettings() {
 
       <div className="mt-8 flex flex-col gap-7">
         {market === "US" && (
-          <StepCard step="01" title={copy.profileTitle} desc={copy.profileDesc}>
+          <StepCard step={stepNumber("profile")} title={copy.profileTitle} desc={copy.profileDesc}>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {(Object.entries(SCAN_PROFILES) as [ProfileKey, (typeof SCAN_PROFILES)[ProfileKey]][]).map(
                 ([key, value]) => (
@@ -295,16 +412,12 @@ export default function ScanSettings() {
           </StepCard>
         )}
 
-        <StepCard step="02" title={copy.contextTitle} desc={copy.contextDesc}>
+        <StepCard step={stepNumber("context")} title={copy.contextTitle} desc={copy.contextDesc}>
           <div className="grid gap-5 md:grid-cols-2">
             <Select
               label={copy.market}
               value={market}
-              help={
-                lang === "ko"
-                  ? "시장에 따라 후보 풀과 통화가 달라집니다."
-                  : "The market changes both the candidate pool and currency."
-              }
+              help={copy.marketHelp}
               onChange={(e) => handleMarketChange(e.target.value as "US" | "KR")}
             >
               <option value="US">US</option>
@@ -313,11 +426,7 @@ export default function ScanSettings() {
             <Select
               label={copy.horizon}
               value={String(horizon)}
-              help={
-                lang === "ko"
-                  ? "보유 기간에 따라 모멘텀 기준과 결과 해석이 달라집니다."
-                  : "Holding window changes the momentum lens and how results should be read."
-              }
+              help={copy.horizonHelp}
               onChange={(e) => setHorizon(Number(e.target.value) as 5 | 20)}
             >
               <option value="5">{lang === "ko" ? "5일 스윙" : "5-day swing"}</option>
@@ -326,7 +435,7 @@ export default function ScanSettings() {
           </div>
         </StepCard>
 
-        <StepCard step="03" title={copy.filterTitle} desc={copy.filterDesc}>
+        <StepCard step={stepNumber("filter")} title={copy.filterTitle} desc={copy.filterDesc}>
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {market === "US" && (
               <Select
@@ -381,117 +490,156 @@ export default function ScanSettings() {
               </div>
 
               {advancedOpen && (
-                <div className="mt-5 grid animate-fade-in gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  <Input
-                    label={copy.marketCapMin}
-                    type="number"
-                    value={krSettings.marketCapMin}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({ ...prev, marketCapMin: Number(e.target.value) }))
-                    }
-                  />
-                  <Input
-                    label={copy.todayTurnoverMin}
-                    type="number"
-                    value={krSettings.todayTurnoverMin}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({
-                        ...prev,
-                        todayTurnoverMin: Number(e.target.value),
-                      }))
-                    }
-                  />
-                  <Input
-                    label={copy.relVolMin}
-                    type="number"
-                    step="0.1"
-                    value={krSettings.relVolMin}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({ ...prev, relVolMin: Number(e.target.value) }))
-                    }
-                  />
-                  <Input
-                    label={copy.closePosMin}
-                    type="number"
-                    step="0.05"
-                    value={krSettings.closePosMin}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({ ...prev, closePosMin: Number(e.target.value) }))
-                    }
-                  />
-                  <Input
-                    label={copy.ret5dMin}
-                    type="number"
-                    step="0.5"
-                    value={krSettings.ret5dMin}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({ ...prev, ret5dMin: Number(e.target.value) }))
-                    }
-                  />
-                  <Input
-                    label={copy.ret5dMax}
-                    type="number"
-                    step="0.5"
-                    value={krSettings.ret5dMax}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({ ...prev, ret5dMax: Number(e.target.value) }))
-                    }
-                  />
-                  <Input
-                    label={copy.freshNewsHours}
-                    type="number"
-                    value={krSettings.freshNewsHours}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({
-                        ...prev,
-                        freshNewsHours: Number(e.target.value),
-                      }))
-                    }
-                  />
-                  <Input
-                    label={copy.marketTurnoverRankMax}
-                    type="number"
-                    value={krSettings.marketTurnoverRankMax}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({
-                        ...prev,
-                        marketTurnoverRankMax: Number(e.target.value),
-                      }))
-                    }
-                  />
-                  <Input
-                    label={copy.largecapMin}
-                    type="number"
-                    value={krSettings.largecapMin}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({ ...prev, largecapMin: Number(e.target.value) }))
-                    }
-                  />
-                  <Input
-                    label={copy.largecapQuota}
-                    type="number"
-                    value={krSettings.largecapQuota}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({ ...prev, largecapQuota: Number(e.target.value) }))
-                    }
-                  />
-                  <Select
-                    label={copy.excludeFundlike}
-                    value={String(krSettings.krExcludeFundlike)}
-                    onChange={(e) =>
-                      setKrSettings((prev) => ({
-                        ...prev,
-                        krExcludeFundlike: e.target.value === "true",
-                      }))
-                    }
-                  >
-                    <option value="true">{copy.on}</option>
-                    <option value="false">{copy.off}</option>
-                  </Select>
-                  <div className="flex items-end">
-                    <Button variant="secondary" onClick={() => setKrSettings(KR_DEFAULT_PRESET)}>
-                      {copy.reset}
-                    </Button>
+                <div className="mt-5 animate-fade-in space-y-5">
+                  <div className="space-y-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      {copy.advancedPresetTitle}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(Object.entries(KR_PRESETS) as [KrPresetKey, (typeof KR_PRESETS)[KrPresetKey]][]).map(
+                        ([key, meta]) => (
+                          <button
+                            key={key}
+                            onClick={() => applyKrPreset(key)}
+                            className={clsx(
+                              "rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-200",
+                              krPreset === key
+                                ? "border-[var(--text)] bg-[var(--card)] text-[var(--text)] shadow-[var(--shadow-sm)]"
+                                : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--card)]"
+                            )}
+                          >
+                            {meta.label[lang]}
+                          </button>
+                        )
+                      )}
+                    </div>
+                    <p className="text-sm leading-7 text-[var(--muted)]">
+                      {KR_PRESETS[krPreset].desc[lang]}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <Input
+                      label={copy.marketCapMin}
+                      type="number"
+                      value={krSettings.marketCapMin}
+                      help={copy.marketCapMinHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({ ...prev, marketCapMin: Number(e.target.value) }))
+                      }
+                    />
+                    <Input
+                      label={copy.todayTurnoverMin}
+                      type="number"
+                      value={krSettings.todayTurnoverMin}
+                      help={copy.todayTurnoverMinHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({
+                          ...prev,
+                          todayTurnoverMin: Number(e.target.value),
+                        }))
+                      }
+                    />
+                    <Input
+                      label={copy.relVolMin}
+                      type="number"
+                      step="0.1"
+                      value={krSettings.relVolMin}
+                      help={copy.relVolMinHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({ ...prev, relVolMin: Number(e.target.value) }))
+                      }
+                    />
+                    <Input
+                      label={copy.closePosMin}
+                      type="number"
+                      step="0.05"
+                      value={krSettings.closePosMin}
+                      help={copy.closePosMinHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({ ...prev, closePosMin: Number(e.target.value) }))
+                      }
+                    />
+                    <Input
+                      label={copy.ret5dMin}
+                      type="number"
+                      step="0.5"
+                      value={krSettings.ret5dMin}
+                      help={copy.ret5dHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({ ...prev, ret5dMin: Number(e.target.value) }))
+                      }
+                    />
+                    <Input
+                      label={copy.ret5dMax}
+                      type="number"
+                      step="0.5"
+                      value={krSettings.ret5dMax}
+                      help={copy.ret5dHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({ ...prev, ret5dMax: Number(e.target.value) }))
+                      }
+                    />
+                    <Input
+                      label={copy.freshNewsHours}
+                      type="number"
+                      value={krSettings.freshNewsHours}
+                      help={copy.freshNewsHoursHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({
+                          ...prev,
+                          freshNewsHours: Number(e.target.value),
+                        }))
+                      }
+                    />
+                    <Input
+                      label={copy.marketTurnoverRankMax}
+                      type="number"
+                      value={krSettings.marketTurnoverRankMax}
+                      help={copy.marketTurnoverRankMaxHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({
+                          ...prev,
+                          marketTurnoverRankMax: Number(e.target.value),
+                        }))
+                      }
+                    />
+                    <Input
+                      label={copy.largecapMin}
+                      type="number"
+                      value={krSettings.largecapMin}
+                      help={copy.largecapMinHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({ ...prev, largecapMin: Number(e.target.value) }))
+                      }
+                    />
+                    <Input
+                      label={copy.largecapQuota}
+                      type="number"
+                      value={krSettings.largecapQuota}
+                      help={copy.largecapQuotaHelp}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({ ...prev, largecapQuota: Number(e.target.value) }))
+                      }
+                    />
+                    <Select
+                      label={copy.excludeFundlike}
+                      value={String(krSettings.krExcludeFundlike)}
+                      onChange={(e) =>
+                        setKrSettings((prev) => ({
+                          ...prev,
+                          krExcludeFundlike: e.target.value === "true",
+                        }))
+                      }
+                    >
+                      <option value="true">{copy.on}</option>
+                      <option value="false">{copy.off}</option>
+                    </Select>
+                    <div className="flex items-end">
+                      <Button variant="secondary" onClick={() => applyKrPreset("default")}>
+                        {copy.reset}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -499,27 +647,19 @@ export default function ScanSettings() {
           )}
         </StepCard>
 
-        <StepCard step="04" title={copy.symbolTitle} desc={copy.symbolDesc}>
+        <StepCard step={stepNumber("symbol")} title={copy.symbolTitle} desc={copy.symbolDesc}>
           <div className="grid gap-5 md:grid-cols-2">
             <Input
               label={copy.symbolInput}
               placeholder={market === "KR" ? copy.symbolHintKr : copy.symbolHintUs}
-              help={
-                lang === "ko"
-                  ? "이미 볼 종목이 정해져 있으면 스크리너보다 우선해서 확인합니다."
-                  : "If you already know the names, they override the screener."
-              }
+              help={copy.symbolHelp}
               value={symbols}
               onChange={(e) => setSymbols(e.target.value)}
             />
             <Input
               label={copy.heldInput}
               placeholder={market === "KR" ? copy.heldHintKr : copy.heldHintUs}
-              help={
-                lang === "ko"
-                  ? "보유 종목은 새 진입 후보와 분리해서 읽기 위한 입력입니다."
-                  : "Held names are separated so the desk does not treat them like fresh entries."
-              }
+              help={copy.heldHelp}
               value={heldSymbols}
               onChange={(e) => setHeldSymbols(e.target.value)}
             />

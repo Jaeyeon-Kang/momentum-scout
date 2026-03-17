@@ -5,9 +5,17 @@ import { clsx } from "clsx";
 import { toast } from "sonner";
 import { fetchPromptMulti, fetchTicker, type Candidate, type TickerDetail } from "@/lib/api";
 import {
+  buildCandidateInterpretation,
   buildCandidateReasonBullets,
+  formatRelativeTime,
   getDecisionActionSummary,
+  getEntryStatusActionHint,
+  translateDetailKey,
+  translateEntryStatus,
+  translateMacroKey,
   translateReasonText,
+  translateRecommendedAction,
+  translateRegime,
 } from "@/lib/decision";
 import { fmt, fmtCompact, fmtPct, fmtPrice, fmtTurnover } from "@/lib/format";
 import { useApp } from "@/lib/store";
@@ -15,29 +23,6 @@ import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import Card from "./ui/Card";
 import Modal, { ModalBody, ModalHeader } from "./ui/Modal";
-
-const REGIME_LABELS_KO: Record<string, string> = {
-  MIXED: "혼조",
-  RISK_ON: "리스크 온",
-  RISK_OFF: "리스크 오프",
-  NEUTRAL: "중립",
-};
-
-function translateRegime(value?: string, lang?: "ko" | "en") {
-  if (!value) return "-";
-  return lang === "ko" ? (REGIME_LABELS_KO[value] ?? value) : value.replaceAll("_", " ");
-}
-
-function translateEntryStatus(status: string, lang: "ko" | "en") {
-  if (lang !== "ko") {
-    if (status === "APPROVED_NEW") return "Approved";
-    if (status === "AVOID") return "Avoid";
-    return "Watch";
-  }
-  if (status === "APPROVED_NEW") return "승인 후보";
-  if (status === "AVOID") return "제외";
-  return "관찰";
-}
 
 export default function ScanResults() {
   const { lang, market, horizon, scanResult, selected, toggleSelected, selectAll, clearSelection } =
@@ -50,6 +35,7 @@ export default function ScanResults() {
   } | null>(null);
   const [promptPreview, setPromptPreview] = useState<string | null>(null);
   const [promptLoading, setPromptLoading] = useState(false);
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
 
   const copy =
     lang === "ko"
@@ -87,11 +73,15 @@ export default function ScanResults() {
           relVol: "상대 거래량",
           score: "점수",
           whyShown: "왜 뜨는지",
+          actionNow: "지금 할 일",
+          detailSummary: "한눈에 보기",
           detailPlan: "매매 계획",
           detailLevels: "가격 레벨",
           detailStats: "통계",
           detailNews: "최근 뉴스",
           detailRaw: "검증용 원본 데이터",
+          detailRawExpand: "원본 데이터 펼치기",
+          detailRawCollapse: "원본 데이터 접기",
           entryTrigger: "진입 트리거",
           stop: "손절",
           target: "목표",
@@ -129,11 +119,15 @@ export default function ScanResults() {
           relVol: "Rel vol",
           score: "Score",
           whyShown: "Why it surfaced",
+          actionNow: "Action now",
+          detailSummary: "At a glance",
           detailPlan: "Trade plan",
           detailLevels: "Levels",
           detailStats: "Statistics",
           detailNews: "Recent news",
           detailRaw: "Raw verification data",
+          detailRawExpand: "Expand raw data",
+          detailRawCollapse: "Collapse raw data",
           entryTrigger: "Entry trigger",
           stop: "Stop",
           target: "Target",
@@ -174,6 +168,10 @@ export default function ScanResults() {
         max_items: String(Math.min(selected.size, 5)),
       });
       setPromptPreview(String(text));
+      // Open modal on narrow screens
+      if (window.innerWidth < 1280) {
+        setPromptModalOpen(true);
+      }
     } catch {
       toast.error(copy.promptError);
     } finally {
@@ -217,8 +215,20 @@ export default function ScanResults() {
     .slice(0, 4);
   const actionSummary = getDecisionActionSummary(decision.recommended_action, lang);
 
+  // Translate macro_snapshot keys, hide unknowns
+  const macroEntries = decision.macro_snapshot
+    ? Object.entries(decision.macro_snapshot)
+        .map(([key, value]) => {
+          const label = translateMacroKey(key, lang);
+          if (!label) return null;
+          return { key, label, value };
+        })
+        .filter(Boolean)
+        .slice(0, 5) as { key: string; label: string; value: number }[]
+    : [];
+
   return (
-    <div className="grid max-w-[1320px] animate-fade-in items-start gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid max-w-[1280px] animate-fade-in items-start gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0 space-y-7">
         <Card
           className={clsx(
@@ -261,7 +271,7 @@ export default function ScanResults() {
 
             <div className="rounded-[22px] border border-[var(--border)] bg-[var(--card2)] p-4">
               <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
-                {decision.recommended_action}
+                {translateRecommendedAction(decision.recommended_action, lang)}
               </div>
               <div className="mt-2 text-sm leading-7 text-[var(--muted)]">
                 {lang === "ko"
@@ -271,11 +281,11 @@ export default function ScanResults() {
             </div>
           </div>
 
-          {decision.macro_snapshot && (
+          {macroEntries.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {Object.entries(decision.macro_snapshot).map(([key, value]) => (
+              {macroEntries.map(({ key, label, value }) => (
                 <Badge key={key} variant="muted">
-                  {key}: {typeof value === "number" ? value.toFixed(2) : String(value)}
+                  {label}: {typeof value === "number" ? value.toFixed(2) : String(value)}
                 </Badge>
               ))}
             </div>
@@ -354,6 +364,7 @@ export default function ScanResults() {
         <p className="pb-10 text-center text-sm leading-7 text-[var(--muted)]">{copy.disclaimer}</p>
       </div>
 
+      {/* Desktop sidebar for prompt preview */}
       <aside className="hidden xl:block">
         <div className="sticky top-28">
           <Card className="p-6">
@@ -399,6 +410,28 @@ export default function ScanResults() {
         </div>
       </aside>
 
+      {/* Mobile prompt preview modal */}
+      <Modal open={promptModalOpen && !!promptPreview} onClose={() => setPromptModalOpen(false)}>
+        <ModalHeader onClose={() => setPromptModalOpen(false)}>
+          <h2 className="text-lg font-semibold">{copy.prompt}</h2>
+        </ModalHeader>
+        <ModalBody>
+          {promptPreview && (
+            <div className="space-y-4">
+              <textarea
+                readOnly
+                value={promptPreview}
+                className="h-[400px] w-full resize-none rounded-[20px] border border-[var(--border)] bg-[var(--card2)] p-4 font-mono text-sm leading-7 text-[var(--text)] outline-none"
+              />
+              <Button className="w-full justify-center" size="sm" variant="primary" onClick={copyPrompt}>
+                {copy.promptCopy}
+              </Button>
+            </div>
+          )}
+        </ModalBody>
+      </Modal>
+
+      {/* Detail modal */}
       <Modal open={!!detailModal} onClose={() => setDetailModal(null)}>
         {detailModal && (
           <>
@@ -425,7 +458,13 @@ export default function ScanResults() {
                   ))}
                 </div>
               ) : detailModal.data ? (
-                <DetailContent data={detailModal.data} market={market} labels={copy} />
+                <DetailContent
+                  data={detailModal.data}
+                  candidate={scanResult?.candidates.find((c) => c.symbol === detailModal.symbol)}
+                  market={market}
+                  lang={lang}
+                  labels={copy}
+                />
               ) : null}
             </ModalBody>
           </>
@@ -486,6 +525,8 @@ function CandidateCard({
         ? "danger"
         : "accent";
   const reasonBullets = buildCandidateReasonBullets(candidate, lang).slice(0, 3);
+  const actionHint = getEntryStatusActionHint(candidate.entry_status, lang);
+  const interpretation = buildCandidateInterpretation(candidate, lang);
 
   return (
     <button
@@ -521,6 +562,19 @@ function CandidateCard({
             <p className="mt-2 truncate text-sm text-[var(--muted)]">{candidate.name}</p>
           </div>
 
+          {/* Action hint */}
+          <div className={clsx(
+            "rounded-[18px] px-4 py-2.5 text-sm leading-7",
+            isApproved
+              ? "bg-[var(--good-dim)] text-[var(--good)]"
+              : candidate.entry_status === "AVOID"
+                ? "bg-[var(--danger-dim)] text-[var(--danger)]"
+                : "bg-[var(--card2)] text-[var(--fg)]/80"
+          )}>
+            <span className="font-semibold">{labels.actionNow}: </span>
+            {actionHint}
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <Badge variant="muted">
               {labels.turnover} {fmtTurnover(candidate.day_turnover, currency)}
@@ -542,6 +596,7 @@ function CandidateCard({
             ))}
           </div>
 
+          {/* entry_reason as tags (판정 태그) */}
           {candidate.entry_reason?.length ? (
             <div className="flex flex-wrap gap-2">
               {candidate.entry_reason.slice(0, 3).map((reason) => (
@@ -555,19 +610,25 @@ function CandidateCard({
             </div>
           ) : null}
 
-          <div className="rounded-[22px] border border-[var(--border)] bg-[var(--card2)] p-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
-              {labels.whyShown}
+          {/* whyShown bullets (평문 설명) — only if not redundant with entry_reason */}
+          {reasonBullets.length > 0 && (
+            <div className="rounded-[22px] border border-[var(--border)] bg-[var(--card2)] p-4">
+              <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
+                {labels.whyShown}
+              </div>
+              <ul className="mt-3 space-y-2 text-sm leading-7 text-[var(--fg)]/88">
+                {reasonBullets.map((reason) => (
+                  <li key={reason} className="flex gap-2">
+                    <span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ul className="mt-3 space-y-2 text-sm leading-7 text-[var(--fg)]/88">
-              {reasonBullets.map((reason) => (
-                <li key={reason} className="flex gap-2">
-                  <span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
-                  <span>{reason}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          )}
+
+          {/* Short interpretation */}
+          <p className="text-sm leading-7 text-[var(--muted)]">{interpretation}</p>
         </div>
 
         <div className="grid shrink-0 grid-cols-2 gap-4 sm:grid-cols-4 xl:min-w-[340px]">
@@ -636,21 +697,57 @@ function PctBadge({ value }: { value: number }) {
 
 function DetailContent({
   data,
+  candidate,
   market,
+  lang,
   labels,
 }: {
   data: TickerDetail;
+  candidate?: Candidate;
   market: string;
+  lang: "ko" | "en";
   labels: Record<string, string>;
 }) {
+  const [rawOpen, setRawOpen] = useState(false);
   const currency = market === "KR" ? "KRW" : "USD";
   const plan = data.trade_plan_like as Record<string, unknown> | undefined;
   const levels = data.levels as Record<string, unknown> | undefined;
   const stats = data.stats as Record<string, unknown> | undefined;
   const news = data.news as Array<{ title: string; published: string; link: string }> | undefined;
 
+  const statusLabel = candidate ? translateEntryStatus(candidate.entry_status, lang) : null;
+  const actionHint = candidate ? getEntryStatusActionHint(candidate.entry_status, lang) : null;
+  const reasonBullets = candidate ? buildCandidateReasonBullets(candidate, lang).slice(0, 3) : [];
+  const statusTone = candidate?.entry_status === "APPROVED_NEW" ? "good" : candidate?.entry_status === "AVOID" ? "danger" : "accent";
+
   return (
     <div className="space-y-8 text-base">
+      {/* Summary card at top */}
+      {candidate && (
+        <div className={clsx(
+          "rounded-[22px] border p-5 space-y-3",
+          statusTone === "good" ? "border-[var(--good)]/20 bg-[var(--good-dim)]" :
+          statusTone === "danger" ? "border-[var(--danger)]/20 bg-[var(--danger-dim)]" :
+          "border-[var(--border)] bg-[var(--card2)]"
+        )}>
+          <div className="flex items-center gap-3">
+            <Badge variant={statusTone}>{statusLabel}</Badge>
+            <span className="text-sm font-semibold">{labels.detailSummary}</span>
+          </div>
+          {actionHint && <p className="text-sm leading-7">{actionHint}</p>}
+          {reasonBullets.length > 0 && (
+            <ul className="space-y-1 text-sm leading-7 text-[var(--muted)]">
+              {reasonBullets.map((reason) => (
+                <li key={reason} className="flex gap-2">
+                  <span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
+                  <span>{reason}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {plan && (
         <DetailSection title={labels.detailPlan}>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -673,7 +770,7 @@ function DetailContent({
               .map(([key, value]) => (
                 <DetailRow
                   key={key}
-                  label={key}
+                  label={translateDetailKey(key, lang)}
                   value={typeof value === "number" ? fmtPrice(value, currency) : String(value ?? "-")}
                 />
               ))}
@@ -689,7 +786,7 @@ function DetailContent({
               .map(([key, value]) => (
                 <DetailRow
                   key={key}
-                  label={key}
+                  label={translateDetailKey(key, lang)}
                   value={typeof value === "number" ? fmt(value) : String(value ?? "-")}
                 />
               ))}
@@ -706,18 +803,30 @@ function DetailContent({
                 className="rounded-[20px] border border-[var(--border)] bg-[var(--card2)] px-4 py-4"
               >
                 <p className="text-sm font-medium leading-7">{item.title}</p>
-                <p className="mt-1 text-xs text-[var(--muted)]">{item.published}</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {formatRelativeTime(item.published, lang)}
+                </p>
               </div>
             ))}
           </div>
         </DetailSection>
       )}
 
-      <DetailSection title={labels.detailRaw}>
-        <pre className="overflow-x-auto rounded-[20px] border border-[var(--border)] bg-[var(--card2)] p-4 text-xs leading-6 text-[var(--muted)]">
-          {JSON.stringify(data, null, 2)}
-        </pre>
-      </DetailSection>
+      {/* Collapsible raw JSON */}
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setRawOpen((prev) => !prev)}
+          className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+        >
+          {rawOpen ? labels.detailRawCollapse : labels.detailRawExpand}
+        </button>
+        {rawOpen && (
+          <pre className="animate-fade-in overflow-x-auto rounded-[20px] border border-[var(--border)] bg-[var(--card2)] p-4 text-xs leading-6 text-[var(--muted)]">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        )}
+      </div>
     </div>
   );
 }

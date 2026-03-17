@@ -135,7 +135,7 @@ export default function Home() {
       <div className="min-h-screen flex flex-col">
         <Header />
         <main className="min-w-0 flex flex-1 justify-center px-4 sm:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 lg:py-10">
-          <div className="w-full max-w-[1180px] mx-auto space-y-8 sm:space-y-10">
+          <div className="w-full max-w-[1280px] mx-auto space-y-8 sm:space-y-10">
             {mode === "scout" && scoutPanel === "scan" && <ScanSettings />}
             {mode === "scout" && scoutPanel === "results" && <ScanResults />}
             {mode === "intraday" && <IntradayDesk />}

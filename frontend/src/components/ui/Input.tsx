@@ -4,10 +4,11 @@ import { clsx } from "clsx";
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   help?: string;
+  warn?: string;
   suffix?: string;
 }
 
-export default function Input({ label, help, suffix, className, ...props }: InputProps) {
+export default function Input({ label, help, warn, suffix, className, ...props }: InputProps) {
   return (
     <label className="flex flex-col gap-2">
       {label && (
@@ -34,7 +35,8 @@ export default function Input({ label, help, suffix, className, ...props }: Inpu
           </span>
         )}
       </div>
-      {help && <span className="text-xs text-[var(--muted)] leading-relaxed">{help}</span>}
+      {warn && <span className="text-xs text-[var(--danger)] leading-relaxed">{warn}</span>}
+      {!warn && help && <span className="text-xs text-[var(--muted)] leading-relaxed">{help}</span>}
     </label>
   );
 }

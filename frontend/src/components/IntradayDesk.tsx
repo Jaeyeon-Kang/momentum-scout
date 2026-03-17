@@ -13,10 +13,13 @@ import {
 import {
   calcRiskReward,
   formatUpdatedAt,
+  getIntradayCardInterpretation,
   getIntradayModeHint,
+  getIntradayRules,
   getStateActionHint,
   sortIntradayRows,
   translateReasonText,
+  translateRegime,
 } from "@/lib/decision";
 import { fmtCompact, fmtPrice } from "@/lib/format";
 import { useApp } from "@/lib/store";
@@ -25,13 +28,6 @@ import Button from "./ui/Button";
 import Card from "./ui/Card";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
-
-const REGIME_LABELS_KO: Record<string, string> = {
-  MIXED: "혼조",
-  RISK_ON: "리스크 온",
-  RISK_OFF: "리스크 오프",
-  NEUTRAL: "중립",
-};
 
 const STATE_LABELS_KO: Record<string, string> = {
   PREPARE: "준비",
@@ -48,11 +44,6 @@ const SETUP_LABELS_KO: Record<string, string> = {
   pullback: "눌림목",
   reversal: "반전 시도",
 };
-
-function translateRegime(value?: string, lang?: "ko" | "en") {
-  if (!value) return "-";
-  return lang === "ko" ? (REGIME_LABELS_KO[value] ?? value) : value.replaceAll("_", " ");
-}
 
 function translateState(value: string, lang: "ko" | "en") {
   return lang === "ko" ? (STATE_LABELS_KO[value] ?? value) : value.replaceAll("_", " ");
@@ -80,6 +71,17 @@ export default function IntradayDesk() {
     [equity, riskBudget]
   );
 
+  // Input validation
+  const cashWarn = cash < 0 ? (lang === "ko" ? "현금은 0 이상이어야 합니다" : "Cash must be >= 0") : undefined;
+  const equityWarn = equity < 0 ? (lang === "ko" ? "자산은 0 이상이어야 합니다" : "Equity must be >= 0") : undefined;
+  const riskWarn =
+    riskBudget < 0
+      ? (lang === "ko" ? "손실 한도는 0 이상이어야 합니다" : "Loss cap must be >= 0")
+      : riskBudget > 10
+        ? (lang === "ko" ? "10%를 넘으면 위험합니다. 정말 이 값이 맞는지 확인하세요" : "Above 10% is risky. Double-check this value")
+        : undefined;
+  const inputsValid = cash >= 0 && equity >= 0 && riskBudget >= 0 && riskBudget <= 100;
+
   const copy =
     lang === "ko"
       ? {
@@ -97,12 +99,11 @@ export default function IntradayDesk() {
           marketDecision: "오늘의 운영 모드",
           entryAllowed: "진입 열림",
           entryBlocked: "보수 운영",
-          nextActionAllowed: "오늘은 신규 진입을 열어도 됩니다. 단, 진입 신호가 나온 후보만 보세요.",
-          nextActionBlocked: "오늘은 보수 운영이 기본입니다. 추격보다 관찰과 기록이 우선입니다.",
           whyInputsMatterTitle: "왜 이 값을 묻나",
           whyInputsMatterText:
             "이 값들은 보기 좋으라고 받는 게 아니라, 추천별 포지션 규모와 허용 손실을 계산하려고 필요합니다.",
           riskBudgetAmountLabel: "오늘 허용 손실",
+          rulesTitle: "오늘 기본 규칙",
           stateLegendTitle: "상태 해석",
           priority: "지금 볼 후보",
           watch: "관찰 또는 제외",
@@ -114,9 +115,11 @@ export default function IntradayDesk() {
           size: "권장 규모",
           actionHint: "지금 행동",
           reasons: "왜 이 후보인가",
+          interpretation: "해석",
           disclaimer:
             "공개 데이터 기준 참고 화면입니다. 실제 체결 전에는 호가와 스프레드를 한 번 더 확인하세요.",
           loadError: "인트라데이 데이터를 불러오지 못했습니다.",
+          heroTag: "의사결정 데스크",
         }
       : {
           title: "Intraday Desk",
@@ -133,12 +136,11 @@ export default function IntradayDesk() {
           marketDecision: "Today's operating mode",
           entryAllowed: "Entry open",
           entryBlocked: "Defensive mode",
-          nextActionAllowed: "New entries are allowed today, but only for candidates with valid trigger states.",
-          nextActionBlocked: "Stay defensive today. Observation and notes matter more than forcing a trade.",
           whyInputsMatterTitle: "Why ask for this",
           whyInputsMatterText:
             "These values are used to size positions and calculate allowed loss, not to decorate the form.",
           riskBudgetAmountLabel: "Today's allowed loss",
+          rulesTitle: "Today's ground rules",
           stateLegendTitle: "State legend",
           priority: "Priority candidates",
           watch: "Watch or avoid",
@@ -150,12 +152,15 @@ export default function IntradayDesk() {
           size: "Suggested size",
           actionHint: "Action",
           reasons: "Why it is on the desk",
+          interpretation: "Read",
           disclaimer:
             "Reference view based on public data. Check live spreads and tape before you touch an order.",
           loadError: "Failed to load intraday data.",
+          heroTag: "Decision Desk",
         };
 
   const loadIdeas = async () => {
+    if (!inputsValid) return;
     setLoading(true);
     try {
       const [nextMeta, nextRadar] = await Promise.all([
@@ -194,6 +199,10 @@ export default function IntradayDesk() {
     () => rows.filter((row) => !["TRIGGERED", "CONFIRM", "PREPARE"].includes(row.state)),
     [rows]
   );
+  const rules = useMemo(
+    () => getIntradayRules(marketDecision?.new_entries_allowed ?? false, lang),
+    [marketDecision?.new_entries_allowed, lang]
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1180px] animate-fade-in">
@@ -201,7 +210,7 @@ export default function IntradayDesk() {
         <Card className="p-8 sm:p-10">
           <div className="max-w-[860px] space-y-4">
             <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-              Decision Desk
+              {copy.heroTag}
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-bold tracking-tight sm:text-[2.2rem]">{copy.title}</h2>
@@ -252,6 +261,23 @@ export default function IntradayDesk() {
           </Card>
         )}
 
+        {/* Rules strip */}
+        {marketDecision && (
+          <div className="flex flex-wrap gap-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)] self-center">
+              {copy.rulesTitle}
+            </div>
+            {rules.map((rule) => (
+              <span
+                key={rule}
+                className="rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1.5 text-xs text-[var(--muted)]"
+              >
+                {rule}
+              </span>
+            ))}
+          </div>
+        )}
+
         <Card className="space-y-5 p-7">
           <div className="space-y-2">
             <div className="text-sm font-semibold">{copy.whyInputsMatterTitle}</div>
@@ -292,6 +318,7 @@ export default function IntradayDesk() {
               type="number"
               value={cash}
               help={copy.cashHelp}
+              warn={cashWarn}
               onChange={(e) => setCash(Number(e.target.value))}
             />
             <Input
@@ -299,6 +326,7 @@ export default function IntradayDesk() {
               type="number"
               value={equity}
               help={copy.equityHelp}
+              warn={equityWarn}
               onChange={(e) => setEquity(Number(e.target.value))}
             />
             <Input
@@ -306,7 +334,8 @@ export default function IntradayDesk() {
               type="number"
               step="0.1"
               value={riskBudget}
-              help={`${copy.riskHelp} ${copy.riskBudgetAmountLabel}: ${fmtPrice(riskBudgetAmount, currency)}`}
+              help={copy.riskHelp}
+              warn={riskWarn}
               onChange={(e) => setRiskBudget(Number(e.target.value))}
               suffix="%"
             />
@@ -316,6 +345,7 @@ export default function IntradayDesk() {
               variant="primary"
               className="w-full max-w-[320px] justify-center"
               loading={loading}
+              disabled={!inputsValid}
               onClick={loadIdeas}
             >
               {copy.refresh}
@@ -384,7 +414,7 @@ export default function IntradayDesk() {
             {priorityRows.length > 0 && (
               <DeskSection title={copy.priority} count={priorityRows.length}>
                 {priorityRows.map((row) => (
-                  <IntradayIdeaCard key={row.symbol} row={row} market={market} lang={lang} labels={copy} />
+                  <IntradayIdeaCard key={row.symbol} row={row} market={market} equity={equity} lang={lang} labels={copy} />
                 ))}
               </DeskSection>
             )}
@@ -396,6 +426,7 @@ export default function IntradayDesk() {
                     key={row.symbol}
                     row={row}
                     market={market}
+                    equity={equity}
                     lang={lang}
                     labels={copy}
                     muted
@@ -479,12 +510,14 @@ function LegendCard({
 function IntradayIdeaCard({
   row,
   market,
+  equity,
   labels,
   lang,
   muted,
 }: {
   row: IntradayRadarRow;
   market: string;
+  equity: number;
   labels: Record<string, string>;
   lang: "ko" | "en";
   muted?: boolean;
@@ -499,21 +532,54 @@ function IntradayIdeaCard({
     .slice(0, 3);
   const riskReward = calcRiskReward(row);
   const updateLabel = formatUpdatedAt(row.last_updated_at, lang);
+  const interpretation = getIntradayCardInterpretation(row, lang);
+
+  // Size with % of equity
+  const sizeLabel = useMemo(() => {
+    if (typeof row.position_notional !== "number" || row.position_notional <= 0) return null;
+    const pct = equity > 0 ? ((row.position_notional / equity) * 100).toFixed(1) : null;
+    const amount = fmtCompact(row.position_notional);
+    if (pct) {
+      return lang === "ko"
+        ? `${amount} · 자산의 ${pct}%`
+        : `${amount} · ${pct}% of equity`;
+    }
+    return amount;
+  }, [row.position_notional, equity, lang]);
+
+  const isWarning = row.state === "EXPIRED" || row.state === "BLOCKED";
 
   return (
     <Card className={clsx("p-6 sm:p-7", muted ? "" : "border-[var(--accent)]/18")}>
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-xl font-semibold tracking-tight">{row.symbol}</span>
-            <Badge variant={badgeVariant}>{translateState(row.state, lang)}</Badge>
-            {row.setup_type && <Badge variant="muted">{translateSetup(row.setup_type, lang)}</Badge>}
-            <Badge variant="muted">{getStateActionHint(row.state, lang)}</Badge>
+        <div className="min-w-0 flex-1 space-y-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-xl font-semibold tracking-tight">{row.symbol}</span>
+              <Badge variant={badgeVariant}>{translateState(row.state, lang)}</Badge>
+              {row.setup_type && <Badge variant="muted">{translateSetup(row.setup_type, lang)}</Badge>}
+              <Badge variant="muted">{getStateActionHint(row.state, lang)}</Badge>
+            </div>
+            <p className="mt-2 text-sm text-[var(--muted)]">{row.name}</p>
           </div>
-          <p className="mt-2 text-sm text-[var(--muted)]">{row.name}</p>
+
+          {/* Warning for EXPIRED / BLOCKED */}
+          {isWarning && (
+            <div className="rounded-[18px] bg-[var(--danger-dim)] px-4 py-2.5 text-sm leading-7 text-[var(--danger)]">
+              {interpretation}
+            </div>
+          )}
+
+          {/* Interpretation for non-warning */}
+          {!isWarning && interpretation && (
+            <p className="text-sm leading-7 text-[var(--fg)]/80">
+              <span className="font-semibold text-[var(--muted)]">{labels.interpretation}: </span>
+              {interpretation}
+            </p>
+          )}
 
           {translatedReasons?.length ? (
-            <div className="mt-4 space-y-2">
+            <div className="space-y-2">
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                 {labels.reasons}
               </div>
@@ -530,10 +596,10 @@ function IntradayIdeaCard({
             </div>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {typeof row.position_notional === "number" && row.position_notional > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {sizeLabel && (
               <Badge variant="muted">
-                {labels.size} {fmtCompact(row.position_notional)}
+                {labels.size} {sizeLabel}
               </Badge>
             )}
             {typeof row.allowed_chase_pct === "number" && row.allowed_chase_pct >= 0 && (
