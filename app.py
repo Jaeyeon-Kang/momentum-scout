@@ -2686,9 +2686,25 @@ async def candidates(
         cands.append(r)
 
     if market_u == "KR":
-        base_pool = cands if explicit else [c for c in cands if not c.rejection_flags]
-        if not base_pool:
+        if explicit:
             base_pool = list(cands)
+        else:
+            clean_pool = [c for c in cands if not c.rejection_flags]
+            near_pass_pool = sorted(
+                [c for c in cands if len(c.rejection_flags or []) <= 2],
+                key=lambda c: (
+                    len(c.rejection_flags or []),
+                    -_to_float(c.day_turnover, 0.0),
+                    -_to_float(c.ret_5d_pct, 0.0),
+                    -_to_float(c.extras.get("turnover_ratio_20d"), 0.0),
+                ),
+            )
+            if len(clean_pool) >= max(4, min(top_n, 6)):
+                base_pool = clean_pool
+            elif near_pass_pool:
+                base_pool = near_pass_pool
+            else:
+                base_pool = list(cands)
 
         general_bucket = sorted(
             base_pool,
@@ -2741,7 +2757,8 @@ async def candidates(
             )
             flow_1d = (flow.get("lookbacks") or {}).get("1d") or {}
             flow_5d = (flow.get("lookbacks") or {}).get("5d") or {}
-            signed_flow = _signed_flow_score(flow_1d, flow_5d)
+            flow_available = bool(flow.get("as_of")) or bool(flow_1d) or bool(flow_5d)
+            signed_flow = _signed_flow_score(flow_1d, flow_5d) if flow_available else None
             news_dt = None
             if news_items:
                 n0 = news_items[0] or {}
@@ -2789,16 +2806,16 @@ async def candidates(
             conviction_score = (
                 0.30 * breakout_strength
                 + 0.25 * liquidity_accel
-                + 0.20 * signed_flow
+                + 0.20 * (signed_flow if signed_flow is not None else 0.0)
                 + 0.15 * catalyst_freshness
                 - 0.10 * junk_risk
             )
 
             scan_reason = list(base.scan_reason)
             rejection_flags = list(base.rejection_flags)
-            if signed_flow > 0:
+            if signed_flow is not None and signed_flow > 0:
                 scan_reason.append("5D flow positive")
-            elif signed_flow < 0:
+            elif signed_flow is not None and signed_flow < 0:
                 rejection_flags.append("flow_negative")
             if news_items and news_age_hours is not None and news_age_hours <= scan_defaults["fresh_news_hours"]:
                 scan_reason.append("fresh news verified")
@@ -2811,7 +2828,7 @@ async def candidates(
                     "news_items": news_items,
                     "news_asof": ((news_items[0] or {}).get("published_kst") or (news_items[0] or {}).get("published")) if news_items else None,
                     "flow_asof": flow.get("as_of"),
-                    "signed_flow_score": round(signed_flow, 2),
+                    "signed_flow_score": round(signed_flow, 2) if signed_flow is not None else None,
                     "conviction_score": round(conviction_score, 2),
                     "catalyst_freshness": round(catalyst_freshness, 2),
                     "foreign_1d": flow_1d.get("foreign_net_volume"),
@@ -2852,9 +2869,12 @@ async def candidates(
         else:
             watch_reasons: List[str] = []
             if market_u == "KR":
+                if c.rejection_flags:
+                    watch_reasons.append("watch only")
                 if not (c.extras.get("news_items") or []):
                     watch_reasons.append("missing news")
-                if _to_float(c.extras.get("signed_flow_score"), 0.0) <= 0:
+                signed_flow_score = c.extras.get("signed_flow_score")
+                if signed_flow_score is not None and float(signed_flow_score) < 0:
                     watch_reasons.append("negative flow")
                 close_pos = c.extras.get("close_position")
                 if close_pos is None or float(close_pos) < float(scan_defaults["close_position_min"]):
