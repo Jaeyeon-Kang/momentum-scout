@@ -1,18 +1,17 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useState, useTransition } from "react";
 import { AppContext, type AppState } from "@/lib/store";
 import type { ScanResult } from "@/lib/api";
 import Header from "@/components/Header";
 import ScanSettings from "@/components/ScanSettings";
 import ScanResults from "@/components/ScanResults";
 import IntradayDesk from "@/components/IntradayDesk";
-import Card from "@/components/ui/Card";
 import { Toaster } from "sonner";
 
 export default function Home() {
   const [theme, setThemeState] = useState<"light" | "dark">("light");
   const [lang, setLangState] = useState<"ko" | "en">("ko");
-  const [mode, setMode] = useState<"scout" | "intraday" | "paper">("scout");
+  const [mode, setMode] = useState<"scout" | "intraday">("scout");
   const [scoutPanel, setScoutPanel] = useState<"scan" | "results">("scan");
   const [market, setMarket] = useState<"US" | "KR">("US");
   const [horizon, setHorizon] = useState<5 | 20>(5);
@@ -22,7 +21,7 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<"guide" | "focus">("guide");
   const [, startTransition] = useTransition();
 
-  useEffect(() => {
+  const hydratePrefs = useEffectEvent(() => {
     const nextTheme =
       (localStorage.getItem("ms_theme") as "light" | "dark" | null) ||
       (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -31,7 +30,10 @@ export default function Home() {
     setLangState(nextLang);
     document.documentElement.dataset.theme = nextTheme;
     document.documentElement.lang = nextLang;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
+  useEffect(() => {
+    hydratePrefs();
   }, []);
 
   const setTheme = useCallback((nextTheme: "light" | "dark") => {
@@ -136,37 +138,9 @@ export default function Home() {
             {mode === "scout" && scoutPanel === "scan" && <ScanSettings />}
             {mode === "scout" && scoutPanel === "results" && <ScanResults />}
             {mode === "intraday" && <IntradayDesk />}
-            {mode === "paper" && <PaperTradingPlaceholder lang={lang} />}
           </div>
         </main>
       </div>
     </AppContext.Provider>
-  );
-}
-
-function PaperTradingPlaceholder({ lang }: { lang: "ko" | "en" }) {
-  const copy =
-    lang === "ko"
-      ? {
-          title: "모의 기록 준비 중",
-          body: "실거래 화면으로 착각할 정도로 정교하게 만들기 전에, 먼저 기록 흐름부터 단단히 묶는 중입니다. 다음 단계에서는 진입, 청산, 복기 메모를 같은 타임라인으로 다루게 됩니다.",
-        }
-      : {
-          title: "Paper journal in progress",
-          body: "Before this pretends to be a real trade blotter, we are tightening the journaling flow first. The next pass will connect entries, exits, and review notes in one timeline.",
-        };
-
-  return (
-    <div className="max-w-[980px] mx-auto animate-fade-in">
-      <Card className="glass-panel p-8 sm:p-10 lg:p-12">
-        <div className="space-y-4">
-          <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-            {lang === "ko" ? "모의 모드" : "Paper Mode"}
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight">{copy.title}</h1>
-          <p className="max-w-[760px] text-base leading-8 text-[var(--muted)]">{copy.body}</p>
-        </div>
-      </Card>
-    </div>
   );
 }

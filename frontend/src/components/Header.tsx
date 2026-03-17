@@ -5,7 +5,18 @@ import { clsx } from "clsx";
 import { useApp } from "@/lib/store";
 
 export default function Header() {
-  const { theme, setTheme, lang, setLang, mode, setMode, viewMode, setViewMode } = useApp();
+  const {
+    theme,
+    setTheme,
+    lang,
+    setLang,
+    mode,
+    setMode,
+    scoutPanel,
+    setScoutPanel,
+    viewMode,
+    setViewMode,
+  } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -26,9 +37,9 @@ export default function Header() {
           eyebrow: "Tape First",
           title: "Momentum Scout",
           subtitle: "시끄러운 장에서도 지금 볼 만한 흐름만 남기는 스카우트 콘솔",
+          home: "홈",
           scout: "스카우트",
           intraday: "인트라데이",
-          paper: "모의 기록",
           guide: "가이드",
           focus: "집중",
           theme: "테마 전환",
@@ -41,9 +52,9 @@ export default function Header() {
           eyebrow: "Tape First",
           title: "Momentum Scout",
           subtitle: "A calmer console for spotting momentum without turning the whole screen into a circus.",
+          home: "Home",
           scout: "Scout",
           intraday: "Intraday",
-          paper: "Journal",
           guide: "Guide",
           focus: "Focus",
           theme: "Toggle theme",
@@ -53,11 +64,23 @@ export default function Header() {
           panelBody: "Quiet chrome, louder signal. The chart gets the spotlight, not the garnish.",
         };
 
+  const goHome = () => {
+    setMode("scout");
+    setScoutPanel("scan");
+    setMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--header-bg)] backdrop-blur-2xl">
       <div className="mx-auto w-full max-w-[1280px] px-4 sm:px-8 lg:px-10 xl:px-12">
-        <div className="flex min-h-[92px] items-center justify-between gap-4 py-4">
-          <div className="min-w-0 flex-1">
+        <div className="flex min-h-[92px] flex-wrap items-start justify-between gap-4 py-4 sm:flex-nowrap sm:items-center">
+          <button
+            type="button"
+            onClick={goHome}
+            className="min-w-0 flex-1 rounded-[28px] p-1 -m-1 text-left transition-colors hover:text-[var(--accent)]"
+            title={copy.home}
+          >
             <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--card2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
               {copy.eyebrow}
             </div>
@@ -65,7 +88,7 @@ export default function Header() {
               <h1 className="text-[1.1rem] font-bold tracking-tight sm:text-[1.25rem]">{copy.title}</h1>
               <p className="hidden max-w-[560px] text-sm leading-7 text-[var(--muted)] sm:block">{copy.subtitle}</p>
             </div>
-          </div>
+          </button>
 
           <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-1 py-1 shadow-[var(--shadow-sm)] sm:flex">
             <ModePill active={viewMode === "guide"} onClick={() => setViewMode("guide")}>
@@ -76,7 +99,17 @@ export default function Header() {
             </ModePill>
           </div>
 
-          <div className="flex flex-1 items-center justify-end gap-2">
+          <div className="flex flex-1 items-center justify-end gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={goHome}
+              className={clsx(
+                "hidden h-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] px-4 text-sm font-semibold transition-colors hover:text-[var(--text)] sm:inline-flex",
+                mode === "scout" && scoutPanel === "scan" ? "text-[var(--text)]" : "text-[var(--muted)]"
+              )}
+            >
+              {copy.home}
+            </button>
             <button
               onClick={() => setLang(lang === "ko" ? "en" : "ko")}
               className="flex h-10 min-w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-semibold text-[var(--muted)] transition-colors hover:text-[var(--text)]"
@@ -115,7 +148,7 @@ export default function Header() {
 
               <div
                 className={clsx(
-                  "absolute right-0 top-[56px] w-[320px] overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-lg)] transition-all duration-200",
+                  "absolute right-0 top-[56px] w-[min(320px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-lg)] transition-all duration-200",
                   menuOpen ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0"
                 )}
               >
@@ -125,14 +158,14 @@ export default function Header() {
                 </div>
 
                 <div className="space-y-2 p-3">
+                  <MenuButton active={mode === "scout" && scoutPanel === "scan"} onClick={goHome}>
+                    {copy.home}
+                  </MenuButton>
                   <MenuButton active={mode === "scout"} onClick={() => { setMode("scout"); setMenuOpen(false); }}>
                     {copy.scout}
                   </MenuButton>
                   <MenuButton active={mode === "intraday"} onClick={() => { setMode("intraday"); setMenuOpen(false); }}>
                     {copy.intraday}
-                  </MenuButton>
-                  <MenuButton active={mode === "paper"} onClick={() => { setMode("paper"); setMenuOpen(false); }}>
-                    {copy.paper}
                   </MenuButton>
                   <div className="flex gap-1 rounded-full border border-[var(--border)] bg-[var(--card2)] p-1 sm:hidden">
                     <button
